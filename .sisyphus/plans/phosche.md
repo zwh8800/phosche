@@ -1119,7 +1119,7 @@ Wave FINAL (After ALL — 4 parallel reviews):
   - Message: `feat(pipeline): implement processing pipeline with worker pool`
   - Files: `internal/pipeline/pipeline.go`
 
-- [ ] 15. **API 路由 + 中间件 + 健康检查**
+- [x] 15. **API 路由 + 中间件 + 健康检查**
 
   **What to do**:
   - 在 `internal/api/router.go` 使用 chi 构建路由

@@ -180,3 +180,14 @@
 - 9 tests (8 pipeline + 1 IsLLMConnectionError), all PASS
 - Zero LSP errors; only Go 1.26 modernization hints
 - `go test ./internal/pipeline/` → PASS (0.968s)
+
+## T15: API Router Setup (2026-05-29)
+
+### Dependencies Added
+- `github.com/go-chi/chi/v5` v5.3.0
+- `github.com/go-chi/cors` v1.2.2
+
+### Implementation Notes
+- chi v5.3.0 `middleware.Timeout` returns HTTP 504 (Gateway Timeout), NOT 503 as older versions did
+- go-chi/cors v1.2.2: `Access-Control-Allow-Methods` header only appears on preflight (OPTIONS) responses, NOT on simple GET/POST
+- CORS middleware intercepts preflight OPTIONS requests on any path (including non-existent routes) and returns 200 with CORS headers — but OPTIONS /health returns 405 because the route handler explicitly rejects non-GET methods
