@@ -1,1 +1,35 @@
-# phosche configuration
+watch:
+  directories:
+    - /path/to/photos
+  recursive: true
+  debounce_ms: 500
+  min_dir_depth: 1
+
+llm:
+  provider: ollama
+  ollama:
+    base_url: http://localhost:11434
+    model: llama3.2-vision
+  openai:
+    api_key: ""
+    base_url: https://api.openai.com/v1
+    model: gpt-4o
+  prompt: "请分析这张图片的内容，并用中文描述。"
+  max_retries: 3
+  concurrency: 2
+  timeout_seconds: 60
+  output_language: zh
+
+elasticsearch:
+  addresses:
+    - http://localhost:9200
+  username: ""
+  password: ""
+  insecure_skip_verify: false
+  index_name: phosche
+
+server:
+  host: "0.0.0.0"
+  port: 8080
+  photo_base_path: /path/to/photos
+  dev_mode: true

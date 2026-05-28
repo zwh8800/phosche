@@ -304,7 +304,7 @@ Wave FINAL (After ALL — 4 parallel reviews):
   - Message: `chore: initialize project scaffolding (Go + React)`
   - Files: `cmd/`, `internal/`, `web/`, `config.example.yaml`, `.gitignore`
 
-- [ ] 2. **YAML 配置系统**
+- [x] 2. **YAML 配置系统**
 
   **What to do**:
   - 安装 `gopkg.in/yaml.v3`
@@ -378,7 +378,7 @@ Wave FINAL (After ALL — 4 parallel reviews):
   - Message: `feat(config): implement YAML configuration system with validation`
   - Files: `internal/config/`, `config.example.yaml`
 
-- [ ] 3. **共享类型定义 + 错误类型**
+- [x] 3. **共享类型定义 + 错误类型**
 
   **What to do**:
   - 在 `internal/types/types.go` 定义所有共享类型：
@@ -569,7 +569,7 @@ Wave FINAL (After ALL — 4 parallel reviews):
   - Message: `feat(analyzer): implement LLM client with Ollama and OpenAI support`
   - Files: `internal/analyzer/`
 
-- [ ] 6. **图片解码器 — JPEG/PNG/WebP/HEIC**
+- [x] 6. **图片解码器 — JPEG/PNG/WebP/HEIC**
 
   **What to do**:
   - 在 `internal/decoder/decoder.go` 定义 `ImageDecoder` 接口：`Decode(path string) (image.Image, string, error)`
