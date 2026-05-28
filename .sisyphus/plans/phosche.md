@@ -1048,7 +1048,7 @@ Wave FINAL (After ALL — 4 parallel reviews):
   - Message: `feat(static): implement secure static file server for photos`
   - Files: `internal/static/server.go`
 
-- [ ] 14. **处理流水线编排器**
+- [x] 14. **处理流水线编排器**
 
   **What to do**:
   - 在 `internal/pipeline/pipeline.go` 实现 `Pipeline`

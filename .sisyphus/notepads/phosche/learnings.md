@@ -147,3 +147,36 @@
 - 11 new tests, all PASS (8 skip on no-Docker, 3 unit tests pass always)
 - Zero LSP errors, zero vet warnings
 - `go build ./...` passes
+
+## T14: Pipeline Orchestrator — Worker Pool + Bounded Queue + Retry
+
+### Design Decisions
+- Defined `Analyzer` and `Indexer` interfaces locally in pipeline package (Go idiom: consume interfaces where needed) — `*analyzer.ImageAnalyzer` and `*indexer.IndexerService` satisfy them automatically
+- Worker contexts: each item gets a fresh `context.WithTimeout(context.Background(), 5min)` — avoids cancelled-context issues during graceful shutdown drain phase
+- `IsLLMConnectionError` exported (capital I) for testability — detects `net.Error` in the error chain via `errors.As` unwrapping
+- Pending retry map stored as `Pipeline.pending` struct field (not goroutine-local) — allows `updateErrorStatus` to add items and `processPath` to remove on success
+
+### Pipeline Flow
+1. `scanExisting` → sends paths to inputCh (bounded channel)
+2. `forwardEvents` goroutine → forwards watcher FileEvent paths to inputCh (skips delete)
+3. N worker goroutines → read from inputCh, call `processPath` per item
+4. Retry goroutine → periodic ticker; iterates pending map; retries items up to maxPendingRetries
+5. Graceful shutdown: `ctx.Done` → `watcher.Close()` → `fwWg.Wait()` → `close(inputCh)` → `workersWg.Wait()` → `retryWg.Wait()` → `indexer.Stop()`
+
+### Test Patterns
+- `runPipeline(t, p)` helper returns `(cancel, wait)` — runs pipeline in goroutine, `wait()` blocks until Run returns
+- `require.Eventually` for async verification (no brittle `time.Sleep` polling)
+- Real temp JPEG files created via `image.NewRGBA + jpeg.Encode` — enables real `decoder.DecodeImage` tests
+- Concurrency test: mock analyzer blocks on channel → verify maxConcurrent → release → verify all processed
+- No defer+wrapper double-wait pattern (avoided `cancel/wait` being called twice)
+
+### Gotchas
+- Go 1.26 `:=` short variable declarations don't allow self-reference in closures within struct literals → use `var x *T; x = &T{...}` pattern
+- Worker must use fresh context per item (not pipeline ctx) to survive graceful shutdown drain phase — otherwise in-flight analysis gets "context canceled"
+- `IndexPhoto` doesn't call `UpdateStatus` — the document's `Status` field IS the status update; `UpdateStatus` only used for intermediate states (analyzing, pending_analysis, failed)
+
+### Results
+- 2 files: pipeline.go (302 lines), pipeline_test.go (523 lines)
+- 9 tests (8 pipeline + 1 IsLLMConnectionError), all PASS
+- Zero LSP errors; only Go 1.26 modernization hints
+- `go test ./internal/pipeline/` → PASS (0.968s)

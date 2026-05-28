@@ -44,6 +44,15 @@
       "agent": "Sisyphus-Junior",
       "category": "deep",
       "updated_at": "2026-05-28T16:39:08.708Z"
+    },
+    "todo:14": {
+      "task_key": "todo:14",
+      "task_label": "14",
+      "task_title": "**处理流水线编排器**",
+      "session_id": "ses_1908890b0ffe6hFmgvn2gF7GA6",
+      "agent": "Sisyphus-Junior",
+      "category": "deep",
+      "updated_at": "2026-05-28T17:03:18.851Z"
     }
   }
 }
