@@ -181,6 +181,42 @@
 - Zero LSP errors; only Go 1.26 modernization hints
 - `go test ./internal/pipeline/` → PASS (0.968s)
 
+## T18: Photo Detail API — GET /api/photos/{id}
+
+### Route Design
+- Used chi catch-all `*` pattern (`/photos/*`) for path-based IDs containing slashes — `chi.URLParam(r, "*")` captures everything after the prefix
+- `url.PathUnescape` decodes URL-encoded paths (e.g., `%2F` → `/`)
+- `strings.TrimPrefix(id, "/")` removes leading slash from captured path
+
+### Handler Pattern
+- `writeJSONError` helper returns structured error: `{"error":{"code":"...","message":"..."}}`
+- `errors.As(err, &appErr)` to unwrap `*AppError` and check `Code == "NOT_FOUND"` for 404
+- Non-matching errors → 500 with generic INTERNAL_ERROR message
+- Response includes all PhotoDocument fields (flattened via struct embedding) + `photo_url`
+
+### Response Structure
+```go
+type photoDetailResponse struct {
+    *types.PhotoDocument  // embeds Photo + AnalysisResult → all fields flattened
+    PhotoURL string       `json:"photo_url"`  // "/photos/" + doc.Path
+}
+```
+
+### Mock Pattern
+- `mockIndexer` implements the `Indexer` interface with a `getPhotoFunc` function field
+- Functions embedded in test assertions verify correct path/indexName params
+
+### Results
+- 2 files: photo_detail.go (62 lines), photo_detail_test.go (165 lines)
+- 3 new tests (success, not found, internal error), all PASS
+- All 22 tests across the package PASS
+
+### Side Fixes During T18
+- Fixed `search.go`: page/page_size defaults moved before validation so `{"query":"sunset"}` without explicit page defaults to page=1, size=20 instead of 400 error
+- Fixed `stats.go`: replaced `writeError` (undefined) with `writeJSON` call
+- Added `GetFilters`/`GetStats` to `PhotoSearcher` interface for `filters.go`/`stats.go` compilation
+- Added `DeletePhoto` to `Indexer` interface for `photos.go` compilation
+
 ## T15: API Router Setup (2026-05-29)
 
 ### Dependencies Added

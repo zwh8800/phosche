@@ -1,0 +1,28 @@
+package api
+
+import (
+	"context"
+
+	"github.com/zwh8800/phosche/internal/types"
+)
+
+type mockSearchService struct {
+	statsFunc   func(ctx context.Context, indexName string) (*types.StatsResponse, error)
+	filtersFunc func(ctx context.Context, indexName string) (*types.FiltersResponse, error)
+	searchFunc  func(ctx context.Context, indexName string, req *types.SearchRequest) (*types.SearchResponse, error)
+}
+
+func (m *mockSearchService) GetStats(ctx context.Context, indexName string) (*types.StatsResponse, error) {
+	return m.statsFunc(ctx, indexName)
+}
+
+func (m *mockSearchService) GetFilters(ctx context.Context, indexName string) (*types.FiltersResponse, error) {
+	return m.filtersFunc(ctx, indexName)
+}
+
+func (m *mockSearchService) Search(ctx context.Context, indexName string, req *types.SearchRequest) (*types.SearchResponse, error) {
+	if m.searchFunc != nil {
+		return m.searchFunc(ctx, indexName, req)
+	}
+	return &types.SearchResponse{}, nil
+}

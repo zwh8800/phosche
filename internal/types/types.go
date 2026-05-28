@@ -80,6 +80,7 @@ type SearchRequest struct {
 	Objects     []string `json:"objects,omitempty"`
 	SceneType   string   `json:"scene_type,omitempty"`
 	CameraModel string   `json:"camera_model,omitempty"`
+	Status      string   `json:"status,omitempty"`
 	Page        int      `json:"page"`
 	PageSize    int      `json:"page_size"`
 }

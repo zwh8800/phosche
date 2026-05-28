@@ -1172,7 +1172,7 @@ Wave FINAL (After ALL — 4 parallel reviews):
   - Message: `feat(api): set up chi router with middleware and health check`
   - Files: `internal/api/router.go`
 
-- [ ] 16. **时间线 API 端点**
+- [x] 16. **时间线 API 端点**
 
   **What to do**:
   - 在 `internal/api/photos.go` 实现 `GET /api/photos`
@@ -1225,7 +1225,7 @@ Wave FINAL (After ALL — 4 parallel reviews):
   - Message: `feat(api): implement photo timeline endpoint with pagination`
   - Files: `internal/api/photos.go`
 
-- [ ] 17. **搜索 API 端点**
+- [x] 17. **搜索 API 端点**
 
   **What to do**:
   - 在 `internal/api/search.go` 实现 `POST /api/search`
@@ -1281,7 +1281,7 @@ Wave FINAL (After ALL — 4 parallel reviews):
   - Message: `feat(api): implement search endpoint with validation`
   - Files: `internal/api/search.go`
 
-- [ ] 18. **照片详情 API 端点**
+- [x] 18. **照片详情 API 端点**
 
   **What to do**:
   - 在 `internal/api/photo_detail.go` 实现 `GET /api/photos/{id}`
@@ -1329,7 +1329,7 @@ Wave FINAL (After ALL — 4 parallel reviews):
   - Message: `feat(api): implement photo detail endpoint`
   - Files: `internal/api/photo_detail.go`
 
-- [ ] 19. **状态/统计/过滤器 API 端点**
+- [x] 19. **状态/统计/过滤器 API 端点**
 
   **What to do**:
   - 在 `internal/api/stats.go` 实现 `GET /api/stats`

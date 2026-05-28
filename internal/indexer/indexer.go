@@ -146,6 +146,29 @@ func (s *IndexerService) BulkIndex(ctx context.Context, docs []*types.PhotoDocum
 // Public read operation
 // --------------------------------------------------------------------------
 
+// DeletePhoto removes a photo document from the index by path.
+func (s *IndexerService) DeletePhoto(ctx context.Context, path string, indexName string) error {
+	docID := sha256hex(path)
+
+	req := esapi.DeleteRequest{
+		Index:      indexName,
+		DocumentID: docID,
+	}
+
+	resp, err := req.Do(ctx, s.client.Client())
+	if err != nil {
+		return fmt.Errorf("delete document: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.IsError() && resp.StatusCode != 404 {
+		b, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("delete returned %s: %s", resp.Status(), string(b))
+	}
+
+	return nil
+}
+
 // GetPhoto retrieves a photo document by path. Returns an *AppError with
 // code NOT_FOUND if the document does not exist.
 func (s *IndexerService) GetPhoto(ctx context.Context, path string, indexName string) (*types.PhotoDocument, error) {

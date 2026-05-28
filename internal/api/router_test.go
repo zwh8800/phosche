@@ -15,7 +15,7 @@ import (
 )
 
 func TestHealthEndpoint(t *testing.T) {
-	router := NewRouter()
+	router := NewRouter(&Server{})
 	ts := httptest.NewServer(router)
 	defer ts.Close()
 
@@ -34,7 +34,7 @@ func TestHealthEndpoint(t *testing.T) {
 }
 
 func TestHealthEndpoint_ContentType(t *testing.T) {
-	router := NewRouter()
+	router := NewRouter(&Server{})
 	ts := httptest.NewServer(router)
 	defer ts.Close()
 
@@ -47,7 +47,7 @@ func TestHealthEndpoint_ContentType(t *testing.T) {
 }
 
 func TestCORSHeaders(t *testing.T) {
-	router := NewRouter()
+	router := NewRouter(&Server{})
 	ts := httptest.NewServer(router)
 	defer ts.Close()
 
@@ -64,7 +64,7 @@ func TestCORSHeaders(t *testing.T) {
 }
 
 func TestCORSPreflight(t *testing.T) {
-	router := NewRouter()
+	router := NewRouter(&Server{})
 	ts := httptest.NewServer(router)
 	defer ts.Close()
 
@@ -98,7 +98,7 @@ func TestTimeout(t *testing.T) {
 }
 
 func TestNotFound(t *testing.T) {
-	router := NewRouter()
+	router := NewRouter(&Server{})
 	ts := httptest.NewServer(router)
 	defer ts.Close()
 
@@ -110,7 +110,7 @@ func TestNotFound(t *testing.T) {
 }
 
 func TestMethodNotAllowed(t *testing.T) {
-	router := NewRouter()
+	router := NewRouter(&Server{})
 	ts := httptest.NewServer(router)
 	defer ts.Close()
 

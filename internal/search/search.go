@@ -13,6 +13,11 @@ import (
 	"github.com/zwh8800/phosche/internal/types"
 )
 
+// Searcher defines the interface for photo search operations.
+type Searcher interface {
+	Search(ctx context.Context, indexName string, req *types.SearchRequest) (*types.SearchResponse, error)
+}
+
 // SearchService provides full-text search and filtered queries against the
 // Elasticsearch photo index.
 type SearchService struct {
@@ -167,6 +172,14 @@ func (s *SearchService) buildQuery(req *types.SearchRequest) map[string]any {
 		})
 	}
 
+	if req.Status != "" {
+		filter = append(filter, map[string]any{
+			"term": map[string]any{
+				"status": req.Status,
+			},
+		})
+	}
+
 	if req.CameraModel != "" {
 		filter = append(filter, map[string]any{
 			"term": map[string]any{
@@ -258,6 +271,96 @@ func (s *SearchService) parseSearchResponse(body io.Reader, req *types.SearchReq
 		Page:       page,
 		PageSize:   pageSize,
 		TotalPages: totalPages,
+	}, nil
+}
+
+// GetStats returns aggregate photo statistics (total count, counts by status,
+// and count of recently created photos).
+func (s *SearchService) GetStats(ctx context.Context, indexName string) (*types.StatsResponse, error) {
+	query := map[string]any{
+		"size":             0,
+		"track_total_hits": true,
+		"aggs": map[string]any{
+			"by_status": map[string]any{
+				"terms": map[string]any{"field": "status", "size": 10},
+			},
+			"recent": map[string]any{
+				"filter": map[string]any{
+					"range": map[string]any{
+						"created_at": map[string]any{"gte": "now-1h"},
+					},
+				},
+			},
+		},
+	}
+
+	bodyBytes, err := json.Marshal(query)
+	if err != nil {
+		return nil, fmt.Errorf("marshal stats query: %w", err)
+	}
+
+	searchReq := esapi.SearchRequest{
+		Index: []string{indexName},
+		Body:  bytes.NewReader(bodyBytes),
+	}
+
+	resp, err := searchReq.Do(ctx, s.client.Client())
+	if err != nil {
+		return nil, fmt.Errorf("stats request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.IsError() {
+		b, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("stats returned %s: %s", resp.Status(), string(b))
+	}
+
+	return s.parseStatsResponse(resp.Body)
+}
+
+type esStatsResult struct {
+	Hits struct {
+		Total struct {
+			Value int64 `json:"value"`
+		} `json:"total"`
+	} `json:"hits"`
+	Aggregations struct {
+		ByStatus struct {
+			Buckets []aggBucketWithCount `json:"buckets"`
+		} `json:"by_status"`
+		Recent struct {
+			DocCount int64 `json:"doc_count"`
+		} `json:"recent"`
+	} `json:"aggregations"`
+}
+
+type aggBucketWithCount struct {
+	Key      string `json:"key"`
+	DocCount int64  `json:"doc_count"`
+}
+
+func (s *SearchService) parseStatsResponse(body io.Reader) (*types.StatsResponse, error) {
+	var result esStatsResult
+	if err := json.NewDecoder(body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode stats response: %w", err)
+	}
+
+	byStatus := map[types.JobStatus]int64{
+		types.StatusUnanalyzed:      0,
+		types.StatusAnalyzing:       0,
+		types.StatusAnalyzed:        0,
+		types.StatusFailed:          0,
+		types.StatusPendingAnalysis: 0,
+	}
+
+	for _, b := range result.Aggregations.ByStatus.Buckets {
+		byStatus[types.JobStatus(b.Key)] = b.DocCount
+	}
+
+	return &types.StatsResponse{
+		Total:       result.Hits.Total.Value,
+		ByStatus:    byStatus,
+		RecentCount: result.Aggregations.Recent.DocCount,
 	}, nil
 }
 
