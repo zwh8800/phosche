@@ -254,3 +254,24 @@ type photoDetailResponse struct {
 - 2 files changed: `pages/Timeline.tsx` (new, 249 lines), `App.tsx` (modified)
 - `tsc -b` → PASS, `vite build` → PASS
 - Bundle: 314 KB JS (102 KB gzipped), 29 KB CSS (6.5 KB gzipped)
+
+## T24: Responsive Tuning + 404 Page + Error Boundary (2026-05-29)
+
+### Files Created
+- `web/src/pages/NotFound.tsx` — 404 page with purple-200 "404" big text, "页面未找到" heading, "返回首页" link button
+- `web/src/components/ErrorBoundary.tsx` — React class component error boundary; catches render errors; shows "出错了" with error message in red box + "刷新页面" and "返回首页" buttons
+
+### Files Modified
+- `web/src/components/Layout.tsx` — Added `useState` for `mobileMenuOpen` toggle; hamburger button (3-line SVG) visible on `md:hidden`, transforms to X when open; nav links extracted to `navLinks` variable reused in both desktop (`hidden md:flex`) and mobile dropdown; mobile dropdown has `border-t` separator
+- `web/src/App.tsx` — Wrapped entire app in `<ErrorBoundary>`; added `path="*"` catch-all route pointing to `<NotFound />`
+
+### Patterns
+- ErrorBoundary wraps the entire app (outside QueryClientProvider + BrowserRouter) since it doesn't use router hooks
+- Mobile nav reuses the same `navLinks` JSX fragment in both desktop and mobile positions — single source of truth
+- Hamburger button toggles between hamburger (3 lines) and close (X) SVG icons based on `mobileMenuOpen` state
+- NavLink's `onClick` closes mobile menu on navigation, preventing stale open state
+
+### Results
+- 4 files touched (2 new, 2 modified)
+- `tsc -b && vite build` → PASS
+- Bundle: 338 KB JS (108 KB gzipped), 30 KB CSS (6.7 KB gzipped)

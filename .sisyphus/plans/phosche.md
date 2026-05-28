@@ -1583,7 +1583,7 @@ Wave FINAL (After ALL — 4 parallel reviews):
   - Message: `feat(web): implement photo detail modal`
   - Files: `web/src/components/PhotoDetail.tsx`
 
-- [ ] 24. **响应式微调 + 404 + 错误边界**
+- [x] 24. **响应式微调 + 404 + 错误边界**
 
   **What to do**:
   - 完善 `web/src/components/Layout.tsx` 的响应式行为：移动端汉堡菜单、路由高亮
