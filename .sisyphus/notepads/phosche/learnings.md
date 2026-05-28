@@ -275,3 +275,64 @@ type photoDetailResponse struct {
 - 4 files touched (2 new, 2 modified)
 - `tsc -b && vite build` → PASS
 - Bundle: 338 KB JS (108 KB gzipped), 30 KB CSS (6.7 KB gzipped)
+
+## T27: Dockerfile + Makefile (2026-05-29)
+
+### Implementation Notes
+- Multi-stage Dockerfile: `golang:1.26-alpine` (go-builder) → `node:20-alpine` (frontend-builder) → `alpine:latest` (runtime)
+- `CGO_ENABLED=0` for static binary — no libheif dependency in Docker
+- Makefile includes: `build`, `build-frontend`, `docker-build`, `test`, `test-race`, `clean`, `run`
+- Docker-compose at `build: .` auto-discovers the Dockerfile — no changes needed to existing compose file
+- Runtime copies `config.example.yaml` as `config.yaml` (default config, overridable via volume mount in compose)
+- Runtime includes `ca-certificates` (for HTTPS/TLS) and `tzdata` (for timezone handling)
+
+## T28a+T28b: E2E Integration Tests — Backend + Frontend (2026-05-29)
+
+### Backend E2E (`internal/integration/e2e_test.go`)
+
+**Implementation Notes:**
+- Reused the same testcontainers ES pattern from `client_test.go` and `search_test.go` — `docker.elastic.co/elasticsearch/elasticsearch:8.17.0`, `wait.ForHTTP("/")`, `ES_JAVA_OPTS=-Xms512m -Xmx512m`
+- Extracted `startESContainer` helper that returns `(container, address, cleanup)` for clean setup/teardown
+- Mock scanner (`mockScanner`), mock watcher (`mockWatcher`), mock analyzer (`mockAnalyzer`) — same interface satisfaction pattern as `pipeline_test.go`
+- Pipeline detects completion by polling `SearchService.Search` with `Status: "analyzed"` filter — `require.Eventually` with 30s timeout, 500ms interval
+- After processing confirmed: `GetPhoto` for document field verification, `Search` for full-text query verification
+- Graceful pipeline shutdown via context cancellation + channel read with 30s timeout
+
+**Skip Logic:**
+- `testing.Short()` → skip ("skipping E2E test in short mode")
+- `exec.LookPath("docker")` → skip ("Docker not available")
+- Both guards at top of `TestEndToEnd` before any expensive setup
+
+**Verification:**
+- `go vet ./internal/integration/` → PASS
+- `go test -c -o /dev/null ./internal/integration/` → PASS
+- `go test -timeout 120s ./internal/integration/` → PASS (skips without Docker)
+- All existing tests in `./internal/...` → PASS
+
+### Frontend E2E (`web/e2e/app.spec.ts`)
+
+**Implementation Notes:**
+- Installed `@playwright/test` as dev dependency (Playwright CLI v1.60.0 was already available)
+- Created `web/playwright.config.ts` with `webServer.command: 'npm run dev'` and `reuseExistingServer: !CI`
+- 3 tests: app loads + navigates, search page has input, 404 page works
+- Test selectors based on actual DOM: `nav` element, `text=搜索` link, `input[type="text"]`, `text=404`
+
+**Playwright Config:**
+- `testDir: './e2e'`
+- `fullyParallel: true`
+- `retries: CI ? 2 : 0`
+- `baseURL: 'http://localhost:5173'`
+- Only `chromium` project configured
+
+**Verification:**
+- `npx playwright test --list` → 3 tests listed, all valid
+- `npx tsc --noEmit --project tsconfig.app.json` → PASS (framework code compiles)
+
+### Files Created
+- `internal/integration/e2e_test.go` (227 lines)
+- `web/playwright.config.ts` (23 lines)
+- `web/e2e/app.spec.ts` (17 lines)
+
+### Files Modified
+- `web/package.json` — added `@playwright/test` dev dependency
+- `web/package-lock.json` — updated lock file

@@ -89,6 +89,15 @@
       "agent": "Sisyphus-Junior",
       "category": "visual-engineering",
       "updated_at": "2026-05-28T17:33:16.743Z"
+    },
+    "todo:25": {
+      "task_key": "todo:25",
+      "task_label": "25",
+      "task_title": "**主入口点 — 完整装配**",
+      "session_id": "ses_19059c14fffepf2AwgkyoKjQ3C",
+      "agent": "Sisyphus-Junior",
+      "category": "deep",
+      "updated_at": "2026-05-28T17:44:28.356Z"
     }
   }
 }

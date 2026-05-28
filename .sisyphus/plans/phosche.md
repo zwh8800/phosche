@@ -1616,7 +1616,7 @@ Wave FINAL (After ALL — 4 parallel reviews):
   - Message: `feat(web): implement global layout with responsive navigation`
   - Files: `web/src/components/Layout.tsx`
 
-- [ ] 25. **主入口点 — 完整装配**
+- [x] 25. **主入口点 — 完整装配**
 
   **What to do**:
   - 完成 `cmd/phosche/main.go`：读取配置 → 初始化所有模块 → 装配 Pipeline → 启动 HTTP server → 等待信号 → 优雅关闭
@@ -1669,7 +1669,7 @@ Wave FINAL (After ALL — 4 parallel reviews):
   - Message: `feat(main): wire up all modules with graceful shutdown`
   - Files: `cmd/phosche/main.go`
 
-- [ ] 26. **Docker Compose 编排**
+- [x] 26. **Docker Compose 编排**
 
   **What to do**:
   - 创建 `docker-compose.yaml`：
@@ -1718,7 +1718,7 @@ Wave FINAL (After ALL — 4 parallel reviews):
   - Message: `feat(deploy): add Docker Compose configuration`
   - Files: `docker-compose.yaml`, `.env.example`
 
-- [ ] 27. **Dockerfile + 单二进制构建**
+- [x] 27. **Dockerfile + 单二进制构建**
 
   **What to do**:
   - 创建多阶段 `Dockerfile`：
@@ -1774,7 +1774,7 @@ Wave FINAL (After ALL — 4 parallel reviews):
   - Message: `feat(deploy): add Dockerfile and Makefile`
   - Files: `Dockerfile`, `Makefile`
 
-- [ ] 28a. **后端端到端集成测试**
+- [x] 28a. **后端端到端集成测试**
 
   **What to do**:
   - 在 `internal/integration/` 创建端到端测试
@@ -1821,7 +1821,7 @@ Wave FINAL (After ALL — 4 parallel reviews):
   - Message: `test(integration): add backend end-to-end integration test`
   - Files: `internal/integration/`
 
-- [ ] 28b. **前端端到端集成测试**
+- [x] 28b. **前端端到端集成测试**
 
   **What to do**:
   - 在 `web/e2e/` 创建 Playwright E2E 测试

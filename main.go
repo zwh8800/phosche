@@ -2,8 +2,6 @@ package main
 
 import (
 	"flag"
-	"log/slog"
-	"os"
 
 	"github.com/zwh8800/phosche/internal/app"
 )
@@ -12,9 +10,5 @@ func main() {
 	configPath := flag.String("config", "config.yaml", "path to configuration file")
 	flag.Parse()
 
-	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	})))
-
-	app.Run(nil, *configPath)
+	app.Run(webDist, *configPath)
 }
