@@ -17,6 +17,24 @@
       "agent": "Sisyphus-Junior",
       "category": "quick",
       "updated_at": "2026-05-28T16:13:50.685Z"
+    },
+    "todo:2": {
+      "task_key": "todo:2",
+      "task_label": "2",
+      "task_title": "**YAML 配置系统**",
+      "session_id": "ses_190a0605fffe8NyrMfEcKg5D1e",
+      "agent": "Sisyphus-Junior",
+      "category": "quick",
+      "updated_at": "2026-05-28T16:19:21.984Z"
+    },
+    "todo:4": {
+      "task_key": "todo:4",
+      "task_label": "4",
+      "task_title": "**Elasticsearch 客户端 + 索引映射**",
+      "session_id": "ses_190986b90ffe3akL7F14CEeApd",
+      "agent": "Sisyphus-Junior",
+      "category": "unspecified-high",
+      "updated_at": "2026-05-28T16:31:35.122Z"
     }
   }
 }

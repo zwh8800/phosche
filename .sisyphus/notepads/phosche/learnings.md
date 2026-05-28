@@ -1,70 +1,42 @@
-# Learnings
+## T5: LLM Client Interface - Ollama + OpenAI
 
-## T1: Project Scaffold
+### Decisions
+- Used `LLMClientConfig` (decoupled from `config.LLMConfig`) for the factory — avoids circular imports with config package
+- Ollama response parsing handles both string-encoded JSON and object JSON in `message.content` — Ollama may return the analysis result as a JSON string within the content field
 
-### Go Project Layout
-- Module: `github.com/zwh8800/phosche`, Go 1.26.2
-- Standard layout: `cmd/` for binaries, `internal/` for private packages
-- Internal packages created: config, watcher, decoder, analyzer, indexer, search, api, static, pipeline, types, errors
-- `go build` with no external dependencies works fine for a minimal main.go
+### Patterns
+- Mock servers via `net/http/httptest` for both providers
+- Both clients share the same `LLMClient` interface → easy to swap or add new providers
+- Request bodies use typed structs with JSON tags rather than `map[string]interface{}` for safety
+- `http.NewRequestWithContext` used for context-aware cancellation
 
-### slog Logger Setup
-- Use `slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})` for production logging
-- Set as default via `slog.SetDefault()` so all packages can use `slog.Info()` etc.
-- No external logging dependency needed
+### Results
+- 4 source files: client.go, ollama.go, openai.go, client_test.go
+- 12 tests, all PASS
+- Zero LSP errors (only `interface{}` → `any` hints in test file)
+- No external dependencies beyond stdlib
 
-### Web Project
-- `npm create vite@latest web -- --template react-ts` creates the scaffold
-- Additional deps installed: react-router-dom, axios, @tanstack/react-query
-- Built successfully with `npm run build` → `dist/` folder generated
-
-### Testing
-- Test files in `package main` need explicit import of `log/slog` to reference `slog.Default`
-- Build test (`go build -o /dev/null`) passes independently of test file imports
-
-## T3 - Types and Errors
-
-- `internal/types/types.go`: 11 type definitions with `json` and `es` struct tags. Used Go doc comments on all exported symbols (required by convention).
-- `internal/errors/errors.go`: `AppError` struct with `Code`, `Message`, `HTTPStatus` (excluded from JSON via `json:"-"`), `Details` (included in JSON), and `Err` (excluded from JSON). Constructor functions for 4 error types.
-- `AppError` implements both `Error()` and `Unwrap()` (for `errors.Is`/`errors.As` support).
-- `internal/errors/errors_test.go` includes: `TestAppError_Error`, `TestAppError_ErrorWithWrapped`, `TestAppError_JSONMarshal`, `TestAppError_Unwrap`, `TestAppError_UnwrapNil`, `TestConstructors` (table-driven with subtests), `TestValidationError_Details`.
-- `PhotoDocument` uses Go struct embedding — fields from `Photo` and `AnalysisResult` are flattened in JSON.
-- All 11 tests pass, 0 LSP diagnostics.
-
-## T2 - YAML Config System
-
-- `internal/config/config.go`: 6 struct types (`Config`, `WatchConfig`, `LLMConfig`, `OllamaConfig`, `OpenAIConfig`, `ESConfig`, `ServerConfig`), `LoadConfig()` reading+unmarshal+defaults+validation.
-- `gopkg.in/yaml.v3` as YAML library — minimal, `go get` adds it.
-- `applyDefaults()` sets missing optional fields: debounce_ms=500, max_retries=3, concurrency=2, timeout_seconds=60, host="0.0.0.0", port=8080, recursive=true, output_language="zh", min_dir_depth=1.
-- `validate()` checks: watch.directories non-empty, llm.provider in [ollama, openai], elasticsearch.addresses non-empty, elasticsearch.index_name non-empty.
-- Bool default limitation: `Recursive bool` has zero-value=false, so we always default to true. If user sets `recursive: false`, it's overridden. Future fix: use `*bool`.
-- Tests use `t.TempDir()` to create temp YAML files — 6 test functions, all passing.
-- `config.example.yaml` at repo root is the reference example with all fields.
-
-## T6 - Image Decoder
-
-### HEIC Library Research
-- **`github.com/gen2brain/heic`** (v0.4.9): Pure Go HEIC decoder, CGo-free. Uses libheif/libde265 compiled to WASM and executed via `github.com/tetratelabs/wazero` runtime. Falls back to dynamic/shared library via `github.com/ebitengine/purego` if available. This is the ideal choice — no CGo dependency, no system library required.
-- **`github.com/jdeng/goheif`**: Requires CGo + libde265. Not suitable.
-- **`github.com/vegidio/heif-go`**: Requires CGo despite claiming "without system dependencies". Not suitable.
-- **`github.com/klippa-app/go-libheif`**: Requires CGo + libheif. Not suitable.
-- Decision: Use `gen2brain/heic` — works out of the box on all platforms.
-
-### Dependencies Added
-- `golang.org/x/image v0.41.0` — WebP decoding
-- `github.com/rwcarlsen/goexif v0.0.0-20190401172101-9e8deecbddbd` — EXIF extraction
-- `github.com/gen2brain/heic v0.4.9` — HEIC decoding (CGo-free)
-- `github.com/tetratelabs/wazero v1.9.0` — WASM runtime (transitive dep of gen2brain/heic)
-- `github.com/ebitengine/purego v0.9.1` — dynamic lib loader (transitive dep)
+## T4: Elasticsearch 客户端 + 索引映射
 
 ### Implementation Notes
-- `DecodeImage()` detects format by file extension (string mapping), not magic bytes. Simple and fast for our use case.
-- `types.EXIFInfo` from `internal/types` is reused (not redefined) — it already has JSON struct tags for search indexing.
-- EXIF extraction only attempted for JPEG (.jpg/.jpeg) since EXIF is TIFF-based and embedded in JPEG APP1 marker. PNG/WebP/HEIC don't contain EXIF in this format.
-- EXIF field mapping uses goexif constants: `exif.DateTimeOriginal`, `exif.Model`, `exif.LensModel`, `exif.FocalLength`, `exif.FNumber`, `exif.ISOSpeedRatings`, and `LatLong()` for GPS.
-- Rational values (FocalLength, FNumber) are converted from num/den to formatted strings ("85.0mm", "f/2.8").
-- GPS coordinates rounded to 6 decimal places using string-conversion trick (avoids floating-point formatting issues).
-- `slog.Warn` used for non-critical EXIF extraction failures — decode still succeeds with EXIF=nil.
-- If all EXIF fields are zero/empty after extraction, returns nil (no EXIF data) rather than an empty struct.
-- Test data: JPEG/PNG generated programmatically; WebP+HEIC embedded via `//go:embed` from `testdata/` directory.
-- All 8 tests pass (JPEG, PNG, WebP, HEIC, Corrupt, UnknownFormat, NonExistent, NoEXIF).
+- Used `ESClient` struct wrapping `*elasticsearch.Client` with a `*slog.Logger` field for structured logging
+- Exposed `NewESClientWithLogger` constructor for testability — allows capturing slog output in tests
+- `NewESClient` defaults to `slog.Default()` for production use
+- TLS config via `http.Transport.TLSClientConfig.InsecureSkipVerify` — only set when `cfg.InsecureSkipVerify` is true
+- Ping ES via `client.Info()` in constructor — returns error (never panics)
+- Index mapping uses nested `map[string]any` for clear structure, with `textWithKeyword` shared var for tags/objects multifields
+- `_meta.version` stored inside `mappings` per Elasticsearch convention
+- Version mismatch: only `slog.Warn()`, no auto-migration
+
+### Test Infrastructure
+- `exec.LookPath("docker")` for Docker availability check — simple and reliable enough
+- `wait.ForHTTP("/").WithPort("9200/tcp")` with 2min startup timeout for ES readiness
+- `ES_JAVA_OPTS=-Xms512m -Xmx512m` to limit memory in test containers
+- `captureLogger` helper uses `slog.NewTextHandler` with `LevelWarn` for verifying log output
+- VersionMismatch test creates its own container (isolated from other tests) because it needs a raw ES client and a logger-wrapped client
+- Non-Docker tests (InvalidAddress, WithTLS) run regardless of Docker availability
+
+### Dependencies
+- `github.com/elastic/go-elasticsearch/v8` v8.19.6
+- `github.com/testcontainers/testcontainers-go` v0.42.0
+- `github.com/testcontainers/testcontainers-go/modules/elasticsearch` v0.42.0

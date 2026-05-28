@@ -436,7 +436,7 @@ Wave FINAL (After ALL — 4 parallel reviews):
   - Message: `feat(types): define shared type system for photo pipeline`
   - Files: `internal/types/`
 
-- [ ] 4. **Elasticsearch 客户端 + 索引映射**
+- [x] 4. **Elasticsearch 客户端 + 索引映射**
 
   **What to do**:
   - 安装 `github.com/elastic/go-elasticsearch/v8`
@@ -500,7 +500,7 @@ Wave FINAL (After ALL — 4 parallel reviews):
   - Message: `feat(indexer): set up ES client with index mapping`
   - Files: `internal/indexer/`
 
-- [ ] 5. **LLM 客户端接口 — Ollama + OpenAI 双协议**
+- [x] 5. **LLM 客户端接口 — Ollama + OpenAI 双协议**
 
   **What to do**:
   - 在 `internal/analyzer/` 定义 `LLMClient` 接口：
@@ -629,7 +629,7 @@ Wave FINAL (After ALL — 4 parallel reviews):
   - Message: `feat(decoder): implement multi-format image decoder with EXIF extraction`
   - Files: `internal/decoder/`
 
-- [ ] 7. **文件监控类型 + 接口**
+- [x] 7. **文件监控类型 + 接口**
 
   **What to do**:
   - 在 `internal/watcher/` 定义接口和类型：
@@ -996,7 +996,7 @@ Wave FINAL (After ALL — 4 parallel reviews):
   - Message: `feat(search): implement ES search query builder with multi-filter`
   - Files: `internal/search/search.go`
 
-- [ ] 13. **静态文件服务器**
+- [x] 13. **静态文件服务器**
 
   **What to do**:
   - 在 `internal/static/server.go` 实现静态文件服务
