@@ -1,0 +1,22 @@
+{
+  "active_plan": "/Users/wastecat/code/go/phosche/.sisyphus/plans/phosche.md",
+  "started_at": "2026-05-28T16:10:56.208Z",
+  "session_ids": [
+    "ses_190d2e1f7ffeRsc0bm7lHMHQzD"
+  ],
+  "plan_name": "phosche",
+  "session_origins": {
+    "ses_190d2e1f7ffeRsc0bm7lHMHQzD": "direct"
+  },
+  "task_sessions": {
+    "todo:1": {
+      "task_key": "todo:1",
+      "task_label": "1",
+      "task_title": "**项目脚手架 — Go 模块 + React 项目初始化**",
+      "session_id": "ses_190a4898dfferj0bPHP0Sm7OEP",
+      "agent": "Sisyphus-Junior",
+      "category": "quick",
+      "updated_at": "2026-05-28T16:13:50.685Z"
+    }
+  }
+}
