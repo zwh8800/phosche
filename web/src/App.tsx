@@ -1,41 +1,25 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Layout from './components/Layout';
+import Timeline from './pages/Timeline';
+import Search from './pages/Search';
+import PhotoDetail from './pages/PhotoDetail';
 
-function Timeline() {
-  return (
-    <div>
-      <h1>Timeline</h1>
-    </div>
-  );
-}
-
-function Search() {
-  return (
-    <div>
-      <h1>Search</h1>
-    </div>
-  );
-}
-
-function PhotoDetail() {
-  return (
-    <div>
-      <h1>Photo Detail</h1>
-    </div>
-  );
-}
+const queryClient = new QueryClient();
 
 function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route element={<Layout />}>
-          <Route index element={<Timeline />} />
-          <Route path="search" element={<Search />} />
-          <Route path="photos/:id" element={<PhotoDetail />} />
-        </Route>
-      </Routes>
-    </BrowserRouter>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <Routes>
+          <Route element={<Layout />}>
+            <Route index element={<Timeline />} />
+            <Route path="search" element={<Search />} />
+            <Route path="photos/:id" element={<PhotoDetail />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </QueryClientProvider>
   );
 }
 

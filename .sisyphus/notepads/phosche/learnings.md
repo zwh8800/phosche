@@ -227,3 +227,30 @@ type photoDetailResponse struct {
 - chi v5.3.0 `middleware.Timeout` returns HTTP 504 (Gateway Timeout), NOT 503 as older versions did
 - go-chi/cors v1.2.2: `Access-Control-Allow-Methods` header only appears on preflight (OPTIONS) responses, NOT on simple GET/POST
 - CORS middleware intercepts preflight OPTIONS requests on any path (including non-existent routes) and returns 200 with CORS headers — but OPTIONS /health returns 405 because the route handler explicitly rejects non-GET methods
+
+## T21: Timeline Page (2026-05-29)
+
+### Implementation Notes
+- Created `web/src/pages/Timeline.tsx` — full timeline page with date grouping, infinite scroll, skeleton loading
+- Modified `web/src/App.tsx` — added `QueryClientProvider` wrapper and imported Timeline from `./pages/Timeline`
+- `FetchPhotosResponse` has NO `total_pages` field → computed via `Math.ceil(total / page_size)` in `getNextPageParam`
+- `verbatimModuleSyntax: true` in tsconfig → ALL type-only imports MUST use `import type` syntax (e.g., `import type { PhotoDocument }`)
+- `noUnusedLocals: true` + `noUnusedParameters: true` → strict TS checks, every variable must be used
+- Image src constructed as `/photos/${path.replace(/^\/+/, '')}` to avoid double slashes
+
+### Date Extraction Logic
+- Primary: parse `exif.date_time_original` — normalize EXIF "2024:01:15 14:30:00" → ISO by replacing `:` with `-` and space with `T`
+- Fallback: `created_at` timestamp — auto-detect seconds vs milliseconds via `> 1e12` threshold
+
+### Component Structure
+- `useInfiniteQuery` from `@tanstack/react-query` v5 — `queryKey: ['photos']`, `pageParam`, `getNextPageParam`
+- `IntersectionObserver` on sentinel div triggers `fetchNextPage()` when visible
+- `useMemo` flattens all pages + groups by date (Map), sorted newest-first
+- States: error (warning icon), loading (6 skeleton cards), empty ("还没有照片" with image icon), data (grouped sections)
+- Skeleton: `animate-pulse` + gray `bg-gray-200` placeholders with aspect-square
+- Photo cards: `<button>` (for clickable semantics), `aspect-square` thumbnail with `object-cover`, `group-hover:scale-105` transition, tags as purple pills
+
+### Results
+- 2 files changed: `pages/Timeline.tsx` (new, 249 lines), `App.tsx` (modified)
+- `tsc -b` → PASS, `vite build` → PASS
+- Bundle: 314 KB JS (102 KB gzipped), 29 KB CSS (6.5 KB gzipped)

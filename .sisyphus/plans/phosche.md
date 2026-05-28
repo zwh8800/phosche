@@ -1439,7 +1439,7 @@ Wave FINAL (After ALL — 4 parallel reviews):
   - Message: `feat(web): scaffold React project with API client and routing`
   - Files: `web/`
 
-- [ ] 21. **时间线页面 — 按日期分组 + 无限滚动**
+- [x] 21. **时间线页面 — 按日期分组 + 无限滚动**
 
   **What to do**:
   - 在 `web/src/pages/Timeline.tsx` 实现时间线页面
@@ -1496,7 +1496,7 @@ Wave FINAL (After ALL — 4 parallel reviews):
   - Message: `feat(web): implement timeline page with infinite scroll`
   - Files: `web/src/pages/Timeline.tsx`
 
-- [ ] 22. **搜索页面 — 全文搜索 + 过滤器**
+- [x] 22. **搜索页面 — 全文搜索 + 过滤器**
 
   **What to do**:
   - 在 `web/src/pages/Search.tsx` 实现搜索页面
@@ -1540,7 +1540,7 @@ Wave FINAL (After ALL — 4 parallel reviews):
   - Message: `feat(web): implement search page with multi-filter`
   - Files: `web/src/pages/Search.tsx`
 
-- [ ] 23. **照片详情弹窗**
+- [x] 23. **照片详情弹窗**
 
   **What to do**:
   - 在 `web/src/components/PhotoDetail.tsx` 实现详情模态框
