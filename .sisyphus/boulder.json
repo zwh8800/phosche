@@ -35,6 +35,15 @@
       "agent": "Sisyphus-Junior",
       "category": "unspecified-high",
       "updated_at": "2026-05-28T16:31:35.122Z"
+    },
+    "todo:8": {
+      "task_key": "todo:8",
+      "task_label": "8",
+      "task_title": "**递归 fsnotify 文件监控器**",
+      "session_id": "ses_1909201eeffer4fLBoTCOTpwEy",
+      "agent": "Sisyphus-Junior",
+      "category": "deep",
+      "updated_at": "2026-05-28T16:39:08.708Z"
     }
   }
 }

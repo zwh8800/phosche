@@ -687,7 +687,7 @@ Wave FINAL (After ALL — 4 parallel reviews):
   - Message: `feat(watcher): define watcher interface and dedup types`
   - Files: `internal/watcher/`
 
-- [ ] 8. **递归 fsnotify 文件监控器**
+- [x] 8. **递归 fsnotify 文件监控器**
 
   **What to do**:
   - 安装 `github.com/fsnotify/fsnotify`
@@ -757,7 +757,7 @@ Wave FINAL (After ALL — 4 parallel reviews):
   - Message: `feat(watcher): implement recursive fsnotify file watcher with debounce`
   - Files: `internal/watcher/fsnotify.go`
 
-- [ ] 9. **初始目录扫描器**
+- [x] 9. **初始目录扫描器**
 
   **What to do**:
   - 在 `internal/watcher/scanner.go` 实现 `DirectoryScanner`（实现 `Scanner` 接口）
@@ -814,7 +814,7 @@ Wave FINAL (After ALL — 4 parallel reviews):
   - Message: `feat(watcher): implement directory scanner with dedup`
   - Files: `internal/watcher/scanner.go`
 
-- [ ] 10. **LLM 分析器 — 提示词引擎 + 响应解析**
+- [x] 10. **LLM 分析器 — 提示词引擎 + 响应解析**
 
   **What to do**:
   - 在 `internal/analyzer/analyzer.go` 实现 `ImageAnalyzer`
@@ -881,7 +881,7 @@ Wave FINAL (After ALL — 4 parallel reviews):
   - Message: `feat(analyzer): implement image analyzer with prompt engine and retry`
   - Files: `internal/analyzer/analyzer.go`
 
-- [ ] 11. **ES 索引器服务**
+- [x] 11. **ES 索引器服务**
 
   **What to do**:
   - 在 `internal/indexer/indexer.go` 实现 `IndexerService`
@@ -938,7 +938,7 @@ Wave FINAL (After ALL — 4 parallel reviews):
   - Message: `feat(indexer): implement ES indexing service with circuit breaker`
   - Files: `internal/indexer/indexer.go`
 
-- [ ] 12. **ES 搜索查询构建器**
+- [x] 12. **ES 搜索查询构建器**
 
   **What to do**:
   - 在 `internal/search/search.go` 实现 `SearchService`
@@ -1380,7 +1380,7 @@ Wave FINAL (After ALL — 4 parallel reviews):
   - Message: `feat(api): implement stats endpoint`
   - Files: `internal/api/stats.go`
 
-- [ ] 20. **React 项目脚手架 + API 客户端**
+- [x] 20. **React 项目脚手架 + API 客户端**
 
   **What to do**:
   - 在 `web/` 搭建 React + TypeScript + Vite 项目（脚手架由 T1 创建）
