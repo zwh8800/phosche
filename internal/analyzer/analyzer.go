@@ -20,21 +20,45 @@ import (
 )
 
 // DefaultPrompt is used when no custom prompt is provided to NewImageAnalyzer.
-const DefaultPrompt = `请仔细观察这张图片，然后返回一个JSON对象，包含以下字段：
+const DefaultPrompt = `你是一个专业的图片内容分析助手。请仔细观察这张图片，按照以下要求进行分析。
 
-description（用中文详细描述图片内容，至少50字，包括主体、环境、氛围、构图等）
-tags（相关的标签数组，5-10个，如["风景","天空","云","户外","自然"]）
-objects（检测到的具体物体数组，如["云","太阳","树","长椅"]）
-scene_type（场景类型，只能是以下之一：indoor-室内、outdoor-室外、underwater-水下、aerial-航拍或无人机视角、studio-影棚或专业拍摄环境、night-夜景或低光环境、unknown-无法判断）
-colors（主要颜色数组，3-6个，如["蓝色","白色","黄色"]）
-people_count（图片中的人数，整数，0表示无人）
-has_text（图片中是否有可见文字，布尔值）
-text（如果has_text为true则提取图片中的文字内容，否则返回空字符串）
+## 分析规则
 
-示例格式：
-{"description":"这是一张户外风景照片，画面中可以看到蓝天白云和远处的青山绿水","tags":["风景","天空","云","户外","自然","山水"],"objects":["云","山","树","湖泊"],"scene_type":"outdoor","colors":["蓝色","白色","绿色","青色"],"people_count":0,"has_text":false,"text":""}
+1. 只描述图片中实际可见的内容，不要猜测或编造看不到的细节
+2. 如果某个字段无法从图片中判断，使用合理的默认值
 
-只返回JSON，不要其他文字。`
+## 输出格式
+
+返回一个 JSON 对象，严格包含以下字段：
+
+description（字符串）：用中文详细描述图片内容，包括主体、环境、氛围、构图等，至少50字
+tags（字符串数组）：5-10个相关标签，用于分类和检索，如["风景","天空","云","户外","自然"]
+objects（字符串数组）：检测到的具体物体，如["云","太阳","树","长椅"]
+scene_type（字符串）：场景类型，只能是以下枚举值之一：
+  - "indoor"：室内场景
+  - "outdoor"：室外场景
+  - "underwater"：水下场景
+  - "aerial"：航拍或无人机视角
+  - "studio"：影棚或专业拍摄环境
+  - "night"：夜景或低光环境
+  - "unknown"：无法判断
+colors（字符串数组）：3-6个主要颜色，如["蓝色","白色","黄色"]
+people_count（整数）：图片中的人数，0表示无人
+has_text（布尔值）：图片中是否有可见文字
+text（字符串）：如果 has_text 为 true，提取图片中的文字内容；否则返回空字符串""
+
+## 示例
+
+{"description":"这是一张户外风景照片，画面中可以看到蓝天白云和远处的青山绿水，前景有一棵大树和一条蜿蜒的小路","tags":["风景","天空","云","户外","自然","山水","树木"],"objects":["云","山","树","小路","天空"],"scene_type":"outdoor","colors":["蓝色","白色","绿色","青色"],"people_count":0,"has_text":false,"text":""}
+
+## 注意事项
+
+- 只返回 JSON，不要包含其他文字
+- 确保 JSON 格式正确可解析
+- description 必须至少50字
+- tags 必须5-10个
+- colors 必须3-6个
+- scene_type 只能是上述枚举值之一`
 
 // ImageAnalyzer wraps an LLMClient with prompt building, retry logic, image
 // preprocessing, and response validation.
