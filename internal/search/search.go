@@ -151,7 +151,7 @@ func (s *SearchService) buildQuery(req *types.SearchRequest) map[string]any {
 
 	// 排序策略：有 query 时按 _score 优先（相关性），无 query 时按拍摄时间倒序。
 	sort := []any{
-		map[string]any{"date_time_original": map[string]any{"order": "desc", "missing": "_last"}},
+		map[string]any{"exif.date_time_original": map[string]any{"order": "desc", "missing": "_last"}},
 		map[string]any{"mtime": map[string]any{"order": "desc"}},
 	}
 	if req.Query != "" {
@@ -193,7 +193,7 @@ func (s *SearchService) buildQuery(req *types.SearchRequest) map[string]any {
 	if len(dateRange) > 0 {
 		filter = append(filter, map[string]any{
 			"range": map[string]any{
-				"date_time_original": dateRange,
+				"exif.date_time_original": dateRange,
 			},
 		})
 	}
