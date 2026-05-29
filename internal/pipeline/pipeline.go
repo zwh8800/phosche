@@ -132,7 +132,12 @@ func (p *Pipeline) Run(ctx context.Context) error {
 func (p *Pipeline) scanExisting(ctx context.Context) error {
 	slog.Info("pipeline: starting initial scan", "dirs", p.cfg.Dirs, "recursive", p.cfg.Recursive)
 
-	paths, err := p.cfg.Scanner.Scan(ctx, p.cfg.Dirs, nil)
+	existing, err := watcher.LoadExisting(p.cfg.Dirs, p.cfg.Recursive)
+	if err != nil {
+		slog.Warn("pipeline: load existing failed, scanning all files", "error", err)
+	}
+
+	paths, err := p.cfg.Scanner.Scan(ctx, p.cfg.Dirs, existing)
 	if err != nil {
 		return err
 	}
