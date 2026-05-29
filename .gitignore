@@ -31,6 +31,9 @@ test-results/
 # Configuration (keep only example)
 config.yaml
 
+# Development tools
+opencode.json
+
 # IDE
 .idea/
 .vscode/
