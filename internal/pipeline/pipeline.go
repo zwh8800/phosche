@@ -11,6 +11,8 @@ package pipeline
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -248,10 +250,12 @@ func (p *Pipeline) processPath(ctx context.Context, path string) {
 	}
 
 	now := time.Now().Unix()
+	id := sha256hex(path)
 
 	// 创建 initializing 占位文档，以便 UpdateStatus 有文档可更新。
 	initDoc := &types.PhotoDocument{
 		Photo: types.Photo{
+			ID:        id,
 			Path:      path,
 			MTime:     mtime,
 			Size:      info.Size(),
@@ -268,6 +272,7 @@ func (p *Pipeline) processPath(ctx context.Context, path string) {
 
 	doc := &types.PhotoDocument{
 		Photo: types.Photo{
+			ID:         id,
 			Path:       path,
 			MTime:      mtime,
 			Size:       info.Size(),
@@ -426,4 +431,9 @@ func (p *Pipeline) retryPending(ctx context.Context) {
 
 		p.processPath(ctx, pth)
 	}
+}
+
+func sha256hex(s string) string {
+	h := sha256.Sum256([]byte(s))
+	return hex.EncodeToString(h[:])
 }
