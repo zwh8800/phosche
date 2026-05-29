@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 
 	"github.com/zwh8800/phosche/internal/types"
@@ -27,16 +28,16 @@ func NewOllamaClient(baseURL, model string) *OllamaClient {
 }
 
 type ollamaChatRequest struct {
-	Model    string            `json:"model"`
-	Messages []ollamaMessage   `json:"messages"`
-	Stream   bool              `json:"stream"`
-	Format   string            `json:"format"`
-	Images   []string          `json:"images,omitempty"`
+	Model    string          `json:"model"`
+	Messages []ollamaMessage `json:"messages"`
+	Stream   bool            `json:"stream"`
+	Format   string          `json:"format"`
 }
 
 type ollamaMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role    string   `json:"role"`
+	Content string   `json:"content"`
+	Images  []string `json:"images,omitempty"`
 }
 
 type ollamaChatResponse struct {
@@ -57,9 +58,9 @@ func (c *OllamaClient) AnalyzeImage(ctx context.Context, imageData []byte, promp
 			{
 				Role:    "user",
 				Content: prompt,
+				Images:  []string{encodedImage},
 			},
 		},
-		Images: []string{encodedImage},
 	}
 
 	bodyBytes, err := json.Marshal(reqBody)
@@ -97,6 +98,7 @@ func (c *OllamaClient) AnalyzeImage(ctx context.Context, imageData []byte, promp
 	var result types.AnalysisResult
 
 	if err := json.Unmarshal([]byte(content), &result); err != nil {
+		slog.Warn("ollama: failed to parse JSON response", "raw_content", truncate(content, 500))
 		return nil, fmt.Errorf("unmarshal analysis result: %w", err)
 	}
 

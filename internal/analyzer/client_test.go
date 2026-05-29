@@ -69,13 +69,13 @@ func TestOllamaClient_RequestFormat(t *testing.T) {
 			t.Errorf("expected role 'user', got %v", msg["role"])
 		}
 
-		// Validate images field exists and contains base64 data
-		if images, ok := body["images"].([]interface{}); ok {
+		// Validate images field exists inside message and contains base64 data
+		if images, ok := msg["images"].([]interface{}); ok {
 			if len(images) == 0 {
-				t.Error("expected images array to contain at least one image")
+				t.Error("expected images array in message to contain at least one image")
 			}
 		} else {
-			t.Error("expected images field in body")
+			t.Error("expected images field in message")
 		}
 
 		// Return valid response
