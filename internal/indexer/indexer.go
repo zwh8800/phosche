@@ -77,6 +77,8 @@ func (s *IndexerService) Stop() {
 // IndexPhoto indexes a photo document. The document _id is sha256(path).
 // On ES failure the document is placed in the retry queue and nil is returned.
 func (s *IndexerService) IndexPhoto(ctx context.Context, doc *types.PhotoDocument, indexName string) error {
+	s.logger.Debug("IndexPhoto", "path", doc.Path, "status", doc.Status, "index", indexName)
+
 	if s.isCircuitOpen() {
 		s.queueDocument(doc, indexName)
 		return nil
@@ -96,6 +98,8 @@ func (s *IndexerService) IndexPhoto(ctx context.Context, doc *types.PhotoDocumen
 // UpdateStatus updates only the status field of a photo document using
 // the ES Update API. Other fields are not overwritten.
 func (s *IndexerService) UpdateStatus(ctx context.Context, path string, status types.JobStatus, indexName string) error {
+	s.logger.Debug("UpdateStatus", "path", path, "status", status, "index", indexName)
+
 	if s.isCircuitOpen() {
 		s.queueStatusUpdate(path, status, indexName)
 		return nil
@@ -116,6 +120,8 @@ func (s *IndexerService) UpdateStatus(ctx context.Context, path string, status t
 // Returns an error containing the failure count if any individual document
 // fails. On connection-level failure, all documents are queued for retry.
 func (s *IndexerService) BulkIndex(ctx context.Context, docs []*types.PhotoDocument, indexName string) error {
+	s.logger.Debug("BulkIndex", "count", len(docs), "index", indexName)
+
 	if s.isCircuitOpen() {
 		for _, doc := range docs {
 			s.queueDocument(doc, indexName)
@@ -149,6 +155,7 @@ func (s *IndexerService) BulkIndex(ctx context.Context, docs []*types.PhotoDocum
 // DeletePhoto removes a photo document from the index by path.
 func (s *IndexerService) DeletePhoto(ctx context.Context, path string, indexName string) error {
 	docID := sha256hex(path)
+	s.logger.Debug("DeletePhoto", "path", path, "doc_id", docID, "index", indexName)
 
 	req := esapi.DeleteRequest{
 		Index:      indexName,
@@ -173,6 +180,7 @@ func (s *IndexerService) DeletePhoto(ctx context.Context, path string, indexName
 // code NOT_FOUND if the document does not exist.
 func (s *IndexerService) GetPhoto(ctx context.Context, path string, indexName string) (*types.PhotoDocument, error) {
 	docID := sha256hex(path)
+	s.logger.Debug("GetPhoto", "path", path, "doc_id", docID, "index", indexName)
 
 	req := esapi.GetRequest{
 		Index:      indexName,

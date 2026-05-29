@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 
 	"github.com/elastic/go-elasticsearch/v8/esapi"
@@ -37,6 +38,8 @@ func (s *SearchService) Search(ctx context.Context, indexName string, req *types
 		return nil, fmt.Errorf("marshal query: %w", err)
 	}
 
+	slog.Debug("ES search", "index", indexName, "query", truncateJSON(bodyBytes, 500), "page", req.Page, "page_size", req.PageSize)
+
 	searchReq := esapi.SearchRequest{
 		Index: []string{indexName},
 		Body:  bytes.NewReader(bodyBytes),
@@ -53,12 +56,17 @@ func (s *SearchService) Search(ctx context.Context, indexName string, req *types
 		return nil, fmt.Errorf("search returned %s: %s", resp.Status(), string(b))
 	}
 
-	return s.parseSearchResponse(resp.Body, req)
+	result, err := s.parseSearchResponse(resp.Body, req)
+	if err == nil {
+		slog.Debug("ES search result", "total", result.Total, "hits", len(result.Hits))
+	}
+	return result, err
 }
 
 // GetFilters returns aggregated filter values (tags, scene types, camera models)
 // for use in the frontend filter UI.
 func (s *SearchService) GetFilters(ctx context.Context, indexName string) (*types.FiltersResponse, error) {
+	slog.Debug("ES get filters", "index", indexName)
 	query := map[string]any{
 		"size": 0,
 		"aggs": map[string]any{
@@ -277,6 +285,7 @@ func (s *SearchService) parseSearchResponse(body io.Reader, req *types.SearchReq
 // GetStats returns aggregate photo statistics (total count, counts by status,
 // and count of recently created photos).
 func (s *SearchService) GetStats(ctx context.Context, indexName string) (*types.StatsResponse, error) {
+	slog.Debug("ES get stats", "index", indexName)
 	query := map[string]any{
 		"size":             0,
 		"track_total_hits": true,
@@ -390,4 +399,11 @@ func (s *SearchService) parseFiltersResponse(body io.Reader) (*types.FiltersResp
 		SceneTypes: scenes,
 		Cameras:    cameras,
 	}, nil
+}
+
+func truncateJSON(b []byte, maxLen int) string {
+	if len(b) <= maxLen {
+		return string(b)
+	}
+	return string(b[:maxLen]) + "..."
 }
