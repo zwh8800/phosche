@@ -53,10 +53,22 @@ func (a *ImageAnalyzer) Analyze(ctx context.Context, imageData []byte) (*types.A
 	ctx, cancel := context.WithTimeout(ctx, a.timeout)
 	defer cancel()
 
+	originalSize := len(imageData)
+
 	processed, err := a.preprocessImage(imageData)
 	if err != nil {
 		return nil, fmt.Errorf("preprocess image: %w", err)
 	}
+
+	scaled := len(processed) != originalSize
+	slog.Info("starting LLM analysis",
+		"original_bytes", originalSize,
+		"processed_bytes", len(processed),
+		"scaled", scaled,
+		"timeout", a.timeout,
+	)
+
+	startTime := time.Now()
 
 	var lastErr error
 	for attempt := 0; attempt <= a.maxRetries; attempt++ {
@@ -80,6 +92,14 @@ func (a *ImageAnalyzer) Analyze(ctx context.Context, imageData []byte) (*types.A
 			if err := a.validateResult(result); err != nil {
 				return nil, fmt.Errorf("invalid analysis result: %w", err)
 			}
+			slog.Info("LLM analysis completed",
+				"duration", time.Since(startTime).Round(time.Millisecond),
+				"attempts", attempt+1,
+				"description", truncate(result.Description, 80),
+				"tags_count", len(result.Tags),
+				"scene_type", result.SceneType,
+				"confidence", result.Confidence,
+			)
 			return result, nil
 		}
 
@@ -94,6 +114,13 @@ func (a *ImageAnalyzer) Analyze(ctx context.Context, imageData []byte) (*types.A
 	}
 
 	return nil, fmt.Errorf("all %d retries exhausted: %w", a.maxRetries, lastErr)
+}
+
+func truncate(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }
 
 func (a *ImageAnalyzer) preprocessImage(data []byte) ([]byte, error) {
