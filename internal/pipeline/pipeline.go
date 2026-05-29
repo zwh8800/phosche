@@ -83,23 +83,9 @@ func (p *Pipeline) Run(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	if err := p.scanExisting(ctx); err != nil {
-		return fmt.Errorf("pipeline: initial scan: %w", err)
-	}
-
-	eventCh, err := p.cfg.Watcher.Watch(ctx, p.cfg.Dirs, p.cfg.Recursive)
-	if err != nil {
-		return fmt.Errorf("pipeline: start watcher: %w", err)
-	}
-
 	var fwWg, workersWg, retryWg sync.WaitGroup
 
-	fwWg.Add(1)
-	go func() {
-		defer fwWg.Done()
-		p.forwardEvents(ctx, eventCh)
-	}()
-
+	// Start workers before scan so they can consume as scan feeds the channel.
 	for i := 0; i < p.cfg.Concurrency; i++ {
 		workersWg.Add(1)
 		go func() {
@@ -112,6 +98,21 @@ func (p *Pipeline) Run(ctx context.Context) error {
 	go func() {
 		defer retryWg.Done()
 		p.retryLoop(ctx)
+	}()
+
+	if err := p.scanExisting(ctx); err != nil {
+		return fmt.Errorf("pipeline: initial scan: %w", err)
+	}
+
+	eventCh, err := p.cfg.Watcher.Watch(ctx, p.cfg.Dirs, p.cfg.Recursive)
+	if err != nil {
+		return fmt.Errorf("pipeline: start watcher: %w", err)
+	}
+
+	fwWg.Add(1)
+	go func() {
+		defer fwWg.Done()
+		p.forwardEvents(ctx, eventCh)
 	}()
 
 	<-ctx.Done()
