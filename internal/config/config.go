@@ -112,6 +112,9 @@ func applyDefaults(cfg *Config) {
 	if cfg.Server.LogLevel == "" {
 		cfg.Server.LogLevel = "info"
 	}
+	if cfg.Server.PhotoBasePath == "" && len(cfg.Watch.Directories) > 0 {
+		cfg.Server.PhotoBasePath = cfg.Watch.Directories[0]
+	}
 }
 
 func validate(cfg *Config) error {

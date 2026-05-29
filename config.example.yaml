@@ -31,6 +31,6 @@ elasticsearch:
 server:
   host: "0.0.0.0"
   port: 8080
-  photo_base_path: /path/to/photos
+  # photo_base_path: /path/to/photos   # 不填时默认使用 watch.directories 的第一项
   dev_mode: true
   log_level: info
