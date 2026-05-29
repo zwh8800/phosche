@@ -35,9 +35,10 @@ func PhotoHandler(photoBasePaths []string) http.Handler {
 			cleanBase := filepath.Clean(basePath)
 
 			var safePath string
-			if strings.HasPrefix(requestedPath, cleanBase) {
-				// requestedPath is already an absolute path under this base (e.g. /Volumes/photo/单反/xxx.jpg)
-				safePath = filepath.Clean(requestedPath)
+			absRequested := "/" + requestedPath
+			if strings.HasPrefix(absRequested, cleanBase) {
+				// requestedPath is an absolute path without leading slash (e.g. Volumes/photo/单反/xxx.jpg)
+				safePath = filepath.Clean(absRequested)
 			} else {
 				safePath = filepath.Clean(filepath.Join(basePath, requestedPath))
 			}
