@@ -104,7 +104,7 @@ func Run(distFS fs.FS, configPath string) {
 	apiSrv := api.NewServer(searchSvc, indexerSvc, cfg.Elasticsearch.IndexName)
 	router := api.NewRouter(apiSrv)
 
-	photoHandler := static.PhotoHandler(cfg.Server.PhotoBasePath)
+	photoHandler := static.PhotoHandler(cfg.Watch.Directories)
 
 	httpHandler := newMux(router, photoHandler, distFS, cfg.Server.DevMode)
 

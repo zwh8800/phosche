@@ -224,7 +224,7 @@ func TestQA_StaticFileServer(t *testing.T) {
 	require.NoError(t, err)
 	f.Close()
 
-	handler := static.PhotoHandler(tempDir)
+	handler := static.PhotoHandler([]string{tempDir})
 	ts := httptest.NewServer(handler)
 	defer ts.Close()
 
@@ -252,7 +252,7 @@ func TestQA_StaticFileServer(t *testing.T) {
 	resp3, err := http.Get(ts.URL + "/photos/test.txt")
 	require.NoError(t, err)
 	defer resp3.Body.Close()
-	assert.Equal(t, http.StatusForbidden, resp3.StatusCode, "non-image extension should return 403")
+	assert.Equal(t, http.StatusNotFound, resp3.StatusCode, "non-image extension should return 404")
 
 	// Path traversal should be blocked
 	resp4, err := http.Get(ts.URL + "/photos/../../../etc/passwd")

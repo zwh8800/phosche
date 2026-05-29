@@ -17,11 +17,12 @@ var allowedExtensions = map[string]bool{
 	".heif": true,
 }
 
-// PhotoHandler returns an http.Handler that serves photo files from the given base path.
+// PhotoHandler returns an http.Handler that serves photo files from the given base paths.
+// The handler tries each base path in order and serves from the first where the file exists.
 // Only files with image extensions (.jpg/.jpeg/.png/.webp/.heic/.heif) are served.
 // Path traversal (../) is prevented.
 // Cache-Control header is set to 1 day.
-func PhotoHandler(photoBasePath string) http.Handler {
+func PhotoHandler(photoBasePaths []string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.HasPrefix(r.URL.Path, "/photos/") {
 			http.NotFound(w, r)
@@ -30,32 +31,33 @@ func PhotoHandler(photoBasePath string) http.Handler {
 
 		requestedPath := r.URL.Path[len("/photos/"):]
 
-		safePath := filepath.Clean(filepath.Join(photoBasePath, requestedPath))
+		for _, basePath := range photoBasePaths {
+			safePath := filepath.Clean(filepath.Join(basePath, requestedPath))
 
-		cleanBase := filepath.Clean(photoBasePath)
-		if !strings.HasPrefix(safePath, cleanBase+string(filepath.Separator)) && safePath != cleanBase {
-			http.Error(w, "Forbidden", http.StatusForbidden)
+			cleanBase := filepath.Clean(basePath)
+			if !strings.HasPrefix(safePath, cleanBase+string(filepath.Separator)) && safePath != cleanBase {
+				continue
+			}
+
+			fi, err := os.Stat(safePath)
+			if err != nil {
+				continue
+			}
+
+			if fi.IsDir() {
+				continue
+			}
+
+			ext := strings.ToLower(filepath.Ext(safePath))
+			if !allowedExtensions[ext] {
+				continue
+			}
+
+			w.Header().Set("Cache-Control", "public, max-age=86400")
+			http.ServeFile(w, r, safePath)
 			return
 		}
 
-		fi, err := os.Stat(safePath)
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-
-		if fi.IsDir() {
-			http.NotFound(w, r)
-			return
-		}
-
-		ext := strings.ToLower(filepath.Ext(safePath))
-		if !allowedExtensions[ext] {
-			http.Error(w, "Forbidden", http.StatusForbidden)
-			return
-		}
-
-		w.Header().Set("Cache-Control", "public, max-age=86400")
-		http.ServeFile(w, r, safePath)
+		http.NotFound(w, r)
 	})
 }

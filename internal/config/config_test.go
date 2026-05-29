@@ -48,7 +48,6 @@ elasticsearch:
 server:
   host: "0.0.0.0"
   port: 8080
-  photo_base_path: /path/to/photos
   dev_mode: true
 `
 	path := writeTempYAML(t, yaml)
