@@ -33,3 +33,4 @@ server:
   port: 8080
   photo_base_path: /path/to/photos
   dev_mode: true
+  log_level: info

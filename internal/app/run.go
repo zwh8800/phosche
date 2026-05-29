@@ -23,15 +23,15 @@ import (
 )
 
 func Run(distFS fs.FS, configPath string) {
-	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	})))
-
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
 		slog.Error("failed to load config", "error", err)
 		os.Exit(1)
 	}
+
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: parseLogLevel(cfg.Server.LogLevel),
+	})))
 
 	logStartupInfo(cfg)
 
@@ -183,4 +183,17 @@ func spaHandler(distFS fs.FS) http.Handler {
 		}
 		fileServer.ServeHTTP(w, r)
 	})
+}
+
+func parseLogLevel(s string) slog.Level {
+	switch s {
+	case "debug":
+		return slog.LevelDebug
+	case "warn":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	default:
+		return slog.LevelInfo
+	}
 }

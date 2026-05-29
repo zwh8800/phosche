@@ -56,6 +56,7 @@ type ServerConfig struct {
 	Port          int    `yaml:"port"`
 	PhotoBasePath string `yaml:"photo_base_path"`
 	DevMode       bool   `yaml:"dev_mode"`
+	LogLevel      string `yaml:"log_level"`
 }
 
 func LoadConfig(path string) (*Config, error) {
@@ -107,6 +108,9 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Server.Port == 0 {
 		cfg.Server.Port = 8080
+	}
+	if cfg.Server.LogLevel == "" {
+		cfg.Server.LogLevel = "info"
 	}
 }
 
