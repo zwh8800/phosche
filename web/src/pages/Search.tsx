@@ -149,6 +149,7 @@ export default function Search() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const initialMount = useRef(true);
+  const scrollPositionRef = useRef<number>(0);
 
   const { data: filters } = useQuery<FiltersResponse>({
     queryKey: ['filters'],
@@ -224,10 +225,21 @@ export default function Search() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateFrom, dateTo, sceneType, cameraModel, selectedTags]);
 
+  // Restore scroll position after results update (for load more)
+  useEffect(() => {
+    if (scrollPositionRef.current > 0) {
+      window.scrollTo(0, scrollPositionRef.current);
+      scrollPositionRef.current = 0;
+    }
+  }, [results]);
+
   const handleLoadMore = useCallback(() => {
     if (!results || loading) return;
     const nextPage = results.page + 1;
     if (nextPage > results.total_pages) return;
+    
+    // Save scroll position before loading more
+    scrollPositionRef.current = window.scrollY;
     doSearch(nextPage, true);
   }, [results, loading, doSearch]);
 
