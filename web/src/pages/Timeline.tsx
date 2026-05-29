@@ -7,9 +7,7 @@ import type { PhotoDocument } from '../types';
 function extractDate(photo: PhotoDocument): string {
   const exifDate = photo.exif?.date_time_original;
   if (exifDate) {
-    // Normalize EXIF "2024:01:15 14:30:00" → ISO
-    const normalized = exifDate.replace(/:/g, '-').replace(' ', 'T');
-    const d = new Date(normalized);
+    const d = new Date(exifDate);
     if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
   }
   // Auto-detect unix-seconds vs milliseconds

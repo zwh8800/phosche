@@ -28,12 +28,9 @@ function formatMtime(ts?: number): string {
 
 function formatExifDate(raw?: string): string {
   if (!raw) return '';
-  try {
-    const cleaned = raw.replace(/^(\d{4}):(\d{2}):(\d{2}).*/, '$1-$2-$3');
-    return cleaned;
-  } catch {
-    return raw.slice(0, 10);
-  }
+  const d = new Date(raw);
+  if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+  return raw.slice(0, 10);
 }
 
 function Spinner() {
