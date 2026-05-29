@@ -3,6 +3,7 @@ import {
   useEffect,
   useCallback,
   useRef,
+  memo,
   type FormEvent,
   type ChangeEvent,
 } from 'react';
@@ -57,7 +58,7 @@ const STATUS_COLORS: Record<string, string> = {
   unanalyzed: 'bg-gray-100 text-gray-600',
 };
 
-function PhotoCard({ photo }: { photo: PhotoDocument }) {
+const PhotoCard = memo(function PhotoCard({ photo }: { photo: PhotoDocument }) {
   const dateLabel =
     formatExifDate(photo.exif?.date_time_original) ||
     formatMtime(photo.mtime);
@@ -122,7 +123,7 @@ function PhotoCard({ photo }: { photo: PhotoDocument }) {
       </div>
     </a>
   );
-}
+});
 
 export default function Search() {
   const [searchParams, setSearchParams] = useSearchParams();
