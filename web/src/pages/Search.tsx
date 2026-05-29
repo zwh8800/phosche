@@ -7,7 +7,7 @@ import {
   type FormEvent,
   type ChangeEvent,
 } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { searchPhotos, fetchFilters } from '../api/photos';
 import type {
@@ -64,8 +64,8 @@ const PhotoCard = memo(function PhotoCard({ photo }: { photo: PhotoDocument }) {
     formatMtime(photo.mtime);
 
   return (
-    <a
-      href={`/photos/${encodeURIComponent(photo.path)}`}
+    <Link
+      to={`/photos/${encodeURIComponent(photo.path)}`}
       className="group block rounded-xl overflow-hidden bg-white border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
     >
       <div className="relative aspect-[4/3] bg-gray-100 overflow-hidden">
@@ -121,7 +121,7 @@ const PhotoCard = memo(function PhotoCard({ photo }: { photo: PhotoDocument }) {
           </div>
         )}
       </div>
-    </a>
+    </Link>
   );
 });
 
