@@ -25,8 +25,13 @@ export interface FetchPhotosResponse {
 export async function fetchPhotos(
   params: FetchPhotosParams,
 ): Promise<FetchPhotosResponse> {
-  const { data } = await apiClient.get<FetchPhotosResponse>('/photos', { params });
-  return data;
+  const { data } = await apiClient.get<{ hits: PhotoDocument[]; total: number; page: number; page_size: number; total_pages: number }>('/photos', { params });
+  return {
+    photos: data.hits ?? [],
+    total: data.total,
+    page: data.page,
+    page_size: data.page_size,
+  };
 }
 
 export async function searchPhotos(req: SearchRequest): Promise<SearchResponse> {

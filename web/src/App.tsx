@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Layout from './components/Layout';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -9,20 +9,23 @@ import NotFound from './pages/NotFound';
 
 const queryClient = new QueryClient();
 
+const router = createBrowserRouter([
+  {
+    element: <Layout />,
+    children: [
+      { index: true, element: <Timeline /> },
+      { path: 'search', element: <Search /> },
+      { path: 'photos/:id', element: <PhotoDetail /> },
+      { path: '*', element: <NotFound /> },
+    ],
+  },
+]);
+
 function App() {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
-          <Routes>
-            <Route element={<Layout />}>
-              <Route index element={<Timeline />} />
-              <Route path="search" element={<Search />} />
-              <Route path="photos/:id" element={<PhotoDetail />} />
-              <Route path="*" element={<NotFound />} />
-            </Route>
-          </Routes>
-        </BrowserRouter>
+        <RouterProvider router={router} />
       </QueryClientProvider>
     </ErrorBoundary>
   );
