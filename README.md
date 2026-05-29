@@ -110,6 +110,109 @@ go run ./cmd/phosche/ -config config.yaml
 
 服务默认监听 `0.0.0.0:8080`。开发模式下（`dev_mode: true`），前端由 Vite 独立运行，后端不提供 SPA 静态文件。
 
+#### 方式三：单独使用 Docker 启动
+
+适用于 Elasticsearch 已单独部署（或使用云服务）的场景，通过 `docker run` 启动 phosche 容器。
+
+**1. 构建镜像：**
+
+```bash
+docker build -t phosche .
+```
+
+**2. 准备配置文件：**
+
+```bash
+cp config.example.yaml config.yaml
+vim config.yaml
+```
+
+关键配置项（与 Docker Compose 方式不同，这里的 ES 地址指向外部服务）：
+
+```yaml
+elasticsearch:
+  addresses:
+    - https://your-es-cloud.example.com:9200   # 外部 ES 地址
+  username: "your-username"                     # 如启用了认证
+  password: "your-password"
+  insecure_skip_verify: false
+
+server:
+  dev_mode: false    # 关闭开发模式，使用内嵌前端
+
+llm:
+  provider: openai   # 或 ollama（见下方网络说明）
+```
+
+**3. 启动容器：**
+
+```bash
+docker run -d \
+  --name phosche \
+  -p 8080:8080 \
+  -v "$(pwd)/config.yaml:/app/config.yaml:ro" \
+  -v /path/to/your/photos:/photos:ro \
+  -e CONFIG_PATH=/app/config.yaml \
+  phosche
+```
+
+**参数说明：**
+
+| 参数 | 说明 |
+|------|------|
+| `-d` | 后台运行 |
+| `--name phosche` | 容器名称 |
+| `-p 8080:8080` | 端口映射（主机:容器） |
+| `-v ./config.yaml:/app/config.yaml:ro` | 挂载配置文件（只读） |
+| `-v /path/to/photos:/photos:ro` | 挂载照片目录（只读），路径需与 `server.photo_base_path` 和 `watch.directories` 配置一致 |
+| `-e CONFIG_PATH=/app/config.yaml` | 指定配置文件路径 |
+| `phosche` | 镜像名称 |
+
+**访问服务：** `http://localhost:8080`
+
+**访问本地 Ollama（可选）：**
+
+如果 LLM provider 配置为 `ollama` 且 Ollama 运行在宿主机上，需要让容器能够访问宿主机的网络：
+
+```bash
+# macOS / Windows（Docker Desktop）
+docker run -d \
+  --name phosche \
+  --add-host host.docker.internal:host-gateway \
+  -p 8080:8080 \
+  -v "$(pwd)/config.yaml:/app/config.yaml:ro" \
+  -v /path/to/your/photos:/photos:ro \
+  -e CONFIG_PATH=/app/config.yaml \
+  phosche
+```
+
+然后在 `config.yaml` 中将 Ollama 地址改为 `http://host.docker.internal:11434`：
+
+```yaml
+llm:
+  provider: ollama
+  ollama:
+    base_url: http://host.docker.internal:11434
+```
+
+> **Linux 宿主机**：使用 `--network host` 替代端口映射和 `--add-host`，Ollama 地址填 `http://localhost:11434`。
+
+**常用管理命令：**
+
+```bash
+# 查看日志
+docker logs -f phosche
+
+# 停止容器
+docker stop phosche
+
+# 重启容器（修改配置后）
+docker restart phosche
+
+# 删除容器
+docker rm phosche
+```
+
 ---
 
 ## 配置说明
