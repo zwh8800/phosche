@@ -129,17 +129,31 @@ func (p *Pipeline) Run(ctx context.Context) error {
 }
 
 func (p *Pipeline) scanExisting(ctx context.Context) error {
+	slog.Info("pipeline: starting initial scan", "dirs", p.cfg.Dirs, "recursive", p.cfg.Recursive)
+
 	paths, err := p.cfg.Scanner.Scan(ctx, p.cfg.Dirs, nil)
 	if err != nil {
 		return err
 	}
+
+	slog.Info("pipeline: initial scan complete", "found", len(paths))
+
+	if len(paths) == 0 {
+		slog.Warn("pipeline: no photos found in watched directories, waiting for new files")
+		return nil
+	}
+
+	queued := 0
 	for _, path := range paths {
 		select {
 		case p.inputCh <- path:
+			queued++
 		case <-ctx.Done():
 			return ctx.Err()
 		}
 	}
+
+	slog.Info("pipeline: queued scanned photos for processing", "queued", queued, "total", len(paths))
 	return nil
 }
 
@@ -158,6 +172,7 @@ func (p *Pipeline) forwardEvents(ctx context.Context, eventCh <-chan types.FileE
 
 func (p *Pipeline) worker(_ context.Context) {
 	for path := range p.inputCh {
+		slog.Info("pipeline: processing photo", "path", path)
 		ctx, cancel := context.WithTimeout(context.Background(), defaultDrainTimeout)
 		p.processPath(ctx, path)
 		cancel()
