@@ -9,15 +9,27 @@ bin/
 # Go
 *.test
 *.out
+*.log
 go.work
+coverage/
+
+# Test binaries
+pipeline.test
 
 # Node
 node_modules/
 dist/
 
+# Playwright
+playwright-report/
+test-results/
+
 # Environment
 .env
 .env.local
+
+# Configuration (keep only example)
+config.yaml
 
 # IDE
 .idea/
