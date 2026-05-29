@@ -20,26 +20,17 @@ import (
 )
 
 // DefaultPrompt is used when no custom prompt is provided to NewImageAnalyzer.
-const DefaultPrompt = `分析这张图片，返回 JSON 格式：
-{
-  "description": "图片描述（50-100字）",
-  "tags": ["标签1", "标签2"],
-  "objects": ["物体1", "物体2"],
-  "scene_type": "场景类型",
-  "colors": ["颜色1", "颜色2"],
-  "people_count": 人数,
-  "has_text": true/false,
-  "text": "图片中的文字内容，无文字则为空字符串"
-}
+const DefaultPrompt = `请仔细观察这张图片，然后返回一个JSON对象，包含以下字段：
+- description：用中文详细描述图片内容，至少50字，包括主体、环境、氛围、构图等
+- tags：相关的标签数组，如["风景","天空","云"]，用于分类和检索，5-10个
+- objects：检测到的具体物体数组，如["云","太阳","树"]
+- scene_type：场景类型，只能是以下之一：indoor（室内）、outdoor（室外）、underwater（水下）、aerial（航拍/无人机视角）、studio（影棚/专业拍摄环境）、night（夜景/低光环境）、unknown（无法判断）
+- colors：主要颜色数组，如["蓝色","白色","黄色"]，3-6个
+- people_count：图片中的人数，整数，0表示无人
+- has_text：图片中是否有可见文字，布尔值
+- text：如果has_text为true，提取图片中的文字内容；如果has_text为false，返回空字符串""
 
-scene_type 必须是以下之一：
-- indoor: 室内场景
-- outdoor: 室外场景
-- underwater: 水下场景
-- aerial: 航拍/无人机视角
-- studio: 影棚/专业拍摄环境
-- night: 夜景/低光环境
-- unknown: 无法判断`
+只返回JSON，不要其他文字。`
 
 // ImageAnalyzer wraps an LLMClient with prompt building, retry logic, image
 // preprocessing, and response validation.
