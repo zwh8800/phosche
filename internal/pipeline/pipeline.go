@@ -58,6 +58,9 @@ type Pipeline struct {
 	inputCh   chan string
 	pendingMu sync.Mutex
 	pending   map[string]*pendingItem
+
+	analyzedMu sync.RWMutex
+	analyzed   map[string]int64 // path → mtime, loaded from ES on startup
 }
 
 func NewPipeline(cfg PipelineConfig) *Pipeline {
@@ -74,9 +77,10 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 		cfg.MaxPendingRetries = defaultMaxPendingRetries
 	}
 	return &Pipeline{
-		cfg:     cfg,
-		inputCh: make(chan string, cfg.QueueSize),
-		pending: make(map[string]*pendingItem),
+		cfg:      cfg,
+		inputCh:  make(chan string, cfg.QueueSize),
+		pending:  make(map[string]*pendingItem),
+		analyzed: make(map[string]int64),
 	}
 }
 
@@ -135,10 +139,15 @@ func (p *Pipeline) scanExisting(ctx context.Context) error {
 
 	analyzed, err := p.cfg.Indexer.ListAnalyzed(ctx, p.cfg.IndexName)
 	if err != nil {
-		slog.Warn("pipeline: list analyzed failed, will scan all files", "error", err)
+		slog.Warn("pipeline: list analyzed failed, will process all files", "error", err)
+	} else {
+		p.analyzedMu.Lock()
+		p.analyzed = analyzed
+		p.analyzedMu.Unlock()
+		slog.Info("pipeline: loaded analyzed photos from ES", "count", len(analyzed))
 	}
 
-	paths, err := p.cfg.Scanner.Scan(ctx, p.cfg.Dirs, analyzed)
+	paths, err := p.cfg.Scanner.Scan(ctx, p.cfg.Dirs, nil)
 	if err != nil {
 		return err
 	}
@@ -187,6 +196,23 @@ func (p *Pipeline) worker(_ context.Context) {
 }
 
 func (p *Pipeline) processPath(ctx context.Context, path string) {
+	// Check if already analyzed with same mtime
+	info, err := os.Stat(path)
+	if err != nil {
+		slog.Warn("pipeline: stat failed", "path", path, "error", err)
+		return
+	}
+	mtime := info.ModTime().Unix()
+
+	p.analyzedMu.RLock()
+	storedMtime, exists := p.analyzed[path]
+	p.analyzedMu.RUnlock()
+
+	if exists && storedMtime == mtime {
+		slog.Debug("pipeline: skipping already analyzed", "path", path)
+		return
+	}
+
 	now := time.Now().Unix()
 
 	// Create an initial document so UpdateStatus has something to update.
