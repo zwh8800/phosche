@@ -88,6 +88,7 @@ function PhotoCard({ photo }: { photo: PhotoDocument }) {
 
 export default function Timeline() {
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const scrollPositionRef = useRef<number>(0);
 
   const {
     data,
@@ -115,6 +116,7 @@ export default function Timeline() {
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+          scrollPositionRef.current = window.scrollY;
           fetchNextPage();
         }
       },
@@ -124,6 +126,13 @@ export default function Timeline() {
     observer.observe(sentinel);
     return () => observer.disconnect();
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  useEffect(() => {
+    if (scrollPositionRef.current > 0 && !isFetchingNextPage) {
+      window.scrollTo(0, scrollPositionRef.current);
+      scrollPositionRef.current = 0;
+    }
+  }, [data, isFetchingNextPage]);
 
   const groupedPhotos = useMemo(() => {
     const allPhotos = data?.pages.flatMap((page) => page.photos) ?? [];
