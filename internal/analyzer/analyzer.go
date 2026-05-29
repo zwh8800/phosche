@@ -20,15 +20,10 @@ import (
 )
 
 // DefaultPrompt is used when no custom prompt is provided to NewImageAnalyzer.
-const DefaultPrompt = `请仔细观察这张图片，然后返回一个JSON对象，包含以下字段：
-- description：用中文详细描述图片内容，至少50字，包括主体、环境、氛围、构图等
-- tags：相关的标签数组，如["风景","天空","云"]，用于分类和检索，5-10个
-- objects：检测到的具体物体数组，如["云","太阳","树"]
-- scene_type：场景类型，只能是以下之一：indoor（室内）、outdoor（室外）、underwater（水下）、aerial（航拍/无人机视角）、studio（影棚/专业拍摄环境）、night（夜景/低光环境）、unknown（无法判断）
-- colors：主要颜色数组，如["蓝色","白色","黄色"]，3-6个
-- people_count：图片中的人数，整数，0表示无人
-- has_text：图片中是否有可见文字，布尔值
-- text：如果has_text为true，提取图片中的文字内容；如果has_text为false，返回空字符串""
+const DefaultPrompt = `请仔细观察这张图片，然后返回一个JSON对象，包含以下字段：description（用中文详细描述图片内容，至少50字，包括主体、环境、氛围、构图等）、tags（相关的标签数组，5-10个，如["风景","天空","云","户外","自然"]）、objects（检测到的具体物体数组，如["云","太阳","树","长椅"]）、scene_type（场景类型，只能是以下之一：indoor-室内、outdoor-室外、underwater-水下、aerial-航拍或无人机视角、studio-影棚或专业拍摄环境、night-夜景或低光环境、unknown-无法判断）、colors（主要颜色数组，3-6个，如["蓝色","白色","黄色"]）、people_count（图片中的人数，整数，0表示无人）、has_text（图片中是否有可见文字，布尔值）、text（如果has_text为true则提取图片中的文字内容，否则返回空字符串）。
+
+示例格式：
+{"description":"这是一张户外风景照片，画面中可以看到蓝天白云和远处的青山绿水","tags":["风景","天空","云","户外","自然","山水"],"objects":["云","山","树","湖泊"],"scene_type":"outdoor","colors":["蓝色","白色","绿色","青色"],"people_count":0,"has_text":false,"text":""}
 
 只返回JSON，不要其他文字。`
 
