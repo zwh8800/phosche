@@ -15,7 +15,7 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <Timeline /> },
       { path: 'search', element: <Search /> },
-      { path: 'photos/:id', element: <PhotoDetail /> },
+      { path: 'photos/*', element: <PhotoDetail /> },
       { path: '*', element: <NotFound /> },
     ],
   },

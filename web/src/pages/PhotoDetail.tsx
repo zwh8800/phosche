@@ -4,7 +4,8 @@ import { fetchPhotoDetail } from '../api/photos';
 import PhotoDetailModal from '../components/PhotoDetail';
 
 function PhotoDetail() {
-  const { id } = useParams<{ id: string }>();
+  const { '*': wildcard } = useParams<{ '*': string }>();
+  const id = wildcard ? decodeURIComponent(wildcard) : '';
   const navigate = useNavigate();
 
   const { data, isLoading, error, refetch } = useQuery({
