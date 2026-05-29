@@ -65,7 +65,7 @@ const PhotoCard = memo(function PhotoCard({ photo }: { photo: PhotoDocument }) {
 
   return (
     <Link
-      to={`/photos/${encodeURIComponent(photo.path)}`}
+      to={`/photo/${encodeURIComponent(photo.path)}`}
       className="group block rounded-xl overflow-hidden bg-white border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
     >
       <div className="relative aspect-[4/3] bg-gray-100 overflow-hidden">

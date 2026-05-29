@@ -46,6 +46,35 @@ function tagColor(tag: string): string {
   return TAG_COLORS[Math.abs(hash) % TAG_COLORS.length];
 }
 
+const CHINESE_COLOR_MAP: Record<string, string> = {
+  '红色': '#EF4444', '深红': '#DC2626', '浅红': '#FCA5A5',
+  '橙色': '#F97316', '深橙': '#EA580C',
+  '黄色': '#EAB308', '深黄': '#CA8A04', '金黄色': '#F59E0B',
+  '绿色': '#22C55E', '深绿': '#166534', '浅绿': '#86EFAC', '碧绿': '#10B981',
+  '蓝色': '#3B82F6', '深蓝': '#1D4ED8', '浅蓝': '#93C5FD', '天蓝': '#0EA5E9',
+  '紫色': '#A855F7', '深紫': '#7E22CE', '浅紫': '#C4B5FD',
+  '粉色': '#EC4899', '深粉': '#DB2777', '浅粉': '#F9A8D4',
+  '棕色': '#92400E', '深棕': '#78350F',
+  '黑色': '#1F2937',
+  '白色': '#F9FAFB',
+  '灰色': '#9CA3AF', '深灰': '#4B5563', '浅灰': '#E5E7EB',
+  '青色': '#06B6D4',
+  '金色': '#D97706',
+  '银色': '#D1D5DB',
+  '米色': '#F5DEB3',
+  '卡其色': '#C3B091',
+};
+
+function resolveColor(name: string): string {
+  if (CHINESE_COLOR_MAP[name]) return CHINESE_COLOR_MAP[name];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const h = Math.abs(hash) % 360;
+  return `hsl(${h}, 55%, 55%)`;
+}
+
 function formatAperture(aperture: string): string {
   if (aperture.startsWith('f/') || aperture.startsWith('F/')) return aperture;
   const num = parseFloat(aperture);
@@ -363,12 +392,13 @@ function PhotoDetailModal({
                         <span className="text-xs text-gray-400">主色调</span>
                         <div className="flex gap-1.5">
                           {photo.colors.map((c) => (
-                            <div
-                              key={c}
-                              className="w-6 h-6 rounded-full border border-gray-200 shadow-sm"
-                              style={{ backgroundColor: c }}
-                              title={c}
-                            />
+                            <div key={c} className="flex items-center gap-1.5">
+                              <div
+                                className="w-5 h-5 rounded-full border border-gray-200 shadow-sm"
+                                style={{ backgroundColor: resolveColor(c) }}
+                              />
+                              <span className="text-xs text-gray-500">{c}</span>
+                            </div>
                           ))}
                         </div>
                       </div>

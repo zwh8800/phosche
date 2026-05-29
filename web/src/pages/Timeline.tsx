@@ -46,7 +46,7 @@ function PhotoCard({ photo }: { photo: PhotoDocument }) {
   return (
     <button
       type="button"
-      onClick={() => navigate(`/photos/${encodeURIComponent(photo.path)}`)}
+      onClick={() => navigate(`/photo/${encodeURIComponent(photo.path)}`)}
       className="group cursor-pointer text-left"
     >
       <div className="aspect-square overflow-hidden rounded-lg bg-gray-100">
