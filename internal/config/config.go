@@ -25,7 +25,6 @@ type LLMConfig struct {
 	Provider       string       `yaml:"provider"`
 	Ollama         OllamaConfig `yaml:"ollama"`
 	OpenAI         OpenAIConfig `yaml:"openai"`
-	Prompt         string       `yaml:"prompt"`
 	MaxRetries     int          `yaml:"max_retries"`
 	Concurrency    int          `yaml:"concurrency"`
 	TimeoutSeconds int          `yaml:"timeout_seconds"`

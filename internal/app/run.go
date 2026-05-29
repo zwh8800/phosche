@@ -69,7 +69,7 @@ func Run(distFS fs.FS, configPath string) {
 
 	imgAnalyzer := analyzer.NewImageAnalyzer(
 		llmClient,
-		cfg.LLM.Prompt,
+		"",
 		cfg.LLM.MaxRetries,
 		time.Duration(cfg.LLM.TimeoutSeconds)*time.Second,
 	)

@@ -33,7 +33,6 @@ llm:
     api_key: ""
     base_url: https://api.openai.com/v1
     model: gpt-4o
-  prompt: "describe this image"
   max_retries: 3
   concurrency: 2
   timeout_seconds: 60
@@ -73,9 +72,6 @@ server:
 	}
 	if cfg.LLM.Ollama.BaseURL != "http://localhost:11434" {
 		t.Errorf("LLM.Ollama.BaseURL = %q", cfg.LLM.Ollama.BaseURL)
-	}
-	if cfg.LLM.Prompt != "describe this image" {
-		t.Errorf("LLM.Prompt = %q", cfg.LLM.Prompt)
 	}
 	if len(cfg.Elasticsearch.Addresses) != 1 || cfg.Elasticsearch.Addresses[0] != "http://localhost:9200" {
 		t.Errorf("unexpected ES.Addresses: %v", cfg.Elasticsearch.Addresses)
