@@ -72,7 +72,7 @@ function PhotoCard({ photo }: { photo: PhotoDocument }) {
     >
       <div className="relative aspect-[4/3] bg-gray-100 overflow-hidden">
         <img
-          src={`/photos/${encodeURIComponent(photo.path)}`}
+          src={`/photos/${photo.path.replace(/^\/+/, '')}`}
           alt={photo.description || photo.path}
           loading="lazy"
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
