@@ -74,6 +74,14 @@ func (c *OllamaClient) AnalyzeImage(ctx context.Context, imageData []byte, promp
 	}
 	req.Header.Set("Content-Type", "application/json")
 
+	slog.Debug("ollama: sending request",
+		"url", c.baseURL+"/api/chat",
+		"model", c.model,
+		"prompt", truncate(prompt, 200),
+		"image_bytes", len(imageData),
+		"image_base64_len", len(encodedImage),
+	)
+
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("send request: %w", err)
@@ -84,6 +92,11 @@ func (c *OllamaClient) AnalyzeImage(ctx context.Context, imageData []byte, promp
 	if err != nil {
 		return nil, fmt.Errorf("read response: %w", err)
 	}
+
+	slog.Debug("ollama: received response",
+		"status", resp.StatusCode,
+		"body", truncate(string(respBytes), 2000),
+	)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("ollama API error (status %d): %s", resp.StatusCode, string(respBytes))

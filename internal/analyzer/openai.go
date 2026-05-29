@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 
 	"github.com/zwh8800/phosche/internal/types"
@@ -111,6 +112,13 @@ func (c *OpenAIClient) AnalyzeImage(ctx context.Context, imageData []byte, promp
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+c.apiKey)
 
+	slog.Debug("openai: sending request",
+		"url", c.baseURL+"/v1/chat/completions",
+		"model", c.model,
+		"prompt", truncate(prompt, 200),
+		"image_bytes", len(imageData),
+	)
+
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("send request: %w", err)
@@ -121,6 +129,11 @@ func (c *OpenAIClient) AnalyzeImage(ctx context.Context, imageData []byte, promp
 	if err != nil {
 		return nil, fmt.Errorf("read response: %w", err)
 	}
+
+	slog.Debug("openai: received response",
+		"status", resp.StatusCode,
+		"body", truncate(string(respBytes), 2000),
+	)
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("openai API error (status %d): %s", resp.StatusCode, string(respBytes))
