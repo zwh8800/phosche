@@ -219,6 +219,8 @@ func (p *Pipeline) processPath(ctx context.Context, path string) {
 	initDoc := &types.PhotoDocument{
 		Photo: types.Photo{
 			Path:      path,
+			MTime:     mtime,
+			Size:      info.Size(),
 			Status:    types.StatusAnalyzing,
 			CreatedAt: now,
 		},
@@ -233,6 +235,8 @@ func (p *Pipeline) processPath(ctx context.Context, path string) {
 	doc := &types.PhotoDocument{
 		Photo: types.Photo{
 			Path:       path,
+			MTime:      mtime,
+			Size:       info.Size(),
 			Status:     types.StatusAnalyzed,
 			AnalyzedAt: &now,
 			EXIF:       r.exif,
