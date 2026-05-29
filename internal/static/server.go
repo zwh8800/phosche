@@ -1,3 +1,4 @@
+// Package static 提供照片文件的静态 HTTP 服务，内置路径遍历防护和扩展名白名单。
 package static
 
 import (
@@ -7,7 +8,7 @@ import (
 	"strings"
 )
 
-// Allowed image extensions (case-insensitive).
+// allowedExtensions 允许的图片文件扩展名（大小写不敏感）。
 var allowedExtensions = map[string]bool{
 	".jpg":  true,
 	".jpeg": true,
@@ -17,11 +18,7 @@ var allowedExtensions = map[string]bool{
 	".heif": true,
 }
 
-// PhotoHandler returns an http.Handler that serves photo files from the given base paths.
-// The handler tries each base path in order and serves from the first where the file exists.
-// Only files with image extensions (.jpg/.jpeg/.png/.webp/.heic/.heif) are served.
-// Path traversal (../) is prevented.
-// Cache-Control header is set to 1 day.
+// PhotoHandler 返回照片文件静态服务的 HTTP 处理器。支持多基础路径（依次尝试）、路径遍历防护、扩展名白名单、目录排除。响应包含 Cache-Control: public, max-age=86400（1 天缓存）。
 func PhotoHandler(photoBasePaths []string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.HasPrefix(r.URL.Path, "/photos/") {
@@ -31,9 +28,11 @@ func PhotoHandler(photoBasePaths []string) http.Handler {
 
 		requestedPath := r.URL.Path[len("/photos/"):]
 
+		// 多基础路径：依次尝试，第一个找到文件的路径提供服务
 		for _, basePath := range photoBasePaths {
 			cleanBase := filepath.Clean(basePath)
 
+			// 路径遍历防护：filepath.Clean 标准化 + HasPrefix 前缀检查
 			var safePath string
 			absRequested := "/" + requestedPath
 			if strings.HasPrefix(absRequested, cleanBase) {
@@ -43,10 +42,12 @@ func PhotoHandler(photoBasePaths []string) http.Handler {
 				safePath = filepath.Clean(filepath.Join(basePath, requestedPath))
 			}
 
+			// 确保安全路径仍以 basePath 为前缀（防止 path traversal）
 			if !strings.HasPrefix(safePath, cleanBase+string(filepath.Separator)) && safePath != cleanBase {
 				continue
 			}
 
+			// 检查文件存在且不是目录
 			fi, err := os.Stat(safePath)
 			if err != nil {
 				continue
@@ -56,6 +57,7 @@ func PhotoHandler(photoBasePaths []string) http.Handler {
 				continue
 			}
 
+			// 扩展名白名单校验
 			ext := strings.ToLower(filepath.Ext(safePath))
 			if !allowedExtensions[ext] {
 				continue

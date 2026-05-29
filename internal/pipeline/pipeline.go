@@ -1,3 +1,12 @@
+// Package pipeline 实现照片处理流水线的核心编排逻辑：扫描已有文件 → 实时监控 →
+// 解码图片 → AI 分析 → ES 索引 → 失败重试。
+//
+// 流水线组件：
+//   - 初始扫描：启动时通过 Scanner 扫描监控目录中已有文件
+//   - 文件监控：通过 Watcher 实时监听文件创建/修改事件
+//   - Worker 池：并发处理照片（解码 → AI 分析 → ES 索引）
+//   - 重试循环：LLM 连接失败的照片进入 pending 队列，每 5 分钟重试，最多 10 次
+//   - 优雅关闭：收到取消信号后顺序关闭 watcher → inputCh → workers → retry → indexer
 package pipeline
 
 import (
@@ -15,18 +24,23 @@ import (
 	"github.com/zwh8800/phosche/internal/watcher"
 )
 
+// 默认配置常量，当 PipelineConfig 中对应字段为零值时使用。
 const (
-	defaultConcurrency       = 4
-	defaultQueueSize         = 100
-	defaultRetryInterval     = 5 * time.Minute
-	defaultMaxPendingRetries = 10
-	defaultDrainTimeout      = 5 * time.Minute
+	defaultConcurrency       = 4                // 并发 worker 数量，即同时处理照片的 goroutine 数
+	defaultQueueSize         = 100              // inputCh 通道容量，限制待处理照片的最大积压量
+	defaultRetryInterval     = 5 * time.Minute  // pending_analysis 照片的重试间隔
+	defaultMaxPendingRetries = 10               // 最大重试次数，超过后标记为 failed
+	defaultDrainTimeout      = 5 * time.Minute  // 单个 worker 处理单张照片的超时时间
 )
 
+// Analyzer 是 LLM 图片分析的抽象接口。
+// 实现者负责将图片数据发送给 AI 模型并返回结构化的分析结果。
 type Analyzer interface {
 	Analyze(ctx context.Context, imageData []byte) (*types.AnalysisResult, error)
 }
 
+// Indexer 是流水线所需的索引操作抽象接口。
+// 只暴露流水线实际使用的方法，便于测试时 mock。
 type Indexer interface {
 	IndexPhoto(ctx context.Context, doc *types.PhotoDocument, indexName string) error
 	UpdateStatus(ctx context.Context, path string, status types.JobStatus, indexName string) error
@@ -34,32 +48,36 @@ type Indexer interface {
 	Stop()
 }
 
+// PipelineConfig 集中管理流水线所需的所有外部依赖和运行时参数。
 type PipelineConfig struct {
-	Watcher           watcher.Watcher
-	Scanner           watcher.Scanner
-	Analyzer          Analyzer
-	Indexer           Indexer
-	IndexName         string
-	Dirs              []string
-	Recursive         bool
-	Concurrency       int
-	QueueSize         int
-	RetryInterval     time.Duration
-	MaxPendingRetries int
+	Watcher           watcher.Watcher  // 文件系统监控器（fsnotify 实现）
+	Scanner           watcher.Scanner  // 目录扫描器（启动时遍历已有文件）
+	Analyzer          Analyzer         // LLM 分析器
+	Indexer           Indexer          // ES 索引服务
+	IndexName         string           // ES 索引名称
+	Dirs              []string         // 监控的目录列表
+	Recursive         bool             // 是否递归监控子目录
+	Concurrency       int              // 并发 worker 数（0 使用默认值 4）
+	QueueSize         int              // 输入通道容量（0 使用默认值 100）
+	RetryInterval     time.Duration    // 重试间隔（0 使用默认值 5min）
+	MaxPendingRetries int              // 最大重试次数（0 使用默认值 10）
 }
 
+// pendingItem 跟踪一张等待重试的照片及其重试次数。
 type pendingItem struct {
-	path       string
-	retryCount int
+	path       string // 照片文件路径
+	retryCount int    // 已重试次数
 }
 
+// Pipeline 是照片处理流水线的主体结构。
 type Pipeline struct {
-	cfg       PipelineConfig
-	inputCh   chan string
-	pendingMu sync.Mutex
-	pending   map[string]*pendingItem
+	cfg       PipelineConfig           // 配置（包含所有外部依赖）
+	inputCh   chan string              // 输入通道，worker 从此 channel 接收待处理的文件路径
+	pendingMu sync.Mutex               // 保护 pending map 的互斥锁
+	pending   map[string]*pendingItem  // 待重试的照片映射表，key 为文件路径
 }
 
+// NewPipeline 创建流水线实例，对零值配置应用默认值。
 func NewPipeline(cfg PipelineConfig) *Pipeline {
 	if cfg.Concurrency <= 0 {
 		cfg.Concurrency = defaultConcurrency
@@ -80,13 +98,24 @@ func NewPipeline(cfg PipelineConfig) *Pipeline {
 	}
 }
 
+// Run 启动照片处理流水线，阻塞直到 context 被取消或发生致命错误。
+//
+// 启动顺序：
+//  1. 启动 concurrency 个 worker 协程（先于扫描，确保扫描结果能被消费）
+//  2. 启动 retryLoop 协程（定时重试 pending 照片）
+//  3. 执行 scanExisting（扫描已有文件入队）
+//  4. 启动 Watcher 并转发事件到 inputCh
+//  5. 阻塞等待 ctx.Done()（由 SIGINT/SIGTERM 触发）
+//
+// 关闭顺序：关闭 Watcher → 等待事件转发完成 → 关闭 inputCh →
+// 等待所有 worker → 等待 retryLoop → 调用 Indexer.Stop() 排空重试队列
 func (p *Pipeline) Run(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	var fwWg, workersWg, retryWg sync.WaitGroup
 
-	// Start workers before scan so they can consume as scan feeds the channel.
+	// 先启动 worker 协程（先于扫描），确保扫描结果能被及时消费。
 	for i := 0; i < p.cfg.Concurrency; i++ {
 		workersWg.Add(1)
 		go func() {
@@ -130,6 +159,9 @@ func (p *Pipeline) Run(ctx context.Context) error {
 	return nil
 }
 
+// scanExisting 扫描监控目录中已有的照片文件，将新增/变更的文件入队处理。
+// scanExisting 执行启动时的全量目录扫描，将发现的所有照片路径发送到 inputCh。
+// 扫描结果会由 worker 进一步检查 mtime 来决定是否需要重新分析（通过 ListAnalyzed 比较）。
 func (p *Pipeline) scanExisting(ctx context.Context) error {
 	slog.Info("pipeline: starting initial scan", "dirs", p.cfg.Dirs, "recursive", p.cfg.Recursive)
 
@@ -159,6 +191,9 @@ func (p *Pipeline) scanExisting(ctx context.Context) error {
 	return nil
 }
 
+// forwardEvents 将文件监控事件转发到流水线输入通道（跳过删除事件）。
+// forwardEvents 从文件监控 channel 读取事件，过滤掉删除事件后将路径转发到 inputCh。
+// 当 eventCh 关闭或 ctx 取消时退出。
 func (p *Pipeline) forwardEvents(ctx context.Context, eventCh <-chan types.FileEvent) {
 	for event := range eventCh {
 		if event.Op == types.OpDelete {
@@ -172,6 +207,10 @@ func (p *Pipeline) forwardEvents(ctx context.Context, eventCh <-chan types.FileE
 	}
 }
 
+// worker 从输入通道读取路径并处理，使用独立的超时上下文（5 分钟）。
+// worker 是流水线的消费端 goroutine。
+// 从 inputCh 读取文件路径，为每个照片创建独立超时 context 后调用 processPath 处理。
+// inputCh 关闭时 worker 自动退出。
 func (p *Pipeline) worker(_ context.Context) {
 	for path := range p.inputCh {
 		slog.Info("pipeline: processing photo", "path", path)
@@ -181,8 +220,18 @@ func (p *Pipeline) worker(_ context.Context) {
 	}
 }
 
+// processPath 处理单张照片：检查是否已分析且 mtime 未变 → 创建 initializing 文档 → 解码并分析 → 写入完整文档 → 从待重试列表移除。
+// processPath 处理单张照片的完整流程。
+//
+// 步骤：
+//  1. os.Stat 获取文件大小和修改时间
+//  2. 查询 ES 是否已有 status=analyzed 且 mtime 匹配的文档 → 是则跳过（幂等去重）
+//  3. 创建初始文档（status=analyzing）写入 ES，为此后的 UpdateStatus 提供文档基础
+//  4. 调用 decodeAndAnalyze 执行图片解码 + AI 分析
+//  5. 分析成功 → 创建完整文档（status=analyzed）索引到 ES
+//  6. 从 pending 映射中删除该路径（说明重试成功）
 func (p *Pipeline) processPath(ctx context.Context, path string) {
-	// Check if already analyzed with same mtime
+	// 检查是否已分析且 mtime 未变
 	info, err := os.Stat(path)
 	if err != nil {
 		slog.Warn("pipeline: stat failed", "path", path, "error", err)
@@ -200,7 +249,7 @@ func (p *Pipeline) processPath(ctx context.Context, path string) {
 
 	now := time.Now().Unix()
 
-	// Create an initial document so UpdateStatus has something to update.
+	// 创建 initializing 占位文档，以便 UpdateStatus 有文档可更新。
 	initDoc := &types.PhotoDocument{
 		Photo: types.Photo{
 			Path:      path,
@@ -240,11 +289,15 @@ func (p *Pipeline) processPath(ctx context.Context, path string) {
 	p.pendingMu.Unlock()
 }
 
+// decodeAnalyzeResult 是 decodeAndAnalyze 的返回结构，包含解码后的 EXIF 信息和 AI 分析结果。
+// decodeAnalyzeResult 封装图片解码和 AI 分析的联合结果。
 type decodeAnalyzeResult struct {
-	exif     *types.EXIFInfo
-	analysis *types.AnalysisResult
+	exif     *types.EXIFInfo       // 从图片中提取的 EXIF 元数据
+	analysis *types.AnalysisResult // LLM 返回的结构化分析结果
 }
 
+// decodeAndAnalyze 执行图片解码 → 文件读取 → AI 分析的三步流程。
+// 任何一步失败都会调用 updateErrorStatus 更新 ES 中的照片状态。
 func (p *Pipeline) decodeAndAnalyze(ctx context.Context, path string) *decodeAnalyzeResult {
 	decodeResult, err := decoder.DecodeImage(path)
 	if err != nil {
@@ -273,6 +326,16 @@ func (p *Pipeline) decodeAndAnalyze(ctx context.Context, path string) *decodeAna
 	}
 }
 
+// updateErrorStatus 根据错误类型更新照片状态：
+// LLM 连接错误 → pending_analysis（进入重试队列），其他错误 → failed。
+// updateErrorStatus 根据错误类型将照片标记为不同状态。
+//
+// 错误分类：
+//   - LLM 连接错误（网络超时、连接被拒等） → pending_analysis
+//     - 将照片加入 pending 映射并在 ES 中标记状态
+//     - 后续由 retryLoop 定时重试
+//   - 其他错误（图片损坏、格式不支持等） → failed
+//     - 不可恢复，直接标记为失败
 func (p *Pipeline) updateErrorStatus(ctx context.Context, path string, err error) {
 	if IsLLMConnectionError(err) {
 		p.pendingMu.Lock()
@@ -286,6 +349,11 @@ func (p *Pipeline) updateErrorStatus(ctx context.Context, path string, err error
 	}
 }
 
+// IsLLMConnectionError 判断错误是否为 LLM 连接相关错误。
+//
+// 通过 errors.As 解包错误链，查找是否存在 net.Error 类型的错误。
+// net.Error 表示网络层面的失败（连接被拒绝、超时、DNS 解析失败等），
+// 这类错误是可恢复的，应触发重试而非直接标记为 failed。
 func IsLLMConnectionError(err error) bool {
 	for {
 		var netErr net.Error
@@ -299,6 +367,9 @@ func IsLLMConnectionError(err error) bool {
 	}
 }
 
+// retryLoop 定时重试待处理照片（默认每 5 分钟）。
+// retryLoop 是后台定时器 goroutine，周期性调用 retryPending 重试失败的照片。
+// 间隔由 RetryInterval 配置（默认 5 分钟）。context 取消时退出（不执行最终重试）。
 func (p *Pipeline) retryLoop(ctx context.Context) {
 	ticker := time.NewTicker(p.cfg.RetryInterval)
 	defer ticker.Stop()
@@ -313,6 +384,16 @@ func (p *Pipeline) retryLoop(ctx context.Context) {
 	}
 }
 
+// retryPending 执行一次重试：遍历 pending 映射，跳过已达最大重试次数的项（标记为 failed），其余项调用 processPath。
+// retryPending 遍历 pending 映射中所有待重试的照片并执行重试。
+//
+// 重试逻辑：
+//   - 检查 retryCount 是否已达到 MaxPendingRetries
+//     - 达到 → 从 pending 删除、标记为 failed（放弃重试）
+//     - 未达到 → 递增 retryCount、调用 processPath 重新处理
+//
+// 使用锁分段保护：先加锁读取 pending 列表，释放锁后逐个处理，
+// 处理每个项时再加锁检查和更新重试计数。
 func (p *Pipeline) retryPending(ctx context.Context) {
 	p.pendingMu.Lock()
 	paths := make([]string, 0, len(p.pending))

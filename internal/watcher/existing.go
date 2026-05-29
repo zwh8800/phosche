@@ -7,6 +7,7 @@ import (
 	"strings"
 )
 
+// supportedExts 支持的图片文件扩展名集合。
 var supportedExts = map[string]bool{
 	".jpg":  true,
 	".jpeg": true,
@@ -16,18 +17,18 @@ var supportedExts = map[string]bool{
 	".heif": true,
 }
 
+// isImageFile 判断文件是否为支持的图片格式。
 func isImageFile(path string) bool {
 	ext := strings.ToLower(filepath.Ext(path))
 	return supportedExts[ext]
 }
 
-// LoadExisting scans directories and returns a map of path -> mtime for all image files.
-// Only files with supported image extensions are included (.jpg/.jpeg/.png/.webp/.heic/.heif).
-// If a directory doesn't exist, it is skipped with a warning log.
+// LoadExisting 扫描目录并返回所有图片文件的 path→mtime 映射。
 func LoadExisting(dirs []string, recursive bool) (map[string]int64, error) {
 	result := make(map[string]int64)
 
 	for _, dir := range dirs {
+		// 处理不存在的目录：跳过并记录警告
 		info, err := os.Stat(dir)
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -42,6 +43,7 @@ func LoadExisting(dirs []string, recursive bool) (map[string]int64, error) {
 		}
 
 		if recursive {
+			// 递归扫描：遍历所有子目录
 			err = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 				if err != nil {
 					return err
@@ -49,6 +51,7 @@ func LoadExisting(dirs []string, recursive bool) (map[string]int64, error) {
 				if info.IsDir() {
 					return nil
 				}
+				// 仅处理支持的图片文件
 				if !isImageFile(path) {
 					return nil
 				}
@@ -59,6 +62,7 @@ func LoadExisting(dirs []string, recursive bool) (map[string]int64, error) {
 				return result, err
 			}
 		} else {
+			// 非递归扫描：仅读取目录顶层文件
 			entries, err := os.ReadDir(dir)
 			if err != nil {
 				return result, err
@@ -68,6 +72,7 @@ func LoadExisting(dirs []string, recursive bool) (map[string]int64, error) {
 					continue
 				}
 				fullPath := filepath.Join(dir, entry.Name())
+				// 仅处理支持的图片文件
 				if !isImageFile(fullPath) {
 					continue
 				}

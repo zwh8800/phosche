@@ -1,3 +1,4 @@
+// Package app 负责 phosche 应用的装配与生命周期管理，包括依赖注入、组件启动和优雅关闭。
 package app
 
 import (
@@ -22,6 +23,7 @@ import (
 	"github.com/zwh8800/phosche/internal/watcher"
 )
 
+// Run 启动 phosche 服务。依次执行：加载配置 → 配置日志 → 初始化 ES 客户端并创建索引 → 创建索引服务 → 创建 LLM 客户端 + 图片分析器 → 创建文件监控器 + 目录扫描器 → 组装处理流水线 → 启动 HTTP 服务器 → 等待信号优雅关闭。
 func Run(distFS fs.FS, configPath string) {
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
@@ -29,12 +31,14 @@ func Run(distFS fs.FS, configPath string) {
 		os.Exit(1)
 	}
 
+	// 配置结构化日志（JSON 格式，可配置级别）
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: parseLogLevel(cfg.Server.LogLevel),
 	})))
 
 	logStartupInfo(cfg)
 
+	// 初始化 ES 客户端并创建索引
 	esClient, err := indexer.NewESClient(cfg.Elasticsearch)
 	if err != nil {
 		slog.Error("failed to create ES client", "error", err)
@@ -48,8 +52,10 @@ func Run(distFS fs.FS, configPath string) {
 		os.Exit(1)
 	}
 
+	// 创建索引服务（带断路器功能，队列容量 100）
 	indexerSvc := indexer.NewIndexerService(esClient, 100)
 
+	// 创建 LLM 客户端（通过工厂方法，支持 Ollama 和 OpenAI 两种后端）
 	llmClient, err := analyzer.NewLLMClient(analyzer.LLMClientConfig{
 		Provider: cfg.LLM.Provider,
 		Ollama: analyzer.OllamaClientConfig{
@@ -67,6 +73,7 @@ func Run(distFS fs.FS, configPath string) {
 		os.Exit(1)
 	}
 
+	// 创建图片分析器（配置重试次数和超时时间）
 	imgAnalyzer := analyzer.NewImageAnalyzer(
 		llmClient,
 		"",
@@ -74,11 +81,13 @@ func Run(distFS fs.FS, configPath string) {
 		time.Duration(cfg.LLM.TimeoutSeconds)*time.Second,
 	)
 
+	// 创建文件监控器（基于 fsnotify，带去抖功能）和目录扫描器
 	fsWatcher := watcher.NewFSNotifyWatcher(watcher.WatcherConfig{
 		DebounceMs: cfg.Watch.DebounceMs,
 	})
 	dirScanner := &watcher.DirectoryScanner{}
 
+	// 组装处理流水线（文件监控 → 解码 → AI 分析 → ES 索引）
 	pl := pipeline.NewPipeline(pipeline.PipelineConfig{
 		Watcher:           fsWatcher,
 		Scanner:           dirScanner,
@@ -99,6 +108,7 @@ func Run(distFS fs.FS, configPath string) {
 		}
 	}()
 
+	// 创建搜索服务（构建 ES 查询）
 	searchSvc := search.NewSearchService(esClient)
 
 	apiSrv := api.NewServer(searchSvc, indexerSvc, cfg.Elasticsearch.IndexName)
@@ -108,6 +118,7 @@ func Run(distFS fs.FS, configPath string) {
 
 	httpHandler := newMux(router, photoHandler, distFS, cfg.Server.DevMode)
 
+	// 启动 HTTP 服务器
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	httpSrv := &http.Server{
 		Addr:    addr,
@@ -126,10 +137,12 @@ func Run(distFS fs.FS, configPath string) {
 	defer stop()
 
 	<-sigCtx.Done()
-	slog.Info("shutting down...")
+		slog.Info("shutting down...")
 
+	// 取消 pipeline 上下文，触发流水线优雅关闭
 	pipelineCancel()
 
+	// 使用 10 秒超时关闭 HTTP 服务器
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
 	if err := httpSrv.Shutdown(shutdownCtx); err != nil {
@@ -139,6 +152,7 @@ func Run(distFS fs.FS, configPath string) {
 	slog.Info("phosche stopped")
 }
 
+// logStartupInfo 记录服务启动时的关键配置信息。
 func logStartupInfo(cfg *config.Config) {
 	slog.Info("phosche starting",
 		"port", cfg.Server.Port,
@@ -149,6 +163,7 @@ func logStartupInfo(cfg *config.Config) {
 	)
 }
 
+// newMux 创建 HTTP 请求分发器，将请求路由到不同的处理器：/health 和 /api/* → chi 路由器；/photos/* → 静态照片服务；其他 → SPA 静态文件（生产模式）或 404（开发模式）。
 func newMux(router http.Handler, photoHandler http.Handler, distFS fs.FS, devMode bool) http.Handler {
 	var spa http.Handler
 	if distFS != nil && !devMode {
@@ -168,6 +183,7 @@ func newMux(router http.Handler, photoHandler http.Handler, distFS fs.FS, devMod
 	})
 }
 
+// spaHandler 提供 SPA 单页应用静态文件服务。对于不存在的文件路径，回退到 index.html 以支持客户端路由。
 func spaHandler(distFS fs.FS) http.Handler {
 	fileServer := http.FileServer(http.FS(distFS))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -185,6 +201,7 @@ func spaHandler(distFS fs.FS) http.Handler {
 	})
 }
 
+// parseLogLevel 将日志级别字符串转换为 slog.Level。
 func parseLogLevel(s string) slog.Level {
 	switch s {
 	case "debug":

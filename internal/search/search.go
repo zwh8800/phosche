@@ -1,3 +1,11 @@
+// Package search 提供基于 Elasticsearch 的照片搜索服务，支持全文检索、
+// 多维过滤和聚合统计。
+//
+// 核心功能：
+//   - 全文搜索：multi_match 跨 description/tags/objects/text 字段
+//   - 多维过滤：日期范围、标签、物体、场景类型、相机型号、处理状态
+//   - 排序策略：有查询词时按 _score（相关性），无查询词时按拍摄时间倒序
+//   - 聚合统计：文档总数、按状态分组计数、筛选选项聚合（tags/scene/camera）
 package search
 
 import (
@@ -14,23 +22,29 @@ import (
 	"github.com/zwh8800/phosche/internal/types"
 )
 
-// Searcher defines the interface for photo search operations.
+// Searcher 定义照片搜索操作的接口，供测试 mock 使用。
 type Searcher interface {
 	Search(ctx context.Context, indexName string, req *types.SearchRequest) (*types.SearchResponse, error)
 }
 
-// SearchService provides full-text search and filtered queries against the
-// Elasticsearch photo index.
+// SearchService 提供基于 Elasticsearch 的全文搜索和条件过滤查询。
 type SearchService struct {
-	client *indexer.ESClient
+	client *indexer.ESClient // ES 客户端封装，用于执行搜索请求
 }
 
-// NewSearchService creates a SearchService backed by the given ES client.
+// NewSearchService 创建 SearchService 实例。
 func NewSearchService(client *indexer.ESClient) *SearchService {
 	return &SearchService{client: client}
 }
 
-// Search executes a full-text search with optional filters and pagination.
+// Search 执行全文搜索+条件过滤查询。
+//
+// 流程：
+//  1. 调用 buildQuery 构建 ES 查询 DSL
+//  2. 序列化为 JSON，通过 esapi.SearchRequest 发送
+//  3. 调用 parseSearchResponse 解析 ES 响应
+//
+// 调试日志会输出截断后的查询 JSON（最多 500 字符）和结果命中数。
 func (s *SearchService) Search(ctx context.Context, indexName string, req *types.SearchRequest) (*types.SearchResponse, error) {
 	query := s.buildQuery(req)
 	bodyBytes, err := json.Marshal(query)
@@ -63,8 +77,14 @@ func (s *SearchService) Search(ctx context.Context, indexName string, req *types
 	return result, err
 }
 
-// GetFilters returns aggregated filter values (tags, scene types, camera models)
-// for use in the frontend filter UI.
+// GetFilters 执行词项聚合（terms aggregation），获取前端筛选面板所需的可选项列表。
+//
+// 聚合字段：
+//   - tags.keyword: 最多 50 个标签（按文档计数降序）
+//   - scene_type: 最多 20 个场景类型
+//   - camera_model: 最多 20 个相机型号
+//
+// 返回的 FiltersResponse 用于填充搜索页面的下拉筛选器。
 func (s *SearchService) GetFilters(ctx context.Context, indexName string) (*types.FiltersResponse, error) {
 	slog.Debug("ES get filters", "index", indexName)
 	query := map[string]any{
@@ -106,6 +126,19 @@ func (s *SearchService) GetFilters(ctx context.Context, indexName string) (*type
 	return s.parseFiltersResponse(resp.Body)
 }
 
+// buildQuery 是核心查询构造器，将 SearchRequest 转换为 ES 查询 DSL。
+//
+// 构建规则（按顺序）：
+//  1. 分页默认值：page=1, pageSize=20
+//  2. 排序策略：
+//     - 有搜索词时：_score（相关性）优先，其次 date_time_original desc，最后 mtime desc
+//     - 无搜索词时：date_time_original desc（缺失值排最后），mtime desc
+//  3. 高亮：description 字段启用 ES 高亮
+//  4. 全文搜索：multi_match 跨 description、tags、objects、text 四个字段
+//  5. 日期范围过滤：date_time_original 的 gte/lte
+//  6. 词项过滤：tags.keyword、objects.keyword 的 terms 查询
+//  7. 精确匹配：scene_type、status、camera_model 的 term 查询
+//  8. 组合：must + filter 子句包装为 bool 查询；无任何条件时使用 match_all
 func (s *SearchService) buildQuery(req *types.SearchRequest) map[string]any {
 	page := req.Page
 	if page <= 0 {
@@ -116,6 +149,7 @@ func (s *SearchService) buildQuery(req *types.SearchRequest) map[string]any {
 		pageSize = 20
 	}
 
+	// 排序策略：有 query 时按 _score 优先（相关性），无 query 时按拍摄时间倒序。
 	sort := []any{
 		map[string]any{"date_time_original": map[string]any{"order": "desc", "missing": "_last"}},
 		map[string]any{"mtime": map[string]any{"order": "desc"}},
@@ -138,6 +172,7 @@ func (s *SearchService) buildQuery(req *types.SearchRequest) map[string]any {
 	var must []any
 	var filter []any
 
+	// 全文搜索：multi_match 跨 description/tags/objects/text 四个字段
 	if req.Query != "" {
 		must = append(must, map[string]any{
 			"multi_match": map[string]any{
@@ -147,6 +182,7 @@ func (s *SearchService) buildQuery(req *types.SearchRequest) map[string]any {
 		})
 	}
 
+	// 日期范围过滤（gte: date_from, lte: date_to）
 	dateRange := map[string]any{}
 	if req.DateFrom != "" {
 		dateRange["gte"] = req.DateFrom
@@ -162,6 +198,7 @@ func (s *SearchService) buildQuery(req *types.SearchRequest) map[string]any {
 		})
 	}
 
+	// 标签过滤（terms 查询 tags.keyword 实现多选）
 	if len(req.Tags) > 0 {
 		filter = append(filter, map[string]any{
 			"terms": map[string]any{
@@ -170,6 +207,7 @@ func (s *SearchService) buildQuery(req *types.SearchRequest) map[string]any {
 		})
 	}
 
+	// 物体过滤（terms 查询 objects.keyword）
 	if len(req.Objects) > 0 {
 		filter = append(filter, map[string]any{
 			"terms": map[string]any{
@@ -178,6 +216,7 @@ func (s *SearchService) buildQuery(req *types.SearchRequest) map[string]any {
 		})
 	}
 
+	// 场景类型过滤（term 精确匹配）
 	if req.SceneType != "" {
 		filter = append(filter, map[string]any{
 			"term": map[string]any{
@@ -186,6 +225,7 @@ func (s *SearchService) buildQuery(req *types.SearchRequest) map[string]any {
 		})
 	}
 
+	// 状态过滤（term 精确匹配）
 	if req.Status != "" {
 		filter = append(filter, map[string]any{
 			"term": map[string]any{
@@ -194,6 +234,7 @@ func (s *SearchService) buildQuery(req *types.SearchRequest) map[string]any {
 		})
 	}
 
+	// 相机型号过滤（term 精确匹配）
 	if req.CameraModel != "" {
 		filter = append(filter, map[string]any{
 			"term": map[string]any{
@@ -218,6 +259,7 @@ func (s *SearchService) buildQuery(req *types.SearchRequest) map[string]any {
 	return query
 }
 
+// esSearchResult 是 ES 搜索响应的 JSON 结构，包含命中总数和文档 _source。
 type esSearchResult struct {
 	Hits struct {
 		Total struct {
@@ -230,6 +272,8 @@ type esSearchResult struct {
 	} `json:"hits"`
 }
 
+// esAggsResult 对应 ES 聚合查询（GetFilters）返回的 JSON 结构。
+// 包含 tags、scene_types、cameras 三个词项聚合的 buckets。
 type esAggsResult struct {
 	Aggregations struct {
 		Tags struct {
@@ -244,10 +288,17 @@ type esAggsResult struct {
 	} `json:"aggregations"`
 }
 
+// aggBucket 表示词项聚合（terms aggregation）中的一个桶，Key 为聚合值。
 type aggBucket struct {
 	Key string `json:"key"`
 }
 
+// parseSearchResponse 从 ES 响应体解码搜索结果，填充分页元数据。
+//
+// 总页数计算：ceil(total / pageSize)，特殊处理 total=0 时总页数为 0。
+// 使用 SearchRequest 中的 page/pageSize（已由 buildQuery 应用默认值），
+// 确保响应中的分页信息与请求一致。
+// parseSearchResponse 解析 ES 搜索响应并构建分页结果。
 func (s *SearchService) parseSearchResponse(body io.Reader, req *types.SearchRequest) (*types.SearchResponse, error) {
 	var result esSearchResult
 	if err := json.NewDecoder(body).Decode(&result); err != nil {
@@ -288,8 +339,12 @@ func (s *SearchService) parseSearchResponse(body io.Reader, req *types.SearchReq
 	}, nil
 }
 
-// GetStats returns aggregate photo statistics (total count, counts by status,
-// and count of recently created photos).
+// GetStats 返回照片汇总统计信息。
+//
+// 聚合内容：
+//   - by_status: terms aggregation on status 字段，按处理状态分组计数
+//   - recent: filter aggregation，统计最近 1 小时内创建的文档数
+//   - track_total_hits: true，精确统计文档总数（非近似值）
 func (s *SearchService) GetStats(ctx context.Context, indexName string) (*types.StatsResponse, error) {
 	slog.Debug("ES get stats", "index", indexName)
 	query := map[string]any{
@@ -333,6 +388,7 @@ func (s *SearchService) GetStats(ctx context.Context, indexName string) (*types.
 	return s.parseStatsResponse(resp.Body)
 }
 
+// esStatsResult 是 ES 统计查询（GetStats）响应的 JSON 结构。
 type esStatsResult struct {
 	Hits struct {
 		Total struct {
@@ -349,11 +405,18 @@ type esStatsResult struct {
 	} `json:"aggregations"`
 }
 
+// aggBucketWithCount 表示带文档计数的词项聚合桶（Key + DocCount）。
 type aggBucketWithCount struct {
 	Key      string `json:"key"`
 	DocCount int64  `json:"doc_count"`
 }
 
+// parseStatsResponse 解析 ES 统计响应，构建按状态分组的计数映射。
+//
+// 处理逻辑：
+//   - 初始化所有 5 种状态为 0（确保未出现的状态也返回 0 而非缺失）
+//   - 遍历 by_status buckets 填充实际计数
+//   - 提取 recent filter 的 doc_count 作为最近新增数
 func (s *SearchService) parseStatsResponse(body io.Reader) (*types.StatsResponse, error) {
 	var result esStatsResult
 	if err := json.NewDecoder(body).Decode(&result); err != nil {
@@ -379,6 +442,9 @@ func (s *SearchService) parseStatsResponse(body io.Reader) (*types.StatsResponse
 	}, nil
 }
 
+// parseFiltersResponse 解析 ES 聚合响应，提取 tags/scene_types/cameras 的 bucket key 列表。
+// 返回的字符串切片按文档计数降序排列（ES terms aggregation 默认行为），
+// 前端可直接用于填充下拉筛选器的选项列表。
 func (s *SearchService) parseFiltersResponse(body io.Reader) (*types.FiltersResponse, error) {
 	var result esAggsResult
 	if err := json.NewDecoder(body).Decode(&result); err != nil {
@@ -407,6 +473,7 @@ func (s *SearchService) parseFiltersResponse(body io.Reader) (*types.FiltersResp
 	}, nil
 }
 
+// truncateJSON 截断 JSON 字节数组用于日志输出，避免超长查询体淹没日志。
 func truncateJSON(b []byte, maxLen int) string {
 	if len(b) <= maxLen {
 		return string(b)

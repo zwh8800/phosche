@@ -7,6 +7,7 @@ import (
 	"github.com/zwh8800/phosche/internal/types"
 )
 
+// searchHandler 处理全文搜索请求，解析 JSON 请求体并验证分页参数（page>=1，page_size 1-100）。
 func (s *Server) searchHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 

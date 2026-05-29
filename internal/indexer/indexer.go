@@ -18,39 +18,54 @@ import (
 	"github.com/zwh8800/phosche/internal/types"
 )
 
-// queueItemKind distinguishes the type of operation queued for retry.
+// queueItemKind 区分重试队列中不同类型操作的枚举。
+// 用于 drainQueue 时根据类型调用对应的直接写入方法。
 type queueItemKind int
 
 const (
-	queueItemIndex queueItemKind = iota
-	queueItemUpdateStatus
+	queueItemIndex        queueItemKind = iota // 索引（写入/覆盖）文档操作
+	queueItemUpdateStatus                      // 仅更新文档 status 字段的操作
 )
 
-// queueItem represents a deferred indexer operation.
+// queueItem 表示一个被延迟到重试队列中的索引器操作。
+// 当 ES 不可用时（断路器打开），写入操作不会立即失败，而是封装为 queueItem 放入有界通道中，
+// 待 ES 恢复后由 drainQueue 统一重放。
 type queueItem struct {
-	kind      queueItemKind
-	doc       *types.PhotoDocument
-	path      string
-	status    types.JobStatus
-	indexName string
+	kind      queueItemKind       // 操作类型：索引文档 or 更新状态
+	doc       *types.PhotoDocument // queueItemIndex 时使用，完整的照片文档
+	path      string               // queueItemUpdateStatus 时使用，照片路径
+	status    types.JobStatus      // queueItemUpdateStatus 时使用，目标状态
+	indexName string               // 目标 ES 索引名称
 }
 
-// IndexerService provides CRUD operations against Elasticsearch with
-// circuit-breaker protection and a bounded retry queue.
+// IndexerService 提供对 Elasticsearch 的 CRUD 操作，并内置断路器保护和有界重试队列。
+//
+// 断路器机制：
+//   连续写入失败 ≥ maxFailures(3) → 断路器打开 → 后续写入进入重试队列
+//   每 healthCheckInterval(5s) 检查 ES 健康 → 恢复后关闭断路器 → 排空队列
+//
+// 队列设计：
+//   使用有界 channel (容量由 queueSize 参数指定)，队列满时丢弃最旧的项并记录警告。
+//   这种"熔断 + 队列"模式确保 ES 短暂不可用时不会阻塞整个照片处理流水线。
 type IndexerService struct {
-	client              *ESClient
-	queue               chan queueItem
-	done                chan struct{}
-	mu                  sync.RWMutex
-	circuitOpen         bool
-	failureCount        int
-	maxFailures         int
-	healthCheckInterval time.Duration
-	logger              *slog.Logger
+	client              *ESClient          // ES 客户端封装
+	queue               chan queueItem     // 重试队列（有界 channel），存放 ES 不可用期间的待处理操作
+	done                chan struct{}      // 关闭信号通道，用于优雅停止后台 goroutine
+	mu                  sync.RWMutex       // 保护断路器状态和失败计数的读写锁
+	circuitOpen         bool               // 断路器是否打开（true=拒绝直接写入，仅入队）
+	failureCount        int                // 连续写入失败计数，成功时重置为 0
+	maxFailures         int                // 断路阈值，默认 3，达到后打开断路器
+	healthCheckInterval time.Duration      // 健康检查间隔，默认 5 秒
+	logger              *slog.Logger       // 结构化日志记录器
 }
 
-// NewIndexerService creates an IndexerService backed by the given ES client.
-// queueSize determines the capacity of the in-memory retry queue.
+// NewIndexerService 创建 IndexerService 实例并启动后台断路器 goroutine。
+//
+// 参数：
+//   client    - 已初始化的 ES 客户端
+//   queueSize - 内存重试队列容量，例如 100。队列满时新项会被丢弃
+//
+// 启动时会立即通过 go svc.runCircuitBreaker() 启动后台健康检查循环。
 func NewIndexerService(client *ESClient, queueSize int) *IndexerService {
 	svc := &IndexerService{
 		client:              client,
@@ -64,18 +79,26 @@ func NewIndexerService(client *ESClient, queueSize int) *IndexerService {
 	return svc
 }
 
-// Stop shuts down the background circuit-breaker goroutine and drains
-// any remaining queued items before returning.
+// Stop 关闭后台协程并排水队列中的待重试项。
+// 关闭 done 通道通知 runCircuitBreaker 退出，后者会自动调用 drainQueue 排空队列。
 func (s *IndexerService) Stop() {
 	close(s.done)
 }
 
 // --------------------------------------------------------------------------
-// Public write operations (return nil on ES failure; queue for retry)
+// 公开写入操作 — ES 失败时返回 nil（不阻塞调用方），操作进入重试队列
 // --------------------------------------------------------------------------
 
-// IndexPhoto indexes a photo document. The document _id is sha256(path).
-// On ES failure the document is placed in the retry queue and nil is returned.
+// IndexPhoto 索引一张照片文档到 ES。文档 _id 为 path 的 SHA-256 哈希值。
+//
+// 断路器逻辑：
+//   - 断路器打开 → 文档直接进入重试队列，返回 nil
+//   - 断路器关闭 → 尝试直接写入 ES
+//     - 成功 → recordWriteResult(true)，返回 nil
+//     - 失败 → 入队 + recordWriteResult(false)，返回 nil
+//
+// 注意：本方法永远不会向调用方返回错误。采用"发后即忘"模式配合重试队列，
+// 确保即使 ES 完全不可用也不会阻塞照片处理流水线。
 func (s *IndexerService) IndexPhoto(ctx context.Context, doc *types.PhotoDocument, indexName string) error {
 	s.logger.Debug("IndexPhoto", "path", doc.Path, "status", doc.Status, "index", indexName)
 
@@ -95,8 +118,11 @@ func (s *IndexerService) IndexPhoto(ctx context.Context, doc *types.PhotoDocumen
 	return nil
 }
 
-// UpdateStatus updates only the status field of a photo document using
-// the ES Update API. Other fields are not overwritten.
+// UpdateStatus 仅更新照片文档的 status 字段，使用 ES Update API 的 "doc" 部分更新。
+// 其他字段不受影响，这是 Elasticsearch 的 partial update 机制。
+//
+// 断路器逻辑与 IndexPhoto 相同：断路器打开时入队，关闭时直接更新，失败时入队并记录失败。
+// 同样永远不向调用方返回错误。
 func (s *IndexerService) UpdateStatus(ctx context.Context, path string, status types.JobStatus, indexName string) error {
 	s.logger.Debug("UpdateStatus", "path", path, "status", status, "index", indexName)
 
@@ -116,9 +142,13 @@ func (s *IndexerService) UpdateStatus(ctx context.Context, path string, status t
 	return nil
 }
 
-// BulkIndex indexes multiple documents in a single ES bulk request.
-// Returns an error containing the failure count if any individual document
-// fails. On connection-level failure, all documents are queued for retry.
+// BulkIndex 使用 ES Bulk API 批量索引多个文档。
+//
+// 与单个索引操作不同，本方法的返回值区分了两种失败场景：
+//   - 连接级失败（ES 不可达）→ 所有文档入队重试，返回 nil
+//   - 部分文档失败（连接正常但个别文档写入失败）→ 返回包含失败数量的错误，调用方可据此处理
+//
+// 断路器打开时，所有文档直接入队，不尝试写入。
 func (s *IndexerService) BulkIndex(ctx context.Context, docs []*types.PhotoDocument, indexName string) error {
 	s.logger.Debug("BulkIndex", "count", len(docs), "index", indexName)
 
@@ -149,10 +179,12 @@ func (s *IndexerService) BulkIndex(ctx context.Context, docs []*types.PhotoDocum
 }
 
 // --------------------------------------------------------------------------
-// Public read operation
+// 公开读取操作 — 直通 ES，无需断路器（读操作不改变状态）
 // --------------------------------------------------------------------------
 
-// DeletePhoto removes a photo document from the index by path.
+// DeletePhoto 根据文件路径删除对应的 ES 文档。
+// 文档 _id 为 path 的 SHA-256 哈希值。即使文档不存在（404）也不返回错误，
+// 因为删除一个不存在的文档在语义上是成功的。
 func (s *IndexerService) DeletePhoto(ctx context.Context, path string, indexName string) error {
 	docID := sha256hex(path)
 	s.logger.Debug("DeletePhoto", "path", path, "doc_id", docID, "index", indexName)
@@ -176,8 +208,9 @@ func (s *IndexerService) DeletePhoto(ctx context.Context, path string, indexName
 	return nil
 }
 
-// GetPhoto retrieves a photo document by path. Returns an *AppError with
-// code NOT_FOUND if the document does not exist.
+// GetPhoto 根据文件路径查询照片文档。
+// 返回 *AppError（code=NOT_FOUND）当文档不存在时（HTTP 404），
+// 其他 ES 错误包装为普通 error 返回。
 func (s *IndexerService) GetPhoto(ctx context.Context, path string, indexName string) (*types.PhotoDocument, error) {
 	docID := sha256hex(path)
 	s.logger.Debug("GetPhoto", "path", path, "doc_id", docID, "index", indexName)
@@ -212,9 +245,11 @@ func (s *IndexerService) GetPhoto(ctx context.Context, path string, indexName st
 	return &result.Source, nil
 }
 
-// ListAnalyzed returns a map of path → mtime for all photos that have been
-// analyzed (status = "analyzed"). Used by the pipeline to skip unchanged
-// photos on restart.
+// ListAnalyzed 查询所有 status=analyzed 的文档，返回 path → mtime 映射。
+//
+// 用途：流水线启动时调用，快速获取已分析照片列表。
+// 通过对比文件系统中的 mtime 与 ES 中记录的 mtime 来判断照片是否需要重新分析。
+// 最大返回 10000 条记录，仅获取 path 和 mtime 两个字段以节省带宽。
 func (s *IndexerService) ListAnalyzed(ctx context.Context, indexName string) (map[string]int64, error) {
 	result := make(map[string]int64)
 
@@ -271,9 +306,12 @@ func (s *IndexerService) ListAnalyzed(ctx context.Context, indexName string) (ma
 }
 
 // --------------------------------------------------------------------------
-// Internal: direct ES operations (no circuit breaker, used for retries)
+// 内部方法：直接 ES 操作（不走断路器，供重试/排空队列时使用）
 // --------------------------------------------------------------------------
 
+// indexDocDirect 执行原始的 ES index 请求，文档 _id = sha256(path)。
+// 设置 Refresh=true 确保写入立即可见（适合低吞吐场景）。
+// 成功时记录 result/seq_no/primary_term 等 ES 返回的元信息。
 func (s *IndexerService) indexDocDirect(ctx context.Context, doc *types.PhotoDocument, indexName string) error {
 	docID := sha256hex(doc.Path)
 	body, err := json.Marshal(doc)
@@ -317,12 +355,18 @@ func (s *IndexerService) indexDocDirect(ctx context.Context, doc *types.PhotoDoc
 	return nil
 }
 
+// indexResponse 对应 ES Index API 的响应体中的关键字段。
+// Result: created（新建）/ updated（覆盖已有文档）
+// SeqNo / PrimaryTerm: 用于乐观并发控制的版本信息
 type indexResponse struct {
 	Result      string `json:"result"`
 	SeqNo       int64  `json:"_seq_no"`
 	PrimaryTerm int64  `json:"_primary_term"`
 }
 
+// updateStatusDirect 使用 ES Update API 的 "doc" 模式仅更新 status 字段。
+// 这是 partial update，不会覆盖文档中的其他字段（如 description、tags 等）。
+// 设置 Refresh=true 确保更新立即可搜索到。
 func (s *IndexerService) updateStatusDirect(ctx context.Context, path string, status types.JobStatus, indexName string) error {
 	docID := sha256hex(path)
 
@@ -357,6 +401,18 @@ func (s *IndexerService) updateStatusDirect(ctx context.Context, path string, st
 	return nil
 }
 
+// bulkIndexDirect 使用 esutil.BulkIndexer 执行批量索引。
+//
+// BulkIndexer 配置：
+//   - NumWorkers: 4 — 4 个并发 worker 发送批量请求
+//   - FlushBytes: 5MB — 累积 5MB 数据后自动刷新
+//   - FlushInterval: 30s — 最长 30 秒必须刷新一次
+//
+// 返回值：
+//   - failed: 个别文档写入失败的数量（通过 OnFailure 回调统计）
+//   - error: 连接级错误（如 BulkIndexer 创建失败、Close 失败）
+//
+// OnFailure 回调在文档写入失败时被调用，使用 mutex 保护 failed 计数器的并发更新。
 func (s *IndexerService) bulkIndexDirect(ctx context.Context, docs []*types.PhotoDocument, indexName string) (int, error) {
 	bi, err := esutil.NewBulkIndexer(esutil.BulkIndexerConfig{
 		Index:         indexName,
@@ -409,15 +465,26 @@ func (s *IndexerService) bulkIndexDirect(ctx context.Context, docs []*types.Phot
 }
 
 // --------------------------------------------------------------------------
-// Circuit breaker & queue
+// 断路器与重试队列 — 健康检查、失败计数、队列管理
 // --------------------------------------------------------------------------
 
+// isCircuitOpen 返回断路器当前状态（读锁保护）。
 func (s *IndexerService) isCircuitOpen() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.circuitOpen
 }
 
+// recordWriteResult 根据写入结果更新断路器状态机。
+//
+// 状态转移规则：
+//   - 写入成功 → failureCount 重置为 0，若断路器之前是打开状态则关闭（记录 Info 日志）
+//   - 写入失败 → failureCount 递增
+//     - 若 failureCount >= maxFailures(3) 且断路器尚未打开 → 打开断路器（记录 Warn 日志）
+//
+// 使用写锁保护，确保状态变更的原子性。
+// recordWriteResult 记录写入结果。成功时重置失败计数并关闭断路器；
+// 失败时累加计数，达到 maxFailures(3) 阈值后打开断路器。
 func (s *IndexerService) recordWriteResult(success bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -437,6 +504,10 @@ func (s *IndexerService) recordWriteResult(success bool) {
 	}
 }
 
+// queueDocument 将文档索引操作放入重试队列（非阻塞）。
+// 队列满时丢弃该项并记录 Warn 日志——这是有意的设计选择：
+// 宁可丢失部分写入也不阻塞生产端。
+// queueDocument 将文档索引操作放入重试队列。队列满时丢弃并记录警告。
 func (s *IndexerService) queueDocument(doc *types.PhotoDocument, indexName string) {
 	select {
 	case s.queue <- queueItem{kind: queueItemIndex, doc: doc, indexName: indexName}:
@@ -446,6 +517,9 @@ func (s *IndexerService) queueDocument(doc *types.PhotoDocument, indexName strin
 	}
 }
 
+// queueStatusUpdate 将状态更新操作放入重试队列（非阻塞）。
+// 队列满时丢弃该项并记录 Warn 日志。
+// queueStatusUpdate 将状态更新操作放入重试队列。队列满时丢弃并记录警告。
 func (s *IndexerService) queueStatusUpdate(path string, status types.JobStatus, indexName string) {
 	select {
 	case s.queue <- queueItem{kind: queueItemUpdateStatus, path: path, status: status, indexName: indexName}:
@@ -455,6 +529,18 @@ func (s *IndexerService) queueStatusUpdate(path string, status types.JobStatus, 
 	}
 }
 
+// runCircuitBreaker 后台协程，每 healthCheckInterval(5s) 检查断路器状态。
+// 断路器打开时调用 pingES 检测 ES 健康，恢复后关闭断路器并排空队列。
+// 收到 done 信号后先排空队列再退出。
+// runCircuitBreaker 是后台 goroutine，负责断路器健康检查和队列排空。
+//
+// 工作循环：
+//  1. 每 healthCheckInterval(5s) 触发一次 tick
+//  2. 如果断路器关闭 → 跳过（无操作）
+//  3. 如果断路器打开 → ping ES
+//     - ping 成功 → 关闭断路器、重置 failureCount、排空重试队列
+//     - ping 失败 → 继续等待下一次 tick
+//  4. 收到 done 信号 → 执行最终 drainQueue 后退出
 func (s *IndexerService) runCircuitBreaker() {
 	ticker := time.NewTicker(s.healthCheckInterval)
 	defer ticker.Stop()
@@ -485,6 +571,8 @@ func (s *IndexerService) runCircuitBreaker() {
 	}
 }
 
+// pingES 通过调用 ES Info API 检查 ES 是否可达且响应正常。
+// 返回 true 表示 ES 健康，false 表示连接失败或返回错误状态码。
 func (s *IndexerService) pingES() bool {
 	resp, err := s.client.Client().Info()
 	if err != nil {
@@ -494,6 +582,16 @@ func (s *IndexerService) pingES() bool {
 	return !resp.IsError()
 }
 
+// drainQueue 排空重试队列中的所有待处理项。
+//
+// 处理逻辑：
+//   - 非阻塞地从 channel 中取出每一项
+//   - 每项使用 10 秒超时的 context 执行对应的直接写入操作
+//   - 写入成功 → 计数 +1
+//   - 写入失败 → 记录 Warn 日志并丢弃该项（不会重新入队，避免无限循环）
+//   - 队列为空时打印排空统计并返回
+//
+// 调用时机：断路器恢复时 & 优雅关闭时（收到 done 信号后）。
 func (s *IndexerService) drainQueue() {
 	count := 0
 	for {
@@ -527,7 +625,8 @@ func (s *IndexerService) drainQueue() {
 	}
 }
 
-// sha256hex returns the hex-encoded SHA-256 hash of s.
+// sha256hex 返回字符串 s 的十六进制 SHA-256 哈希值。
+// 用作 ES 文档 _id，确保相同路径始终映射到相同文档 ID。
 func sha256hex(s string) string {
 	h := sha256.Sum256([]byte(s))
 	return hex.EncodeToString(h[:])
