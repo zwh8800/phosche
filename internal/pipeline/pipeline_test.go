@@ -202,15 +202,16 @@ func TestPipeline_E2E(t *testing.T) {
 	cancel, wait := runPipeline(t, p)
 
 	require.Eventually(t, func() bool {
-		return indexer.IndexedCount() >= 1
+		return indexer.IndexedCount() >= 2
 	}, 5*time.Second, 10*time.Millisecond)
 
 	cancel()
 	require.NoError(t, wait())
 
-	require.Equal(t, 1, indexer.IndexedCount())
-	require.Equal(t, types.StatusAnalyzed, indexer.indexedDocs[0].Status)
-	require.Equal(t, "a test photo", indexer.indexedDocs[0].Description)
+	lastDoc := indexer.indexedDocs[len(indexer.indexedDocs)-1]
+	require.Equal(t, 2, indexer.IndexedCount())
+	require.Equal(t, types.StatusAnalyzed, lastDoc.Status)
+	require.Equal(t, "a test photo", lastDoc.Description)
 	require.True(t, indexer.stopCalled)
 }
 
@@ -246,14 +247,15 @@ func TestPipeline_Failure(t *testing.T) {
 	cancel, wait := runPipeline(t, p)
 
 	require.Eventually(t, func() bool {
-		return indexer.IndexedCount() >= 1
+		return indexer.IndexedCount() >= 2
 	}, 5*time.Second, 10*time.Millisecond)
 
 	cancel()
 	require.NoError(t, wait())
 
-	require.Equal(t, 1, indexer.IndexedCount())
-	require.Equal(t, types.StatusAnalyzed, indexer.indexedDocs[0].Status)
+	lastDoc := indexer.indexedDocs[len(indexer.indexedDocs)-1]
+	require.Equal(t, 3, indexer.IndexedCount())
+	require.Equal(t, types.StatusAnalyzed, lastDoc.Status)
 
 	status, found := indexer.LastStatusFor(badPath)
 	require.True(t, found)
@@ -334,12 +336,12 @@ func TestPipeline_Concurrency(t *testing.T) {
 	close(blockCh)
 
 	require.Eventually(t, func() bool {
-		return indexer.IndexedCount() >= 4
+		return indexer.IndexedCount() >= 8
 	}, 10*time.Second, 10*time.Millisecond)
 
 	cancel()
 	require.NoError(t, wait())
-	require.Equal(t, 4, indexer.IndexedCount())
+	require.Equal(t, 8, indexer.IndexedCount())
 }
 
 func TestPipeline_GracefulShutdown(t *testing.T) {
@@ -380,7 +382,7 @@ func TestPipeline_GracefulShutdown(t *testing.T) {
 	}
 
 	require.True(t, indexer.stopCalled)
-	require.Equal(t, 1, indexer.IndexedCount())
+	require.Equal(t, 2, indexer.IndexedCount())
 }
 
 func TestPipeline_Backpressure(t *testing.T) {
@@ -414,12 +416,12 @@ func TestPipeline_Backpressure(t *testing.T) {
 	w.Send(types.FileEvent{Path: filepath.Join(dir, "photo3.jpg"), Op: types.OpCreate})
 
 	require.Eventually(t, func() bool {
-		return indexer.IndexedCount() >= 3
+		return indexer.IndexedCount() >= 6
 	}, 10*time.Second, 10*time.Millisecond)
 
 	cancel()
 	require.NoError(t, wait())
-	require.Equal(t, 3, indexer.IndexedCount())
+	require.Equal(t, 6, indexer.IndexedCount())
 }
 
 func TestPipeline_WatcherEvent(t *testing.T) {
@@ -454,15 +456,16 @@ func TestPipeline_WatcherEvent(t *testing.T) {
 	})
 
 	require.Eventually(t, func() bool {
-		return indexer.IndexedCount() >= 1
+		return indexer.IndexedCount() >= 2
 	}, 5*time.Second, 10*time.Millisecond)
 
 	cancel()
 	require.NoError(t, wait())
 
-	require.Equal(t, 1, indexer.IndexedCount())
-	require.Equal(t, photoPath, indexer.indexedDocs[0].Path)
-	require.Equal(t, "watcher event", indexer.indexedDocs[0].Description)
+	lastDoc := indexer.indexedDocs[len(indexer.indexedDocs)-1]
+	require.Equal(t, 2, indexer.IndexedCount())
+	require.Equal(t, photoPath, lastDoc.Path)
+	require.Equal(t, "watcher event", lastDoc.Description)
 }
 
 func TestPipeline_StatusUpdate(t *testing.T) {
@@ -488,18 +491,17 @@ func TestPipeline_StatusUpdate(t *testing.T) {
 	cancel, wait := runPipeline(t, p)
 
 	require.Eventually(t, func() bool {
-		return indexer.IndexedCount() >= 1
+		return indexer.IndexedCount() >= 2
 	}, 5*time.Second, 10*time.Millisecond)
 
 	cancel()
 	require.NoError(t, wait())
 
-	s, found := indexer.LastStatusFor(photoPath)
-	require.True(t, found)
-	require.Equal(t, types.StatusAnalyzing, s)
+	require.Equal(t, types.StatusAnalyzing, indexer.indexedDocs[0].Status)
 
-	require.Equal(t, 1, indexer.IndexedCount())
-	require.Equal(t, types.StatusAnalyzed, indexer.indexedDocs[0].Status)
+	lastDoc := indexer.indexedDocs[len(indexer.indexedDocs)-1]
+	require.Equal(t, 2, indexer.IndexedCount())
+	require.Equal(t, types.StatusAnalyzed, lastDoc.Status)
 }
 
 func TestIsLLMConnectionError(t *testing.T) {

@@ -181,14 +181,23 @@ func (p *Pipeline) worker(_ context.Context) {
 }
 
 func (p *Pipeline) processPath(ctx context.Context, path string) {
-	_ = p.cfg.Indexer.UpdateStatus(ctx, path, types.StatusAnalyzing, p.cfg.IndexName)
+	now := time.Now().Unix()
+
+	// Create an initial document so UpdateStatus has something to update.
+	initDoc := &types.PhotoDocument{
+		Photo: types.Photo{
+			Path:      path,
+			Status:    types.StatusAnalyzing,
+			CreatedAt: now,
+		},
+	}
+	_ = p.cfg.Indexer.IndexPhoto(ctx, initDoc, p.cfg.IndexName)
 
 	r := p.decodeAndAnalyze(ctx, path)
 	if r == nil {
 		return
 	}
 
-	now := time.Now().Unix()
 	doc := &types.PhotoDocument{
 		Photo: types.Photo{
 			Path:       path,
