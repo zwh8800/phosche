@@ -146,6 +146,10 @@ func (m *mockIndexer) Stop() {
 	m.stopCalled = true
 }
 
+func (m *mockIndexer) ListAnalyzed(_ context.Context, _ string) (map[string]int64, error) {
+	return nil, nil
+}
+
 func (m *mockIndexer) LastStatusFor(path string) (types.JobStatus, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

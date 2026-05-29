@@ -212,6 +212,64 @@ func (s *IndexerService) GetPhoto(ctx context.Context, path string, indexName st
 	return &result.Source, nil
 }
 
+// ListAnalyzed returns a map of path → mtime for all photos that have been
+// analyzed (status = "analyzed"). Used by the pipeline to skip unchanged
+// photos on restart.
+func (s *IndexerService) ListAnalyzed(ctx context.Context, indexName string) (map[string]int64, error) {
+	result := make(map[string]int64)
+
+	query := map[string]any{
+		"query": map[string]any{
+			"term": map[string]any{"status": "analyzed"},
+		},
+		"size": 10000,
+		"_source": []string{"path", "mtime"},
+	}
+
+	bodyBytes, err := json.Marshal(query)
+	if err != nil {
+		return nil, fmt.Errorf("marshal query: %w", err)
+	}
+
+	req := esapi.SearchRequest{
+		Index: []string{indexName},
+		Body:  bytes.NewReader(bodyBytes),
+	}
+
+	resp, err := req.Do(ctx, s.client.Client())
+	if err != nil {
+		return nil, fmt.Errorf("list analyzed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.IsError() {
+		b, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("list analyzed returned %s: %s", resp.Status(), string(b))
+	}
+
+	var searchResp struct {
+		Hits struct {
+			Hits []struct {
+				Source struct {
+					Path  string `json:"path"`
+					MTime int64  `json:"mtime"`
+				} `json:"_source"`
+			} `json:"hits"`
+		} `json:"hits"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&searchResp); err != nil {
+		return nil, fmt.Errorf("decode list analyzed: %w", err)
+	}
+
+	for _, hit := range searchResp.Hits.Hits {
+		result[hit.Source.Path] = hit.Source.MTime
+	}
+
+	s.logger.Debug("ListAnalyzed", "count", len(result), "index", indexName)
+	return result, nil
+}
+
 // --------------------------------------------------------------------------
 // Internal: direct ES operations (no circuit breaker, used for retries)
 // --------------------------------------------------------------------------

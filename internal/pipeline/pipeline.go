@@ -30,6 +30,7 @@ type Analyzer interface {
 type Indexer interface {
 	IndexPhoto(ctx context.Context, doc *types.PhotoDocument, indexName string) error
 	UpdateStatus(ctx context.Context, path string, status types.JobStatus, indexName string) error
+	ListAnalyzed(ctx context.Context, indexName string) (map[string]int64, error)
 	Stop()
 }
 
@@ -132,12 +133,12 @@ func (p *Pipeline) Run(ctx context.Context) error {
 func (p *Pipeline) scanExisting(ctx context.Context) error {
 	slog.Info("pipeline: starting initial scan", "dirs", p.cfg.Dirs, "recursive", p.cfg.Recursive)
 
-	existing, err := watcher.LoadExisting(p.cfg.Dirs, p.cfg.Recursive)
+	analyzed, err := p.cfg.Indexer.ListAnalyzed(ctx, p.cfg.IndexName)
 	if err != nil {
-		slog.Warn("pipeline: load existing failed, scanning all files", "error", err)
+		slog.Warn("pipeline: list analyzed failed, will scan all files", "error", err)
 	}
 
-	paths, err := p.cfg.Scanner.Scan(ctx, p.cfg.Dirs, existing)
+	paths, err := p.cfg.Scanner.Scan(ctx, p.cfg.Dirs, analyzed)
 	if err != nil {
 		return err
 	}
