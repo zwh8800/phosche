@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"net/url"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 	apperrors "github.com/zwh8800/phosche/internal/errors"
@@ -22,12 +20,7 @@ type photoDetailResponse struct {
 // 从 chi URL 参数中获取 URL 编码的照片路径，调用 Indexer.GetPhoto 从 ES 获取照片文档。
 // 若返回 NOT_FOUND 错误，响应 404 状态码；成功时返回嵌入 photo_url 的照片详情。
 func (s *Server) photoDetailHandler(w http.ResponseWriter, r *http.Request) {
-	id, err := url.PathUnescape(chi.URLParam(r, "*"))
-	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "BAD_REQUEST", "Photo ID is required")
-		return
-	}
-	id = strings.TrimPrefix(id, "/")
+	id := "/" + chi.URLParam(r, "*")
 	if id == "" {
 		writeJSONError(w, http.StatusBadRequest, "BAD_REQUEST", "Photo ID is required")
 		return
