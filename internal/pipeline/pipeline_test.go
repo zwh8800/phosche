@@ -146,7 +146,7 @@ func (m *mockIndexer) Stop() {
 	m.stopCalled = true
 }
 
-func (m *mockIndexer) ListAnalyzed(_ context.Context, _ string) (map[string]int64, error) {
+func (m *mockIndexer) GetPhoto(_ context.Context, _ string, _ string) (*types.PhotoDocument, error) {
 	return nil, nil
 }
 
