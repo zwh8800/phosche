@@ -20,7 +20,26 @@ import (
 )
 
 // DefaultPrompt is used when no custom prompt is provided to NewImageAnalyzer.
-const DefaultPrompt = "Please analyze this image and return a JSON object with the following fields: description (a detailed description in the specified language), tags (array of relevant keyword strings), objects (array of objects detected), scene_type (one of: indoor, outdoor, unknown), colors (array of dominant color names), people_count (integer, 0 if none), has_text (boolean, true if visible text in image). Return ONLY valid JSON, no extra text."
+const DefaultPrompt = `分析这张图片，返回 JSON 格式：
+{
+  "description": "图片描述（50-100字）",
+  "tags": ["标签1", "标签2"],
+  "objects": ["物体1", "物体2"],
+  "scene_type": "场景类型",
+  "colors": ["颜色1", "颜色2"],
+  "people_count": 人数,
+  "has_text": true/false,
+  "text": "图片中的文字内容，无文字则为空字符串"
+}
+
+scene_type 必须是以下之一：
+- indoor: 室内场景
+- outdoor: 室外场景
+- underwater: 水下场景
+- aerial: 航拍/无人机视角
+- studio: 影棚/专业拍摄环境
+- night: 夜景/低光环境
+- unknown: 无法判断`
 
 // ImageAnalyzer wraps an LLMClient with prompt building, retry logic, image
 // preprocessing, and response validation.

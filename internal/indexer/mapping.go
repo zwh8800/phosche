@@ -10,7 +10,7 @@ import (
 	"github.com/elastic/go-elasticsearch/v8/esapi"
 )
 
-const mappingVersion = "1"
+const mappingVersion = "2"
 
 var indexMapping = map[string]any{
 	"settings": map[string]any{
@@ -31,6 +31,7 @@ var indexMapping = map[string]any{
 			"colors":             map[string]any{"type": "keyword"},
 			"people_count":       map[string]any{"type": "integer"},
 			"has_text":           map[string]any{"type": "boolean"},
+			"text":               map[string]any{"type": "text"},
 			"status":             map[string]any{"type": "keyword"},
 			"path":               map[string]any{"type": "keyword"},
 			"mtime":              map[string]any{"type": "long"},

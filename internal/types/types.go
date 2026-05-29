@@ -50,6 +50,7 @@ type AnalysisResult struct {
 	Colors      []string `json:"colors" es:"keyword"`
 	PeopleCount int     `json:"people_count" es:"integer"`
 	HasText     bool    `json:"has_text" es:"boolean"`
+	Text        string  `json:"text" es:"text"`
 	Confidence  float64 `json:"confidence,omitempty" es:"double"`
 }
 

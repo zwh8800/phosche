@@ -116,13 +116,18 @@ func (s *SearchService) buildQuery(req *types.SearchRequest) map[string]any {
 		pageSize = 20
 	}
 
+	sort := []any{
+		map[string]any{"date_time_original": map[string]any{"order": "desc", "missing": "_last"}},
+		map[string]any{"mtime": map[string]any{"order": "desc"}},
+	}
+	if req.Query != "" {
+		sort = append([]any{"_score"}, sort...)
+	}
+
 	query := map[string]any{
 		"from": (page - 1) * pageSize,
 		"size": pageSize,
-		"sort": []any{
-			map[string]any{"date_time_original": map[string]any{"order": "desc", "missing": "_last"}},
-			map[string]any{"mtime": map[string]any{"order": "desc"}},
-		},
+		"sort": sort,
 		"highlight": map[string]any{
 			"fields": map[string]any{
 				"description": map[string]any{},
@@ -137,7 +142,7 @@ func (s *SearchService) buildQuery(req *types.SearchRequest) map[string]any {
 		must = append(must, map[string]any{
 			"multi_match": map[string]any{
 				"query":  req.Query,
-				"fields": []string{"description", "tags", "objects"},
+				"fields": []string{"description", "tags", "objects", "text"},
 			},
 		})
 	}

@@ -27,6 +27,7 @@ export interface AnalysisResult {
   colors: string[];
   people_count: number;
   has_text: boolean;
+  text: string;
   confidence?: number;
 }
 
