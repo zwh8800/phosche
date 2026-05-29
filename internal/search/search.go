@@ -120,7 +120,8 @@ func (s *SearchService) buildQuery(req *types.SearchRequest) map[string]any {
 		"from": (page - 1) * pageSize,
 		"size": pageSize,
 		"sort": []any{
-			map[string]any{"date_time_original": map[string]any{"order": "desc"}},
+			map[string]any{"date_time_original": map[string]any{"order": "desc", "missing": "_last"}},
+			map[string]any{"mtime": map[string]any{"order": "desc"}},
 		},
 		"highlight": map[string]any{
 			"fields": map[string]any{
