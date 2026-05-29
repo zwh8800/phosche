@@ -6,6 +6,8 @@
 ![License](https://img.shields.io/badge/License-MIT-blue)
 ![Elasticsearch](https://img.shields.io/badge/Elasticsearch-8.x-005571?logo=elasticsearch)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)
+![Docker](https://img.shields.io/badge/Docker-zwh8800%2Fphosche-2496ED?logo=docker)
+[![CI/CD](https://github.com/zwh8800/phosche/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/zwh8800/phosche/actions/workflows/docker-publish.yml)
 
 ---
 
@@ -114,9 +116,13 @@ go run ./cmd/phosche/ -config config.yaml
 
 适用于 Elasticsearch 已单独部署（或使用云服务）的场景，通过 `docker run` 启动 phosche 容器。
 
-**1. 构建镜像：**
+**1. 获取镜像：**
 
 ```bash
+# 方式 A：从 Docker Hub 拉取（推荐）
+docker pull zwh8800/phosche:latest
+
+# 方式 B：本地构建
 docker build -t phosche .
 ```
 
@@ -631,6 +637,53 @@ cd web && npx playwright test
 - 后端 Go 代码遵循标准 `go fmt` 和 `go vet` 规范
 - 前端 TypeScript 代码使用 ESLint 检查
 - 提交前请确保所有测试通过
+
+### CI/CD
+
+项目使用 GitHub Actions 自动构建和发布 Docker 镜像。
+
+**触发条件：** 推送 `v*` 格式的 tag（如 `v1.0.0`）时自动触发。
+
+**工作流程：**
+1. Checkout 代码
+2. 设置 QEMU + Buildx（多架构支持）
+3. 登录 Docker Hub
+4. 构建 `linux/amd64` 和 `linux/arm64` 多架构镜像
+5. 推送到 Docker Hub
+
+**Docker 镜像：** [`zwh8800/phosche`](https://hub.docker.com/r/zwh8800/phosche)
+
+**Tag 策略：**
+| Tag | 示例 | 说明 |
+|-----|------|------|
+| `latest` | `zwh8800/phosche:latest` | 稳定版本（非预发布 tag 时更新） |
+| `{major}.{minor}` | `zwh8800/phosche:1.0` | 主版本.次版本 |
+| `{major}` | `zwh8800/phosche:1` | 主版本 |
+| `{version}` | `zwh8800/phosche:1.0.0` | 完整语义版本 |
+
+**发布步骤：**
+
+```bash
+# 1. 确保代码已提交
+git add . && git commit -m "..."
+
+# 2. 打 tag
+git tag v1.0.0
+
+# 3. 推送 tag（触发 CI）
+git push origin v1.0.0
+```
+
+**配置 GitHub Secrets：**
+
+在仓库 Settings → Secrets and variables → Actions 中添加：
+
+| Secret | 说明 |
+|--------|------|
+| `DOCKER_USERNAME` | Docker Hub 用户名 |
+| `DOCKER_PASSWORD` | Docker Hub 密码或 Access Token |
+
+> 建议使用 Docker Hub Access Token 而非密码，在 [Docker Hub Security](https://hub.docker.com/settings/security) 页面创建。
 
 ---
 
