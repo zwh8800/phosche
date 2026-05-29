@@ -47,7 +47,7 @@ func TestGetPhotoDetail_Success(t *testing.T) {
 			Tags:        []string{"sunset", "tokyo", "skyline"},
 			Objects:     []string{"sun", "building", "cloud"},
 			SceneType:   "cityscape",
-			Colors:      []string{"orange", "blue", "purple"},
+			Colors:      []types.ColorInfo{{Name: "橙色", Hex: "#F97316"}, {Name: "蓝色", Hex: "#3B82F6"}, {Name: "紫色", Hex: "#A855F7"}},
 			PeopleCount: 0,
 			HasText:     false,
 			Confidence:  0.95,

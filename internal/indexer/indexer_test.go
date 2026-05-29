@@ -304,7 +304,7 @@ func TestIndexer_HighConfidence(t *testing.T) {
 	doc.Confidence = 0.999
 	doc.PeopleCount = 3
 	doc.HasText = true
-	doc.Colors = []string{"#FF0000", "#00FF00"}
+	doc.Colors = []types.ColorInfo{{Name: "红色", Hex: "#FF0000"}, {Name: "绿色", Hex: "#00FF00"}}
 
 	err := svc.IndexPhoto(ctx, doc, indexName)
 	require.NoError(t, err)
@@ -314,5 +314,9 @@ func TestIndexer_HighConfidence(t *testing.T) {
 	assert.Equal(t, float64(0.999), got.Confidence)
 	assert.Equal(t, 3, got.PeopleCount)
 	assert.True(t, got.HasText)
-	assert.Equal(t, []string{"#FF0000", "#00FF00"}, got.Colors)
+	require.Len(t, got.Colors, 2)
+	assert.Equal(t, "红色", got.Colors[0].Name)
+	assert.Equal(t, "#FF0000", got.Colors[0].Hex)
+	assert.Equal(t, "绿色", got.Colors[1].Name)
+	assert.Equal(t, "#00FF00", got.Colors[1].Hex)
 }

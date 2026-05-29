@@ -19,12 +19,17 @@ export interface EXIFInfo {
   gps_lon?: number;
 }
 
+export interface ColorInfo {
+  name: string;
+  hex: string;
+}
+
 export interface AnalysisResult {
   description: string;
   tags: string[];
   objects: string[];
   scene_type: string;
-  colors: string[];
+  colors: ColorInfo[];
   people_count: number;
   has_text: boolean;
   text: string;

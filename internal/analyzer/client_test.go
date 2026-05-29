@@ -12,7 +12,7 @@ import (
 )
 
 func validAnalysisResultJSON() string {
-	return `{"description":"A cat sitting on a windowsill","tags":["cat","windowsill","indoor"],"objects":["cat","window"],"scene_type":"indoor","colors":["white","brown"],"people_count":0,"has_text":false,"confidence":0.95}`
+	return `{"description":"A cat sitting on a windowsill","tags":["cat","windowsill","indoor"],"objects":["cat","window"],"scene_type":"indoor","colors":[{"name":"白色","hex":"#F9FAFB"},{"name":"棕色","hex":"#92400E"}],"people_count":0,"has_text":false,"confidence":0.95}`
 }
 
 var expectedResult = &types.AnalysisResult{
@@ -20,7 +20,7 @@ var expectedResult = &types.AnalysisResult{
 	Tags:        []string{"cat", "windowsill", "indoor"},
 	Objects:     []string{"cat", "window"},
 	SceneType:   "indoor",
-	Colors:      []string{"white", "brown"},
+	Colors:      []types.ColorInfo{{Name: "白色", Hex: "#F9FAFB"}, {Name: "棕色", Hex: "#92400E"}},
 	PeopleCount: 0,
 	HasText:     false,
 	Confidence:  0.95,

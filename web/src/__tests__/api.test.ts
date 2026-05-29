@@ -16,7 +16,7 @@ const mockPhoto: PhotoDocument = {
   tags: ['sunset', 'landscape'],
   objects: ['sun', 'ocean'],
   scene_type: 'outdoor',
-  colors: ['#FF5733', '#FFC300'],
+  colors: [{ name: '橙红', hex: '#FF5733' }, { name: '金黄', hex: '#FFC300' }],
   people_count: 0,
   has_text: false,
   text: '',

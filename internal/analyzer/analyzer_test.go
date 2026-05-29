@@ -28,7 +28,7 @@ func validResult() *types.AnalysisResult {
 		Tags:        []string{"cat", "windowsill", "indoor"},
 		Objects:     []string{"cat", "window"},
 		SceneType:   "indoor",
-		Colors:      []string{"white", "brown"},
+		Colors:      []types.ColorInfo{{Name: "白色", Hex: "#F9FAFB"}, {Name: "棕色", Hex: "#92400E"}},
 		PeopleCount: 0,
 		HasText:     false,
 		Confidence:  0.95,

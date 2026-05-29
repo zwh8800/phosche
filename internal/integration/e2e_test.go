@@ -155,7 +155,7 @@ func TestEndToEnd(t *testing.T) {
 			Tags:        []string{"test"},
 			Objects:     []string{"test"},
 			SceneType:   "indoor",
-			Colors:      []string{"red"},
+			Colors:      []types.ColorInfo{{Name: "红色", Hex: "#EF4444"}},
 			PeopleCount: 0,
 			HasText:     false,
 		},
@@ -198,7 +198,9 @@ func TestEndToEnd(t *testing.T) {
 	assert.Equal(t, []string{"test"}, doc.Tags)
 	assert.Equal(t, []string{"test"}, doc.Objects)
 	assert.Equal(t, "indoor", doc.SceneType)
-	assert.Equal(t, []string{"red"}, doc.Colors)
+	require.Len(t, doc.Colors, 1)
+	assert.Equal(t, "红色", doc.Colors[0].Name)
+	assert.Equal(t, "#EF4444", doc.Colors[0].Hex)
 	assert.Equal(t, 0, doc.PeopleCount)
 	assert.False(t, doc.HasText)
 
