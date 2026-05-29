@@ -19,6 +19,7 @@ const mockPhoto: PhotoDocument = {
   colors: ['#FF5733', '#FFC300'],
   people_count: 0,
   has_text: false,
+  text: '',
   confidence: 0.95,
   exif: {
     camera_model: 'Canon EOS R5',
