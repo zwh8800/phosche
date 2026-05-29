@@ -32,9 +32,16 @@ func PhotoHandler(photoBasePaths []string) http.Handler {
 		requestedPath := r.URL.Path[len("/photos/"):]
 
 		for _, basePath := range photoBasePaths {
-			safePath := filepath.Clean(filepath.Join(basePath, requestedPath))
-
 			cleanBase := filepath.Clean(basePath)
+
+			var safePath string
+			if strings.HasPrefix(requestedPath, cleanBase) {
+				// requestedPath is already an absolute path under this base (e.g. /Volumes/photo/单反/xxx.jpg)
+				safePath = filepath.Clean(requestedPath)
+			} else {
+				safePath = filepath.Clean(filepath.Join(basePath, requestedPath))
+			}
+
 			if !strings.HasPrefix(safePath, cleanBase+string(filepath.Separator)) && safePath != cleanBase {
 				continue
 			}
