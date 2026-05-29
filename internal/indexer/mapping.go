@@ -13,7 +13,7 @@ import (
 // mappingVersion 追踪当前索引映射的版本号，用于迁移检测。
 // 当映射结构发生变化时，应递增此版本号。启动时若检测到 ES 中
 // 已有索引的 _meta.version 与此不一致，会发出告警但不会自动迁移。
-const mappingVersion = "1"
+const mappingVersion = "2"
 
 // indexMapping 定义 ES 索引的 settings 和 mappings。
 //   - number_of_shards: 1（单分片，适用于单节点部署）
@@ -28,7 +28,7 @@ const mappingVersion = "1"
 //   | scene_type          | keyword  | 场景类型（indoor/outdoor/unknown），精确匹配  |
 //   | camera_model        | keyword  | 相机型号，精确匹配                         |
 //   | date_time_original  | date     | 原始拍摄日期时间                           |
-//   | colors              | keyword  | 主体颜色列表                               |
+//   | colors              | nested  | 主体颜色对象数组（name+hex）              |
 //   | people_count        | integer  | 画面中检测到的人物数量                     |
 //   | has_text            | boolean  | 画面中是否包含文字                         |
 //   | text                | text     | OCR 提取的文本内容，支持全文搜索            |
@@ -57,7 +57,13 @@ var indexMapping = map[string]any{
 			"scene_type":         map[string]any{"type": "keyword"},
 			"camera_model":       map[string]any{"type": "keyword"},
 			"date_time_original": map[string]any{"type": "date"},
-			"colors":             map[string]any{"type": "keyword"},
+			"colors": map[string]any{
+				"type": "nested",
+				"properties": map[string]any{
+					"name": map[string]any{"type": "keyword"},
+					"hex":  map[string]any{"type": "keyword"},
+				},
+			},
 			"people_count":       map[string]any{"type": "integer"},
 			"has_text":           map[string]any{"type": "boolean"},
 			"text":               map[string]any{"type": "text"},

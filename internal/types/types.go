@@ -79,26 +79,32 @@ type EXIFInfo struct {
 	GPSLon           float64 `json:"gps_lon,omitempty" es:"double"`            // GPS 经度（十进制度数）
 }
 
+// ColorInfo 表示一个分析出的颜色，包含中文名称和 CSS hex 值。
+type ColorInfo struct {
+	Name string `json:"name" es:"keyword"` // 中文颜色名，如 "蓝色"
+	Hex  string `json:"hex" es:"keyword"`  // CSS hex 值，如 "#3B82F6"
+}
+
 // AnalysisResult 是 LLM 对照片分析后返回的结构化 JSON 分析结果。
 //   - Description：图片的自然语言描述
 //   - Tags：标签列表
 //   - Objects：检测到的物体列表
 //   - SceneType：场景类型（indoor/outdoor/underwater/aerial/studio/night/unknown）
-//   - Colors：主要颜色列表
+//   - Colors：主要颜色列表（含 name 和 hex）
 //   - PeopleCount：照片中的人数
 //   - HasText：照片中是否包含文字
 //   - Text：从照片中提取的文字内容
 //   - Confidence：分析结果的置信度（0-1）
 type AnalysisResult struct {
-	Description string   `json:"description" es:"text"`                // 图片描述
-	Tags        []string `json:"tags" es:"text"`                       // 标签
-	Objects     []string `json:"objects" es:"text"`                    // 检测物体
-	SceneType   string   `json:"scene_type" es:"keyword"`              // 场景类型(indoor/outdoor/underwater/aerial/studio/night/unknown)
-	Colors      []string `json:"colors" es:"keyword"`                  // 主要颜色
-	PeopleCount int      `json:"people_count" es:"integer"`            // 人数
-	HasText     bool     `json:"has_text" es:"boolean"`                // 是否有文字
-	Text        string   `json:"text" es:"text"`                       // 提取的文字
-	Confidence  float64  `json:"confidence,omitempty" es:"double"`     // 置信度
+	Description string      `json:"description" es:"text"`            // 图片描述
+	Tags        []string    `json:"tags" es:"text"`                   // 标签
+	Objects     []string    `json:"objects" es:"text"`                // 检测物体
+	SceneType   string      `json:"scene_type" es:"keyword"`          // 场景类型
+	Colors      []ColorInfo `json:"colors" es:"nested"`               // 主要颜色
+	PeopleCount int         `json:"people_count" es:"integer"`        // 人数
+	HasText     bool        `json:"has_text" es:"boolean"`            // 是否有文字
+	Text        string      `json:"text" es:"text"`                   // 提取的文字
+	Confidence  float64     `json:"confidence,omitempty" es:"double"` // 置信度
 }
 
 // Photo 表示系统中的一个照片实体。
