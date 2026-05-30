@@ -144,14 +144,14 @@ func NewImageAnalyzer(client LLMClient, prompt string, maxRetries int, timeout t
 //  4. 每次重试前检查上下文是否已取消
 //  5. 调用 LLM 客户端进行分析
 //  6. 校验返回结果中的必填字段
-func (a *ImageAnalyzer) Analyze(ctx context.Context, imageData []byte, locationContext string) (*types.AnalysisResult, error) {
+func (a *ImageAnalyzer) Analyze(ctx context.Context, imageData []byte, imageInfo string) (*types.AnalysisResult, error) {
 	// 设置超时上下文
 	ctx, cancel := context.WithTimeout(ctx, a.timeout)
 	defer cancel()
 
 	prompt := a.prompt
-	if locationContext != "" {
-		prompt = a.prompt + "\n\n## 图片信息\n\n" + locationContext
+	if imageInfo != "" {
+		prompt = a.prompt + "\n\n## 图片信息\n\n" + imageInfo
 	}
 
 	originalSize := len(imageData)

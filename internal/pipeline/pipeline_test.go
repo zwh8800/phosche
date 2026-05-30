@@ -86,12 +86,12 @@ type mockAnalyzer struct {
 	blockCh       chan struct{}
 	result        *types.AnalysisResult
 	err           error
-	analyzeFn     func(ctx context.Context, imageData []byte, locationContext string) (*types.AnalysisResult, error)
+	analyzeFn     func(ctx context.Context, imageData []byte, 	imageInfo string) (*types.AnalysisResult, error)
 }
 
-func (m *mockAnalyzer) Analyze(ctx context.Context, imageData []byte, locationContext string) (*types.AnalysisResult, error) {
+func (m *mockAnalyzer) Analyze(ctx context.Context, imageData []byte, imageInfo string) (*types.AnalysisResult, error) {
 	if m.analyzeFn != nil {
-		return m.analyzeFn(ctx, imageData, locationContext)
+		return m.analyzeFn(ctx, imageData, imageInfo)
 	}
 
 	cur := atomic.AddInt32(&m.concurrent, 1)
@@ -239,7 +239,7 @@ func TestPipeline_Failure(t *testing.T) {
 
 	var callCount int32
 	analyzer := &mockAnalyzer{
-		analyzeFn: func(_ context.Context, imageData []byte, locationContext string) (*types.AnalysisResult, error) {
+		analyzeFn: func(_ context.Context, imageData []byte, 	imageInfo string) (*types.AnalysisResult, error) {
 			c := atomic.AddInt32(&callCount, 1)
 			if c == 1 {
 				return nil, errors.New("permanent decode error")
@@ -284,7 +284,7 @@ func TestPipeline_LLMUnavailable(t *testing.T) {
 
 	indexer := &mockIndexer{}
 	analyzer := &mockAnalyzer{
-		analyzeFn: func(_ context.Context, imageData []byte, locationContext string) (*types.AnalysisResult, error) {
+		analyzeFn: func(_ context.Context, imageData []byte, 	imageInfo string) (*types.AnalysisResult, error) {
 			return nil, &net.OpError{Op: "dial", Err: errors.New("connection refused")}
 		},
 	}

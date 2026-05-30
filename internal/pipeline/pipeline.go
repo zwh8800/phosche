@@ -41,7 +41,7 @@ const (
 // Analyzer 是 LLM 图片分析的抽象接口。
 // 实现者负责将图片数据发送给 AI 模型并返回结构化的分析结果。
 type Analyzer interface {
-	Analyze(ctx context.Context, imageData []byte, locationContext string) (*types.AnalysisResult, error)
+	Analyze(ctx context.Context, imageData []byte, imageInfo string) (*types.AnalysisResult, error)
 }
 
 // Indexer 是流水线所需的索引操作抽象接口。
@@ -363,7 +363,7 @@ func (p *Pipeline) decodeAndAnalyze(ctx context.Context, path string) *decodeAna
 	}
 
 	var geoInfo *types.GeoInfo
-	locationContext := ""
+	imageInfo := ""
 	if decodeResult.EXIF != nil && decodeResult.EXIF.GPSLat != 0 && decodeResult.EXIF.GPSLon != 0 {
 		slog.Debug("pipeline: GPS found",
 			"path", path,
@@ -423,7 +423,8 @@ func (p *Pipeline) decodeAndAnalyze(ctx context.Context, path string) *decodeAna
 			ctxParts = append(ctxParts, "详细地址: "+geoInfo.FormattedAddress)
 		}
 	}
-	locationContext = strings.Join(ctxParts, "\n")
+	imageInfo = strings.Join(ctxParts, "\n")
+	slog.Debug("pipeline: image info", "path", path, "info", imageInfo)
 
 	imageBytes, err := os.ReadFile(path)
 	if err != nil {
@@ -432,7 +433,7 @@ func (p *Pipeline) decodeAndAnalyze(ctx context.Context, path string) *decodeAna
 		return nil
 	}
 
-	analysis, err := p.cfg.Analyzer.Analyze(ctx, imageBytes, locationContext)
+	analysis, err := p.cfg.Analyzer.Analyze(ctx, imageBytes, imageInfo)
 	if err != nil {
 		slog.Warn("pipeline: analysis failed", "path", path, "error", err)
 		p.updateErrorStatus(ctx, path, err)
