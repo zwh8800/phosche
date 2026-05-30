@@ -381,17 +381,7 @@ func (p *Pipeline) decodeAndAnalyze(ctx context.Context, path string) *decodeAna
 		slog.Debug("pipeline: no GPS data", "path", path)
 	}
 	if geoInfo != nil {
-		parts := make([]string, 0, 3)
-		if geoInfo.Province != "" {
-			parts = append(parts, geoInfo.Province)
-		}
-		if geoInfo.City != "" {
-			parts = append(parts, geoInfo.City)
-		}
-		if geoInfo.District != "" {
-			parts = append(parts, geoInfo.District)
-		}
-		locationContext = strings.Join(parts, "")
+		locationContext = geoInfo.FormattedAddress
 	}
 
 	imageBytes, err := os.ReadFile(path)
