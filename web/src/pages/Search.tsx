@@ -158,6 +158,7 @@ export default function Search() {
     return raw ? raw.split(',').filter(Boolean) : [];
   });
   const [showFilters, setShowFilters] = useState(false);
+  const [searchActive, setSearchActive] = useState(false);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const initialMount = useRef(true);
 
@@ -194,7 +195,7 @@ export default function Search() {
       return lastPage.page < totalPages ? lastPage.page + 1 : undefined;
     },
     initialPageParam: 1,
-    enabled: false,
+    enabled: searchActive,
   });
 
   // Auto-search on mount if URL has params; debounce on filter changes
@@ -202,6 +203,7 @@ export default function Search() {
     if (initialMount.current) {
       initialMount.current = false;
       if (searchParams.toString()) {
+        setSearchActive(true);
         refetch();
       }
       return;
@@ -209,6 +211,7 @@ export default function Search() {
 
     const timer = setTimeout(() => {
       setSearchParams(buildParams(), { replace: true });
+      if (!searchActive) setSearchActive(true);
       refetch();
     }, 300);
     return () => clearTimeout(timer);
@@ -236,6 +239,7 @@ export default function Search() {
   const handleSearch = (e?: FormEvent) => {
     e?.preventDefault();
     setSearchParams(buildParams(), { replace: true });
+    setSearchActive(true);
     refetch();
   };
 
@@ -264,6 +268,7 @@ export default function Search() {
     setSelectedTags([]);
     setQuery('');
     setSearchParams({}, { replace: true });
+    setSearchActive(false);
   };
 
   const activeFilterCount =
