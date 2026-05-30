@@ -247,9 +247,8 @@ func (a *ImageAnalyzer) preprocessImage(data []byte) ([]byte, error) {
 	width := bounds.Dx()
 	height := bounds.Dy()
 
-	// 如果图片尺寸在限制以内且文件不超过 500KB，直接编码为 JPEG（质量 85%）
-	const maxFileSize = 500 * 1024
-	if width <= a.maxImageDim && height <= a.maxImageDim && len(data) <= maxFileSize {
+	// 如果图片尺寸在限制以内，直接编码为 JPEG（质量 85%）
+	if width <= a.maxImageDim && height <= a.maxImageDim {
 		var buf bytes.Buffer
 		if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 85}); err != nil {
 			return nil, fmt.Errorf("encode image: %w", err)
