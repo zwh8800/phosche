@@ -160,6 +160,7 @@ export default function Search() {
   const [error, setError] = useState<string | null>(null);
   const initialMount = useRef(true);
   const scrollPositionRef = useRef<number>(0);
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
   const { data: filters } = useQuery<FiltersResponse>({
     queryKey: ['filters'],
@@ -280,6 +281,24 @@ export default function Search() {
 
   const hasMore =
     results != null && results.page < results.total_pages;
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loading) {
+          scrollPositionRef.current = window.scrollY;
+          handleLoadMore();
+        }
+      },
+      { threshold: 0.1 },
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, loading, handleLoadMore]);
 
   return (
     <div className="space-y-6">
@@ -526,16 +545,7 @@ export default function Search() {
           </div>
 
           {hasMore && (
-            <div className="flex justify-center pt-2 pb-4">
-              <button
-                type="button"
-                onClick={handleLoadMore}
-                disabled={loading}
-                className="px-6 py-2 text-sm font-medium text-purple-600 bg-purple-50 hover:bg-purple-100 disabled:opacity-50 rounded-lg transition-colors"
-              >
-                {loading ? '加载中…' : '加载更多'}
-              </button>
-            </div>
+            <div ref={sentinelRef} className="h-4" />
           )}
 
           {loading && results && <Spinner />}
