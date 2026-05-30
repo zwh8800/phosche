@@ -58,6 +58,16 @@ const STATUS_COLORS: Record<string, string> = {
   unanalyzed: 'bg-gray-100 text-gray-600',
 };
 
+const SCENE_TYPE_LABELS: Record<string, string> = {
+  outdoor: '室外',
+  indoor: '室内',
+  underwater: '水下',
+  aerial: '航拍',
+  studio: '影棚',
+  night: '夜景',
+  unknown: '未知',
+};
+
 const PhotoCard = memo(function PhotoCard({ photo }: { photo: PhotoDocument }) {
   const dateLabel =
     formatExifDate(photo.exif?.date_time_original) ||
@@ -100,7 +110,7 @@ const PhotoCard = memo(function PhotoCard({ photo }: { photo: PhotoDocument }) {
         )}
         {photo.scene_type && (
           <span className="inline-block text-[11px] px-2 py-0.5 bg-purple-50 text-purple-600 rounded-full font-medium">
-            {photo.scene_type}
+            {SCENE_TYPE_LABELS[photo.scene_type] || photo.scene_type}
           </span>
         )}
         {photo.tags && photo.tags.length > 0 && (
