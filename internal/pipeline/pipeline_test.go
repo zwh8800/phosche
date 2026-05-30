@@ -35,8 +35,18 @@ type mockScanner struct {
 	err   error
 }
 
-func (m *mockScanner) Scan(_ context.Context, _ []string, _ map[string]int64) ([]string, error) {
-	return m.files, m.err
+func (m *mockScanner) Scan(_ context.Context, _ []string, _ map[string]int64) (<-chan string, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	ch := make(chan string, len(m.files)+1)
+	go func() {
+		defer close(ch)
+		for _, f := range m.files {
+			ch <- f
+		}
+	}()
+	return ch, nil
 }
 
 type mockWatcher struct {

@@ -164,35 +164,34 @@ func (p *Pipeline) Run(ctx context.Context) error {
 	return nil
 }
 
-// scanExisting 扫描监控目录中已有的照片文件，将新增/变更的文件入队处理。
-// scanExisting 执行启动时的全量目录扫描，将发现的所有照片路径发送到 inputCh。
-// 扫描结果会由 worker 进一步检查 mtime 来决定是否需要重新分析（通过 ListAnalyzed 比较）。
+// scanExisting 扫描监控目录中已有的照片文件，将新增/变更的文件流式入队处理。
+// 使用 Scanner.Scan 返回的 channel，边扫描边处理，无需等待全量扫描完成。
 func (p *Pipeline) scanExisting(ctx context.Context) error {
 	slog.Info("pipeline: starting initial scan", "dirs", p.cfg.Dirs, "recursive", p.cfg.Recursive)
 
-	paths, err := p.cfg.Scanner.Scan(ctx, p.cfg.Dirs, nil)
+	pathCh, err := p.cfg.Scanner.Scan(ctx, p.cfg.Dirs, nil)
 	if err != nil {
 		return err
 	}
 
-	slog.Info("pipeline: initial scan complete", "found", len(paths))
-
-	if len(paths) == 0 {
-		slog.Warn("pipeline: no photos found in watched directories, waiting for new files")
-		return nil
-	}
-
 	queued := 0
-	for _, path := range paths {
+	for path := range pathCh {
 		select {
 		case p.inputCh <- path:
 			queued++
+			if queued%100 == 0 {
+				slog.Debug("pipeline: scan progress", "queued", queued)
+			}
 		case <-ctx.Done():
 			return ctx.Err()
 		}
 	}
 
-	slog.Info("pipeline: queued scanned photos for processing", "queued", queued, "total", len(paths))
+	if queued == 0 {
+		slog.Warn("pipeline: no photos found in watched directories, waiting for new files")
+	} else {
+		slog.Info("pipeline: initial scan complete", "queued", queued)
+	}
 	return nil
 }
 

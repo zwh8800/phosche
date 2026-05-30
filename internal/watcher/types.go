@@ -18,8 +18,10 @@ type Watcher interface {
 
 // Scanner 定义目录扫描器接口，用于一次性扫描目录中的已有图片文件。
 type Scanner interface {
-	// Scan 递归扫描目录中的图片文件。existing 参数用于增量扫描（跳过已存在的文件）。返回按修改时间降序排列的文件路径。
-	Scan(ctx context.Context, dirs []string, existing map[string]int64) ([]string, error)
+	// Scan 递归扫描目录中的图片文件，通过返回的 channel 流式输出发现的文件路径。
+	// existing 参数用于增量扫描（跳过 mtime 未变化的已有文件）。
+	// channel 在扫描完成后自动关闭。
+	Scan(ctx context.Context, dirs []string, existing map[string]int64) (<-chan string, error)
 }
 
 // dedupEntry 用于去重的文件条目（mtime + size 组合）。

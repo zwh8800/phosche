@@ -5,10 +5,17 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/zwh8800/phosche/internal/watcher"
 )
+
+func drainChan(ch <-chan string) []string {
+	var results []string
+	for path := range ch {
+		results = append(results, path)
+	}
+	return results
+}
 
 func TestScanner_NewFiles(t *testing.T) {
 	dir := t.TempDir()
@@ -20,10 +27,11 @@ func TestScanner_NewFiles(t *testing.T) {
 	createFile(t, dir, "notes.md", 100)
 
 	s := &watcher.DirectoryScanner{}
-	results, err := s.Scan(context.Background(), []string{dir}, nil)
+	ch, err := s.Scan(context.Background(), []string{dir}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+	results := drainChan(ch)
 	if len(results) != 4 {
 		t.Errorf("expected 4 image files, got %d: %v", len(results), results)
 	}
@@ -46,10 +54,11 @@ func TestScanner_SkipExisting(t *testing.T) {
 	}
 
 	s := &watcher.DirectoryScanner{}
-	results, err := s.Scan(context.Background(), []string{dir}, existing)
+	ch, err := s.Scan(context.Background(), []string{dir}, existing)
 	if err != nil {
 		t.Fatal(err)
 	}
+	results := drainChan(ch)
 	if len(results) != 3 {
 		t.Errorf("expected 3 files (1 skipped), got %d: %v", len(results), results)
 	}
@@ -60,65 +69,15 @@ func TestScanner_SkipExisting(t *testing.T) {
 	}
 }
 
-func TestScanner_SortOrder(t *testing.T) {
-	dir := t.TempDir()
-
-	files := []struct {
-		name  string
-		mtime time.Time
-	}{
-		{"old.jpg", time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)},
-		{"mid.png", time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)},
-		{"new.webp", time.Date(2024, 12, 1, 0, 0, 0, 0, time.UTC)},
-	}
-
-	for _, f := range files {
-		path := filepath.Join(dir, f.name)
-		if err := os.WriteFile(path, []byte("data"), 0644); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.Chtimes(path, f.mtime, f.mtime); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	s := &watcher.DirectoryScanner{}
-	results, err := s.Scan(context.Background(), []string{dir}, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(results) != 3 {
-		t.Fatalf("expected 3 files, got %d", len(results))
-	}
-
-	// Verify results are in mtime-descending order (newest first)
-	names := make([]string, len(results))
-	for i, r := range results {
-		names[i] = filepath.Base(r)
-	}
-
-	if names[0] != "new.webp" {
-		t.Errorf("expected new.webp first, got %s", names[0])
-	}
-	if names[1] != "mid.png" {
-		t.Errorf("expected mid.png second, got %s", names[1])
-	}
-	if names[2] != "old.jpg" {
-		t.Errorf("expected old.jpg third, got %s", names[2])
-	}
-}
-
 func TestScanner_EmptyDir(t *testing.T) {
 	dir := t.TempDir()
 
 	s := &watcher.DirectoryScanner{}
-	results, err := s.Scan(context.Background(), []string{dir}, nil)
+	ch, err := s.Scan(context.Background(), []string{dir}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if results == nil {
-		t.Error("expected empty slice, got nil")
-	}
+	results := drainChan(ch)
 	if len(results) != 0 {
 		t.Errorf("expected 0 files, got %d", len(results))
 	}
@@ -126,13 +85,11 @@ func TestScanner_EmptyDir(t *testing.T) {
 
 func TestScanner_NonExistentDir(t *testing.T) {
 	s := &watcher.DirectoryScanner{}
-	results, err := s.Scan(context.Background(), []string{"/nonexistent/path"}, nil)
+	ch, err := s.Scan(context.Background(), []string{"/nonexistent/path"}, nil)
 	if err != nil {
 		t.Errorf("expected no error, got: %v", err)
 	}
-	if results == nil {
-		t.Error("expected empty slice, got nil")
-	}
+	results := drainChan(ch)
 	if len(results) != 0 {
 		t.Errorf("expected 0 files, got %d", len(results))
 	}
@@ -150,10 +107,11 @@ func TestScanner_Recursive(t *testing.T) {
 	createFile(t, subdir, "nested.heic", 100)
 
 	s := &watcher.DirectoryScanner{}
-	results, err := s.Scan(context.Background(), []string{dir}, nil)
+	ch, err := s.Scan(context.Background(), []string{dir}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+	results := drainChan(ch)
 	if len(results) != 3 {
 		t.Errorf("expected 3 image files, got %d: %v", len(results), results)
 	}
@@ -166,10 +124,11 @@ func TestScanner_CaseInsensitiveExt(t *testing.T) {
 	createFile(t, dir, "img.txt", 100)
 
 	s := &watcher.DirectoryScanner{}
-	results, err := s.Scan(context.Background(), []string{dir}, nil)
+	ch, err := s.Scan(context.Background(), []string{dir}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+	results := drainChan(ch)
 	if len(results) != 2 {
 		t.Errorf("expected 2 image files (.JPG + .PNG), got %d", len(results))
 	}
@@ -186,11 +145,13 @@ func TestScanner_ContextCancellation(t *testing.T) {
 	cancel()
 
 	s := &watcher.DirectoryScanner{}
-	results, err := s.Scan(ctx, []string{dir}, nil)
-	if err == nil && len(results) == 0 {
-		// Both outcomes are acceptable per spec
-		return
+	ch, err := s.Scan(ctx, []string{dir}, nil)
+	if err != nil {
+		t.Fatal(err)
 	}
-	// err may be non-nil from context cancellation — that's also acceptable
-	_ = results
+	results := drainChan(ch)
+	// Context already cancelled, should get 0 or very few files
+	if len(results) > 5 {
+		t.Errorf("expected <= 5 files with cancelled context, got %d", len(results))
+	}
 }
