@@ -186,10 +186,10 @@ function PhotoDetailModal({
 
   const hasAnalysis =
     photo.description ||
-    photo.tags.length > 0 ||
-    photo.objects.length > 0 ||
+    photo.tags?.length > 0 ||
+    photo.objects?.length > 0 ||
     photo.scene_type ||
-    photo.colors.length > 0;
+    photo.colors?.length > 0;
 
   return createPortal(
     <div className="fixed inset-0 z-50" role="dialog" aria-modal="true">
@@ -366,7 +366,7 @@ function PhotoDetailModal({
                       </div>
                     )}
 
-                    {photo.tags.length > 0 && (
+                    {photo.tags?.length > 0 && (
                       <div className="flex flex-wrap gap-2 mb-4">
                         {photo.tags.map((t) => (
                           <span
@@ -379,7 +379,7 @@ function PhotoDetailModal({
                       </div>
                     )}
 
-                    {photo.colors.length > 0 && (
+                    {photo.colors?.length > 0 && (
                       <div className="mb-4">
                         <span className="text-xs text-gray-400 block mb-2">主色调</span>
                         <div className="flex flex-wrap gap-1.5">
@@ -396,7 +396,7 @@ function PhotoDetailModal({
                       </div>
                     )}
 
-                    {photo.objects.length > 0 && (
+                    {photo.objects?.length > 0 && (
                       <div className="mb-4">
                         <span className="text-xs text-gray-400 block mb-2">
                           画面物体
