@@ -176,7 +176,7 @@ function PhotoDetailModal({
         onClick={onClose}
       >
         <div
-          className="relative flex flex-col lg:flex-row w-full max-w-[1100px] max-h-[92vh] bg-white rounded-2xl shadow-2xl overflow-hidden animate-[fadeIn_0.2s_ease-out]"
+          className="relative flex flex-col lg:flex-row w-full max-w-[1400px] max-h-[92vh] bg-white rounded-2xl shadow-2xl overflow-hidden animate-[fadeIn_0.2s_ease-out]"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
