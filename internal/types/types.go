@@ -74,6 +74,7 @@ type EXIFInfo struct {
 	LensModel        string  `json:"lens_model,omitempty" es:"keyword"`        // 镜头型号
 	FocalLength      string  `json:"focal_length,omitempty" es:"keyword"`      // 焦距，如 "6.9mm"
 	Aperture         string  `json:"aperture,omitempty" es:"keyword"`          // 光圈值，如 "f/1.8"
+	ShutterSpeed     string  `json:"shutter_speed,omitempty" es:"keyword"`     // 快门速度，如 "1/125s"
 	ISO              int     `json:"iso,omitempty" es:"integer"`               // ISO 感光度
 	GPSLat           float64 `json:"gps_lat,omitempty" es:"double"`            // GPS 纬度（十进制度数）
 	GPSLon           float64 `json:"gps_lon,omitempty" es:"double"`            // GPS 经度（十进制度数）

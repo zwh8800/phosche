@@ -137,6 +137,13 @@ func extractEXIF(path string) (*types.EXIFInfo, error) {
 		}
 	}
 
+	// 提取快门速度（ExposureTime），转换为分数格式 "1/125s"
+	if tag, err := x.Get(exif.ExposureTime); err == nil {
+		if num, den, rErr := tag.Rat2(0); rErr == nil && den != 0 {
+			info.ShutterSpeed = fmt.Sprintf("%d/%ds", num, den)
+		}
+	}
+
 	// 提取 ISO 感光度（ISOSpeedRatings）
 	if tag, err := x.Get(exif.ISOSpeedRatings); err == nil {
 		if iso, iErr := tag.Int(0); iErr == nil {

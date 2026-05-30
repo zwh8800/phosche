@@ -13,7 +13,7 @@ import (
 // mappingVersion 追踪当前索引映射的版本号，用于迁移检测。
 // 当映射结构发生变化时，应递增此版本号。启动时若检测到 ES 中
 // 已有索引的 _meta.version 与此不一致，会发出告警但不会自动迁移。
-const mappingVersion = "4"
+const mappingVersion = "5"
 
 // indexMapping 定义 ES 索引的 settings 和 mappings。
 //   - number_of_shards: 1（单分片，适用于单节点部署）

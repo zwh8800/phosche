@@ -154,6 +154,7 @@ function PhotoDetailModal({
       photo.exif.lens_model ||
       photo.exif.focal_length ||
       photo.exif.aperture ||
+      photo.exif.shutter_speed ||
       photo.exif.iso ||
       photo.exif.date_time_original ||
       photo.exif.gps_lat != null);
@@ -454,6 +455,7 @@ function PhotoDetailModal({
 
                     {(photo.exif!.focal_length ||
                       photo.exif!.aperture ||
+                      photo.exif!.shutter_speed ||
                       photo.exif!.iso != null) && (
                       <div className="flex flex-wrap gap-3 mb-4">
                         {photo.exif!.focal_length && (
@@ -464,6 +466,11 @@ function PhotoDetailModal({
                         {photo.exif!.aperture && (
                           <span className="inline-flex items-center px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-sm font-mono">
                             {formatAperture(photo.exif!.aperture)}
+                          </span>
+                        )}
+                        {photo.exif!.shutter_speed && (
+                          <span className="inline-flex items-center px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-sm font-mono">
+                            {photo.exif!.shutter_speed}
                           </span>
                         )}
                         {photo.exif!.iso != null && (

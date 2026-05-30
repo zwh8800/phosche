@@ -399,6 +399,9 @@ func (p *Pipeline) decodeAndAnalyze(ctx context.Context, path string) *decodeAna
 		if e.Aperture != "" {
 			ctxParts = append(ctxParts, "光圈: "+e.Aperture)
 		}
+		if e.ShutterSpeed != "" {
+			ctxParts = append(ctxParts, "快门: "+e.ShutterSpeed)
+		}
 		if e.ISO != 0 {
 			ctxParts = append(ctxParts, fmt.Sprintf("ISO: %d", e.ISO))
 		}

@@ -14,6 +14,7 @@ export interface EXIFInfo {
   lens_model?: string;
   focal_length?: string;
   aperture?: string;
+  shutter_speed?: string;
   iso?: number;
   gps_lat?: number;
   gps_lon?: number;
