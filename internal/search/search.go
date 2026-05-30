@@ -27,10 +27,10 @@ import (
 func buildEmailFilter(userEmail string) map[string]any {
 	should := []any{
 		map[string]any{"bool": map[string]any{"must_not": map[string]any{"exists": map[string]any{"field": "email"}}}},
-		map[string]any{"term": map[string]any{"email": ""}},
+		map[string]any{"term": map[string]any{"email.keyword": ""}},
 	}
 	if userEmail != "" {
-		should = append(should, map[string]any{"term": map[string]any{"email": userEmail}})
+		should = append(should, map[string]any{"term": map[string]any{"email.keyword": userEmail}})
 	}
 	return map[string]any{"bool": map[string]any{"should": should, "minimum_should_match": 1}}
 }
