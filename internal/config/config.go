@@ -19,10 +19,11 @@ type Config struct {
 
 // WatchConfig 是文件监控配置，控制照片目录的监控行为。
 type WatchConfig struct {
-	Directories []string `yaml:"directories"` // 监控目录列表
-	Recursive   bool     `yaml:"recursive"`   // 递归监控
-	DebounceMs  int      `yaml:"debounce_ms"` // 去抖间隔毫秒
-	MinDirDepth int      `yaml:"min_dir_depth"` // 最小深度
+	Directories []string `yaml:"directories"`    // 监控目录列表
+	Recursive   bool     `yaml:"recursive"`      // 递归监控
+	DebounceMs  int      `yaml:"debounce_ms"`    // 去抖间隔毫秒
+	MinDirDepth int      `yaml:"min_dir_depth"`  // 最小深度
+	ExcludeDirs []string `yaml:"exclude_dirs"`   // 排除的目录名列表
 }
 
 // LLMConfig 是 AI 分析配置，控制 LLM 后端的选择和分析参数。

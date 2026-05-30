@@ -18,6 +18,7 @@ import (
 	"log/slog"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -62,6 +63,7 @@ type PipelineConfig struct {
 	IndexName         string           // ES 索引名称
 	Dirs              []string         // 监控的目录列表
 	Recursive         bool             // 是否递归监控子目录
+	ExcludeDirs       []string         // 排除的目录名列表
 	Concurrency       int              // 并发 worker 数（0 使用默认值 4）
 	QueueSize         int              // 输入通道容量（0 使用默认值 100）
 	RetryInterval     time.Duration    // 重试间隔（0 使用默认值 5min）
@@ -176,6 +178,9 @@ func (p *Pipeline) scanExisting(ctx context.Context) error {
 
 	queued := 0
 	for path := range pathCh {
+		if p.isExcluded(path) {
+			continue
+		}
 		select {
 		case p.inputCh <- path:
 			queued++
@@ -203,12 +208,28 @@ func (p *Pipeline) forwardEvents(ctx context.Context, eventCh <-chan types.FileE
 		if event.Op == types.OpDelete {
 			continue
 		}
+		if p.isExcluded(event.Path) {
+			continue
+		}
 		select {
 		case p.inputCh <- event.Path:
 		case <-ctx.Done():
 			return
 		}
 	}
+}
+
+func (p *Pipeline) isExcluded(path string) bool {
+	cleaned := filepath.Clean(path)
+	parts := strings.Split(cleaned, string(filepath.Separator))
+	for _, part := range parts {
+		for _, d := range p.cfg.ExcludeDirs {
+			if part == d {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // worker 从输入通道读取路径并处理，使用独立的超时上下文（5 分钟）。

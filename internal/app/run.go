@@ -103,6 +103,7 @@ func Run(distFS fs.FS, configPath string) {
 		IndexName:         cfg.Elasticsearch.IndexName,
 		Dirs:              cfg.Watch.Directories,
 		Recursive:         cfg.Watch.Recursive,
+		ExcludeDirs:       cfg.Watch.ExcludeDirs,
 		Concurrency:       cfg.LLM.Concurrency,
 	})
 
