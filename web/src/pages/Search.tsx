@@ -40,6 +40,18 @@ function Spinner() {
   );
 }
 
+function SkeletonCard() {
+  return (
+    <div className="animate-pulse">
+      <div className="aspect-[4/3] rounded-xl bg-gray-200" />
+      <div className="mt-2 space-y-1.5 p-1">
+        <div className="h-3 w-3/4 rounded bg-gray-200" />
+        <div className="h-3 w-1/2 rounded bg-gray-200" />
+      </div>
+    </div>
+  );
+}
+
 const STATUS_LABELS: Record<string, string> = {
   analyzed: '已分析',
   analyzing: '分析中',
@@ -476,7 +488,17 @@ export default function Search() {
 
           <div ref={sentinelRef} className="h-4" />
 
-          {isFetchingNextPage && <Spinner />}
+          {isFetchingNextPage && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <SkeletonCard key={`loading-${i}`} />
+              ))}
+            </div>
+          )}
+
+          {!hasNextPage && (
+            <p className="py-8 text-center text-sm text-gray-400">已加载全部照片</p>
+          )}
         </>
       )}
     </div>
