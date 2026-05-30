@@ -310,7 +310,7 @@ function PhotoDetailModal({
                 {hasAnalysis ? (
                   <>
                     {photo.description && (
-                      <p className="text-base lg:text-lg font-medium text-gray-900 leading-relaxed mb-5">
+                      <p className="text-base lg:text-lg font-medium text-gray-900 leading-relaxed mb-8">
                         {photo.description}
                       </p>
                     )}
