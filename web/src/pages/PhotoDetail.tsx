@@ -36,7 +36,7 @@ function PhotoDetail() {
     );
   }
 
-  return <PhotoDetailModal photo={data} onClose={() => navigate('/')} />;
+  return <PhotoDetailModal photo={data} onClose={() => navigate(-1)} />;
 }
 
 export default PhotoDetail;
