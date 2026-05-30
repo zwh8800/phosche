@@ -384,7 +384,7 @@ function PhotoDetailModal({
                     {photo.objects.length > 0 && (
                       <div className="mb-4">
                         <span className="text-xs text-gray-400 block mb-2">
-                          识别物体
+                          画面物体
                         </span>
                         <div className="flex flex-wrap gap-2">
                           {photo.objects.map((obj) => (
