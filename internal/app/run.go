@@ -105,6 +105,7 @@ func Run(distFS fs.FS, configPath string) {
 		Recursive:         cfg.Watch.Recursive,
 		ExcludeDirs:       cfg.Watch.ExcludeDirs,
 		Concurrency:       cfg.LLM.Concurrency,
+		InitialScan:       cfg.Watch.InitialScan,
 	})
 
 	pipelineCtx, pipelineCancel := context.WithCancel(context.Background())

@@ -24,6 +24,7 @@ type WatchConfig struct {
 	DebounceMs  int      `yaml:"debounce_ms"`    // 去抖间隔毫秒
 	MinDirDepth int      `yaml:"min_dir_depth"`  // 最小深度
 	ExcludeDirs []string `yaml:"exclude_dirs"`   // 排除的目录名列表
+	InitialScan bool     `yaml:"initial_scan"`   // 启动时是否扫描已有文件，默认 true
 }
 
 // LLMConfig 是 AI 分析配置，控制 LLM 后端的选择和分析参数。
@@ -103,6 +104,9 @@ func applyDefaults(cfg *Config) {
 	}
 	if !cfg.Watch.Recursive {
 		cfg.Watch.Recursive = true
+	}
+	if !cfg.Watch.InitialScan {
+		cfg.Watch.InitialScan = true
 	}
 
 	if cfg.LLM.MaxRetries == 0 {

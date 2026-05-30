@@ -64,6 +64,7 @@ type PipelineConfig struct {
 	Dirs              []string         // 监控的目录列表
 	Recursive         bool             // 是否递归监控子目录
 	ExcludeDirs       []string         // 排除的目录名列表
+	InitialScan       bool             // 启动时是否扫描已有文件
 	Concurrency       int              // 并发 worker 数（0 使用默认值 4）
 	QueueSize         int              // 输入通道容量（0 使用默认值 100）
 	RetryInterval     time.Duration    // 重试间隔（0 使用默认值 5min）
@@ -137,8 +138,12 @@ func (p *Pipeline) Run(ctx context.Context) error {
 		p.retryLoop(ctx)
 	}()
 
-	if err := p.scanExisting(ctx); err != nil {
-		return fmt.Errorf("pipeline: initial scan: %w", err)
+	if p.cfg.InitialScan {
+		if err := p.scanExisting(ctx); err != nil {
+			return fmt.Errorf("pipeline: initial scan: %w", err)
+		}
+	} else {
+		slog.Info("pipeline: initial scan disabled by config")
 	}
 
 	eventCh, err := p.cfg.Watcher.Watch(ctx, p.cfg.Dirs, p.cfg.Recursive)
