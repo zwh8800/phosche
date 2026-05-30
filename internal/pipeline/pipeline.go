@@ -320,6 +320,11 @@ func (p *Pipeline) decodeAndAnalyze(ctx context.Context, path string) *decodeAna
 	var geoInfo *types.GeoInfo
 	locationContext := ""
 	if decodeResult.EXIF != nil && decodeResult.EXIF.GPSLat != 0 && decodeResult.EXIF.GPSLon != 0 {
+		slog.Debug("pipeline: GPS found",
+			"path", path,
+			"lat", decodeResult.EXIF.GPSLat,
+			"lon", decodeResult.EXIF.GPSLon,
+		)
 		if p.cfg.Geocoder != nil {
 			geoInfo, err = p.cfg.Geocoder.ReverseGeocode(ctx, decodeResult.EXIF.GPSLat, decodeResult.EXIF.GPSLon)
 			if err != nil {
@@ -327,6 +332,8 @@ func (p *Pipeline) decodeAndAnalyze(ctx context.Context, path string) *decodeAna
 				geoInfo = nil
 			}
 		}
+	} else {
+		slog.Debug("pipeline: no GPS data", "path", path)
 	}
 	if geoInfo != nil {
 		parts := make([]string, 0, 3)
