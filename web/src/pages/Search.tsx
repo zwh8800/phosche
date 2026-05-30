@@ -1,17 +1,15 @@
 import {
   useState,
   useEffect,
-  useCallback,
   useRef,
   memo,
   type FormEvent,
   type ChangeEvent,
 } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
 import { searchPhotos, fetchFilters } from '../api/photos';
 import type {
-  SearchResponse,
   FiltersResponse,
   PhotoDocument,
 } from '../types';
@@ -139,28 +137,17 @@ export default function Search() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [query, setQuery] = useState(searchParams.get('query') || '');
-  const [dateFrom, setDateFrom] = useState(
-    searchParams.get('date_from') || '',
-  );
+  const [dateFrom, setDateFrom] = useState(searchParams.get('date_from') || '');
   const [dateTo, setDateTo] = useState(searchParams.get('date_to') || '');
-  const [sceneType, setSceneType] = useState(
-    searchParams.get('scene_type') || '',
-  );
-  const [cameraModel, setCameraModel] = useState(
-    searchParams.get('camera_model') || '',
-  );
+  const [sceneType, setSceneType] = useState(searchParams.get('scene_type') || '');
+  const [cameraModel, setCameraModel] = useState(searchParams.get('camera_model') || '');
   const [selectedTags, setSelectedTags] = useState<string[]>(() => {
     const raw = searchParams.get('tags');
     return raw ? raw.split(',').filter(Boolean) : [];
   });
-
   const [showFilters, setShowFilters] = useState(false);
-  const [results, setResults] = useState<SearchResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const initialMount = useRef(true);
-  const scrollPositionRef = useRef<number>(0);
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const initialMount = useRef(true);
 
   const { data: filters } = useQuery<FiltersResponse>({
     queryKey: ['filters'],
@@ -168,7 +155,79 @@ export default function Search() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const buildParams = useCallback((): URLSearchParams => {
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useInfiniteQuery({
+    queryKey: ['search', query, dateFrom, dateTo, sceneType, cameraModel, selectedTags],
+    queryFn: ({ pageParam = 1 }) =>
+      searchPhotos({
+        query: query || undefined,
+        date_from: dateFrom || undefined,
+        date_to: dateTo || undefined,
+        tags: selectedTags.length > 0 ? selectedTags : undefined,
+        scene_type: sceneType || undefined,
+        camera_model: cameraModel || undefined,
+        page: pageParam,
+        page_size: PAGE_SIZE,
+      }),
+    getNextPageParam: (lastPage) => {
+      const totalPages = Math.ceil(lastPage.total / lastPage.page_size);
+      return lastPage.page < totalPages ? lastPage.page + 1 : undefined;
+    },
+    initialPageParam: 1,
+    enabled: false,
+  });
+
+  // Auto-search on mount if URL has params; debounce on filter changes
+  useEffect(() => {
+    if (initialMount.current) {
+      initialMount.current = false;
+      if (searchParams.toString()) {
+        refetch();
+      }
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setSearchParams(buildParams(), { replace: true });
+      refetch();
+    }, 300);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateFrom, dateTo, sceneType, cameraModel, selectedTags]);
+
+  // Infinite scroll sentinel
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage();
+        }
+      },
+      { threshold: 0.1 },
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  const handleSearch = (e?: FormEvent) => {
+    e?.preventDefault();
+    setSearchParams(buildParams(), { replace: true });
+    refetch();
+  };
+
+  const buildParams = (): URLSearchParams => {
     const p = new URLSearchParams();
     if (query) p.set('query', query);
     if (dateFrom) p.set('date_from', dateFrom);
@@ -177,90 +236,15 @@ export default function Search() {
     if (cameraModel) p.set('camera_model', cameraModel);
     if (selectedTags.length > 0) p.set('tags', selectedTags.join(','));
     return p;
-  }, [query, dateFrom, dateTo, sceneType, cameraModel, selectedTags]);
+  };
 
-  const doSearch = useCallback(
-    async (page: number, append: boolean) => {
-      setLoading(true);
-      setError(null);
-      try {
-        const resp = await searchPhotos({
-          query: query || undefined,
-          date_from: dateFrom || undefined,
-          date_to: dateTo || undefined,
-          tags: selectedTags.length > 0 ? selectedTags : undefined,
-          scene_type: sceneType || undefined,
-          camera_model: cameraModel || undefined,
-          page,
-          page_size: PAGE_SIZE,
-        });
-
-        setResults((prev) => {
-          if (append && prev) {
-            return { ...resp, hits: [...prev.hits, ...resp.hits] };
-          }
-          return resp;
-        });
-      } catch (err) {
-        setError(err instanceof Error ? err.message : '搜索失败，请重试');
-      } finally {
-        setLoading(false);
-      }
-    },
-    [query, dateFrom, dateTo, sceneType, cameraModel, selectedTags],
-  );
-
-  const handleSearch = useCallback(
-    (e?: FormEvent) => {
-      e?.preventDefault();
-      setSearchParams(buildParams(), { replace: true });
-      doSearch(1, false);
-    },
-    [buildParams, doSearch, setSearchParams],
-  );
-
-  useEffect(() => {
-    if (initialMount.current) {
-      initialMount.current = false;
-      if (searchParams.toString()) {
-        doSearch(1, false);
-      }
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      setSearchParams(buildParams(), { replace: true });
-      doSearch(1, false);
-    }, 300);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateFrom, dateTo, sceneType, cameraModel, selectedTags]);
-
-  // Restore scroll position after results update (for load more)
-  useEffect(() => {
-    if (scrollPositionRef.current > 0) {
-      window.scrollTo(0, scrollPositionRef.current);
-      scrollPositionRef.current = 0;
-    }
-  }, [results]);
-
-  const handleLoadMore = useCallback(() => {
-    if (!results || loading) return;
-    const nextPage = results.page + 1;
-    if (nextPage > results.total_pages) return;
-    
-    // Save scroll position before loading more
-    scrollPositionRef.current = window.scrollY;
-    doSearch(nextPage, true);
-  }, [results, loading, doSearch]);
-
-  const toggleTag = useCallback((tag: string) => {
+  const toggleTag = (tag: string) => {
     setSelectedTags((prev) =>
       prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
     );
-  }, []);
+  };
 
-  const resetFilters = useCallback(() => {
+  const resetFilters = () => {
     setDateFrom('');
     setDateTo('');
     setSceneType('');
@@ -268,9 +252,7 @@ export default function Search() {
     setSelectedTags([]);
     setQuery('');
     setSearchParams({}, { replace: true });
-    setResults(null);
-    setError(null);
-  }, [setSearchParams]);
+  };
 
   const activeFilterCount =
     (dateFrom ? 1 : 0) +
@@ -279,26 +261,9 @@ export default function Search() {
     (cameraModel ? 1 : 0) +
     selectedTags.length;
 
-  const hasMore =
-    results != null && results.page < results.total_pages;
-
-  useEffect(() => {
-    const sentinel = sentinelRef.current;
-    if (!sentinel) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && hasMore && !loading) {
-          scrollPositionRef.current = window.scrollY;
-          handleLoadMore();
-        }
-      },
-      { threshold: 0.1 },
-    );
-
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [hasMore, loading, handleLoadMore]);
+  const allPhotos = data?.pages.flatMap((page) => page.hits) ?? [];
+  const total = data?.pages[0]?.total ?? 0;
+  const totalPages = data?.pages[0]?.total_pages ?? 0;
 
   return (
     <div className="space-y-6">
@@ -320,16 +285,14 @@ export default function Search() {
           <input
             type="text"
             value={query}
-            onChange={(e: ChangeEvent<HTMLInputElement>) =>
-              setQuery(e.target.value)
-            }
+            onChange={(e: ChangeEvent<HTMLInputElement>) => setQuery(e.target.value)}
             placeholder="输入关键词搜索照片…"
             className="w-full pl-9 pr-4 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white placeholder-gray-400"
           />
         </div>
         <button
           type="submit"
-          disabled={loading}
+          disabled={isLoading}
           className="px-5 py-2.5 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 rounded-lg transition-colors"
         >
           搜索
@@ -341,9 +304,7 @@ export default function Search() {
           type="button"
           onClick={() => setShowFilters((v) => !v)}
           className={`inline-flex items-center gap-1.5 text-sm font-medium transition-colors ${
-            showFilters
-              ? 'text-purple-600'
-              : 'text-gray-600 hover:text-gray-900'
+            showFilters ? 'text-purple-600' : 'text-gray-600 hover:text-gray-900'
           }`}
         >
           <svg
@@ -378,75 +339,55 @@ export default function Search() {
               <input
                 type="date"
                 value={dateFrom}
-                onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                  setDateFrom(e.target.value)
-                }
+                onChange={(e: ChangeEvent<HTMLInputElement>) => setDateFrom(e.target.value)}
                 className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white"
               />
               <span className="text-xs text-gray-400">至</span>
               <input
                 type="date"
                 value={dateTo}
-                onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                  setDateTo(e.target.value)
-                }
+                onChange={(e: ChangeEvent<HTMLInputElement>) => setDateTo(e.target.value)}
                 className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white"
               />
             </div>
           </div>
 
           <div>
-            <label
-              htmlFor="filter-scene"
-              className="block text-xs font-medium text-gray-500 mb-2"
-            >
+            <label htmlFor="filter-scene" className="block text-xs font-medium text-gray-500 mb-2">
               场景类型
             </label>
             <select
               id="filter-scene"
               value={sceneType}
-              onChange={(e: ChangeEvent<HTMLSelectElement>) =>
-                setSceneType(e.target.value)
-              }
+              onChange={(e: ChangeEvent<HTMLSelectElement>) => setSceneType(e.target.value)}
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white"
             >
               <option value="">全部</option>
               {(filters?.scene_types || []).map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
+                <option key={s} value={s}>{s}</option>
               ))}
             </select>
           </div>
 
           <div>
-            <label
-              htmlFor="filter-camera"
-              className="block text-xs font-medium text-gray-500 mb-2"
-            >
+            <label htmlFor="filter-camera" className="block text-xs font-medium text-gray-500 mb-2">
               相机型号
             </label>
             <select
               id="filter-camera"
               value={cameraModel}
-              onChange={(e: ChangeEvent<HTMLSelectElement>) =>
-                setCameraModel(e.target.value)
-              }
+              onChange={(e: ChangeEvent<HTMLSelectElement>) => setCameraModel(e.target.value)}
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white"
             >
               <option value="">全部</option>
               {(filters?.cameras || []).map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
+                <option key={c} value={c}>{c}</option>
               ))}
             </select>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-2">
-              标签
-            </label>
+            <label className="block text-xs font-medium text-gray-500 mb-2">标签</label>
             {filters?.tags && filters.tags.length > 0 ? (
               <div className="flex flex-wrap gap-1.5">
                 {filters.tags.map((tag) => {
@@ -486,14 +427,14 @@ export default function Search() {
         </div>
       )}
 
-      {loading && !results && <Spinner />}
+      {isLoading && <Spinner />}
 
-      {error && (
+      {isError && (
         <div className="text-center py-12">
-          <p className="text-sm text-red-500">{error}</p>
+          <p className="text-sm text-red-500">{(error as Error)?.message || '搜索失败'}</p>
           <button
             type="button"
-            onClick={() => doSearch(1, false)}
+            onClick={() => refetch()}
             className="mt-3 text-sm text-purple-600 hover:text-purple-700 font-medium"
           >
             重试
@@ -501,7 +442,7 @@ export default function Search() {
         </div>
       )}
 
-      {!loading && !error && results && results.hits.length === 0 && (
+      {!isLoading && !isError && allPhotos.length === 0 && data && (
         <div className="text-center py-16">
           <svg
             className="w-12 h-12 mx-auto text-gray-300 mb-4"
@@ -516,39 +457,26 @@ export default function Search() {
               d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
             />
           </svg>
-          <p className="text-sm text-gray-500">
-            未找到匹配的照片，试试其他关键词
-          </p>
+          <p className="text-sm text-gray-500">未找到匹配的照片，试试其他关键词</p>
         </div>
       )}
 
-      {!loading && !error && results && results.hits.length > 0 && (
+      {allPhotos.length > 0 && (
         <>
           <p className="text-xs text-gray-400">
-            共找到{' '}
-            <span className="font-medium text-gray-600">{results.total}</span>{' '}
-            张照片
-            {results.total_pages > 1 && (
-              <>
-                ，第 {results.page}/{results.total_pages} 页
-              </>
-            )}
+            共找到 <span className="font-medium text-gray-600">{total}</span> 张照片
+            {totalPages > 1 && <>，第 {data?.pages.length}/{totalPages} 页</>}
           </p>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-            {results.hits.map((photo) => (
-              <PhotoCard
-                key={photo.path}
-                photo={photo}
-              />
+            {allPhotos.map((photo) => (
+              <PhotoCard key={photo.path} photo={photo} />
             ))}
           </div>
 
-          {hasMore && (
-            <div ref={sentinelRef} className="h-4" />
-          )}
+          <div ref={sentinelRef} className="h-4" />
 
-          {loading && results && <Spinner />}
+          {isFetchingNextPage && <Spinner />}
         </>
       )}
     </div>
