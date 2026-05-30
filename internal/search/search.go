@@ -168,8 +168,17 @@ func (s *SearchService) buildQuery(req *types.SearchRequest, userEmail string) m
 	}
 
 	// 排序策略：有 query 时按 _score 优先（相关性），无 query 时按拍摄时间倒序。
+	// 使用 script sort：优先用 exif.date_time_original（拍摄时间），缺失时用 created_at（处理时间）
 	sort := []any{
-		map[string]any{"exif.date_time_original": map[string]any{"order": "desc", "missing": "_last"}},
+		map[string]any{
+			"_script": map[string]any{
+				"type": "number",
+				"script": map[string]any{
+					"source": "if (doc['exif.date_time_original'].size() > 0) { return doc['exif.date_time_original'].value.toInstant().toEpochMilli(); } return doc['created_at'].value.toInstant().toEpochMilli();",
+				},
+				"order": "desc",
+			},
+		},
 		map[string]any{"mtime": map[string]any{"order": "desc"}},
 	}
 	if req.Query != "" {
