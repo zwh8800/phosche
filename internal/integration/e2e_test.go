@@ -183,7 +183,7 @@ func TestEndToEnd(t *testing.T) {
 			Status:   "analyzed",
 			Page:     1,
 			PageSize: 10,
-		})
+		}, "")
 		if err != nil {
 			t.Logf("search poll error: %v", err)
 			return false
@@ -208,7 +208,7 @@ func TestEndToEnd(t *testing.T) {
 		Query:    "test",
 		Page:     1,
 		PageSize: 10,
-	})
+	}, "")
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, resp.Total, int64(1), "search should find the photo")
 

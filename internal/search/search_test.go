@@ -175,7 +175,7 @@ func TestSearch_FullText(t *testing.T) {
 		Query:    "mountain",
 		Page:     1,
 		PageSize: 10,
-	})
+	}, "")
 	require.NoError(t, err)
 	assert.Greater(t, resp.Total, int64(0), "should find mountain docs")
 	assert.Contains(t, collectIDs(resp.Hits), "1", "doc 1 has mountain")
@@ -191,7 +191,7 @@ func TestSearch_DateRange(t *testing.T) {
 		DateTo:   "2024-06-30",
 		Page:     1,
 		PageSize: 10,
-	})
+	}, "")
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), resp.Total, "only 2 docs in June 2024")
 
@@ -210,7 +210,7 @@ func TestSearch_CombinedFilters(t *testing.T) {
 		SceneType: "outdoor",
 		Page:      1,
 		PageSize:  10,
-	})
+	}, "")
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), resp.Total, "only doc 2 matches all conditions")
 
@@ -225,7 +225,7 @@ func TestSearch_Pagination(t *testing.T) {
 	resp, err := svc.Search(context.Background(), testIndex, &types.SearchRequest{
 		Page:     1,
 		PageSize: 2,
-	})
+	}, "")
 	require.NoError(t, err)
 	assert.Equal(t, int64(5), resp.Total, "total should be 5")
 	assert.Len(t, resp.Hits, 2, "page 1 should return 2 docs")
@@ -242,7 +242,7 @@ func TestSearch_EmptyResults(t *testing.T) {
 		Query:    "nonexistent123xyz",
 		Page:     1,
 		PageSize: 10,
-	})
+	}, "")
 	require.NoError(t, err)
 	assert.Equal(t, int64(0), resp.Total, "should find no docs")
 	assert.Empty(t, resp.Hits)
@@ -252,7 +252,7 @@ func TestGetFilters(t *testing.T) {
 	svc, cleanup := setupSearchTest(t)
 	defer cleanup()
 
-	filters, err := svc.GetFilters(context.Background(), testIndex)
+	filters, err := svc.GetFilters(context.Background(), testIndex, "")
 	require.NoError(t, err)
 
 	assert.NotEmpty(t, filters.Tags, "should have aggregated tags")
@@ -281,7 +281,7 @@ func TestSearch_DefaultsHandling(t *testing.T) {
 	svc, cleanup := setupSearchTest(t)
 	defer cleanup()
 
-	resp, err := svc.Search(context.Background(), testIndex, &types.SearchRequest{})
+	resp, err := svc.Search(context.Background(), testIndex, &types.SearchRequest{}, "")
 	require.NoError(t, err)
 	assert.Equal(t, int64(5), resp.Total, "empty request should match all")
 	assert.Equal(t, 1, resp.Page, "default page should be 1")
@@ -296,7 +296,7 @@ func TestSearch_InvalidIndex(t *testing.T) {
 	_, err := svc.Search(context.Background(), "nonexistent_index", &types.SearchRequest{
 		Page:     1,
 		PageSize: 10,
-	})
+	}, "")
 	require.Error(t, err)
 	assert.True(t, strings.Contains(err.Error(), "search returned"),
 		"should return ES error, got: %v", err)
@@ -310,7 +310,7 @@ func TestSearch_TagsFilter(t *testing.T) {
 		Tags:     []string{"mountain"},
 		Page:     1,
 		PageSize: 10,
-	})
+	}, "")
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), resp.Total, "2 docs have 'mountain' tag")
 
@@ -327,7 +327,7 @@ func TestSearch_CameraModelFilter(t *testing.T) {
 		CameraModel: "Sony A7IV",
 		Page:        1,
 		PageSize:    10,
-	})
+	}, "")
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), resp.Total, "2 docs with Sony A7IV")
 

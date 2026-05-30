@@ -5,6 +5,9 @@ watch:
   debounce_ms: 500
   min_dir_depth: 1
   exclude_dirs: []
+  private_dirs: {}
+  #   "/Volumes/photo/私人":
+  #     - "user@example.com"
   skip_initial_scan: false
 
 llm:

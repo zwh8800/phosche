@@ -15,9 +15,9 @@ import (
 
 // PhotoSearcher 定义 API 层依赖的照片搜索操作接口。
 type PhotoSearcher interface {
-	Search(ctx context.Context, indexName string, req *types.SearchRequest) (*types.SearchResponse, error)
-	GetFilters(ctx context.Context, indexName string) (*types.FiltersResponse, error)
-	GetStats(ctx context.Context, indexName string) (*types.StatsResponse, error)
+	Search(ctx context.Context, indexName string, req *types.SearchRequest, userEmail string) (*types.SearchResponse, error)
+	GetFilters(ctx context.Context, indexName string, userEmail string) (*types.FiltersResponse, error)
+	GetStats(ctx context.Context, indexName string, userEmail string) (*types.StatsResponse, error)
 }
 
 // Indexer 定义 API 层依赖的照片索引操作接口。
@@ -73,6 +73,7 @@ func NewRouter(srv *Server) chi.Router {
 		AllowCredentials: false,
 		MaxAge:           300,
 	}))
+	r.Use(JWTAuth)
 
 	// Health check
 	r.Get("/health", healthHandler)

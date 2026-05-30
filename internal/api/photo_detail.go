@@ -37,6 +37,12 @@ func (s *Server) photoDetailHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	userEmail := UserEmailFromContext(r.Context())
+	if doc.Email != "" && doc.Email != userEmail {
+		writeJSONError(w, http.StatusForbidden, "FORBIDDEN", "Access denied")
+		return
+	}
+
 	resp := photoDetailResponse{
 		PhotoDocument: doc,
 		PhotoURL:      "/photos/" + doc.Path,

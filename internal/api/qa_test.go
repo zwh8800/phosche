@@ -29,15 +29,15 @@ type fullMockSearcher struct {
 	searchErr   error
 }
 
-func (m *fullMockSearcher) GetStats(_ context.Context, _ string) (*types.StatsResponse, error) {
+func (m *fullMockSearcher) GetStats(_ context.Context, _ string, _ string) (*types.StatsResponse, error) {
 	return m.statsResp, m.statsErr
 }
 
-func (m *fullMockSearcher) GetFilters(_ context.Context, _ string) (*types.FiltersResponse, error) {
+func (m *fullMockSearcher) GetFilters(_ context.Context, _ string, _ string) (*types.FiltersResponse, error) {
 	return m.filtersResp, m.filtersErr
 }
 
-func (m *fullMockSearcher) Search(_ context.Context, _ string, _ *types.SearchRequest) (*types.SearchResponse, error) {
+func (m *fullMockSearcher) Search(_ context.Context, _ string, _ *types.SearchRequest, _ string) (*types.SearchResponse, error) {
 	return m.searchResp, m.searchErr
 }
 

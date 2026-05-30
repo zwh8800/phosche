@@ -63,8 +63,9 @@ type PipelineConfig struct {
 	IndexName         string           // ES 索引名称
 	Dirs              []string         // 监控的目录列表
 	Recursive         bool             // 是否递归监控子目录
-	ExcludeDirs       []string         // 排除的目录名列表
-	SkipInitialScan   bool             // 跳过启动时扫描已有文件
+	ExcludeDirs       []string             // 排除的目录名列表
+	PrivateDirs       map[string][]string  // 私有目录及其授权用户邮箱列表，key 为目录前缀，value 为邮箱列表
+	SkipInitialScan   bool                 // 跳过启动时扫描已有文件
 	Concurrency       int              // 并发 worker 数（0 使用默认值 4）
 	QueueSize         int              // 输入通道容量（0 使用默认值 100）
 	RetryInterval     time.Duration    // 重试间隔（0 使用默认值 5min）
@@ -224,6 +225,16 @@ func (p *Pipeline) forwardEvents(ctx context.Context, eventCh <-chan types.FileE
 	}
 }
 
+// ownerEmail 根据文件路径匹配私有目录，返回第一个匹配目录的第一个授权邮箱。
+func ownerEmail(path string, privateDirs map[string][]string) string {
+	for dir, emails := range privateDirs {
+		if strings.HasPrefix(path, dir) && len(emails) > 0 {
+			return emails[0]
+		}
+	}
+	return ""
+}
+
 func (p *Pipeline) isExcluded(path string) bool {
 	for _, d := range p.cfg.ExcludeDirs {
 		// 前缀匹配：/Volumes/photo/#recycle 匹配 /Volumes/photo/#recycle/xxx
@@ -283,6 +294,9 @@ func (p *Pipeline) processPath(ctx context.Context, path string) {
 	now := time.Now().Unix()
 	id := sha256hex(path)
 
+	// 根据路径匹配私有目录，获取所有者邮箱。
+	email := ownerEmail(path, p.cfg.PrivateDirs)
+
 	// 创建 initializing 占位文档，以便 UpdateStatus 有文档可更新。
 	initDoc := &types.PhotoDocument{
 		Photo: types.Photo{
@@ -291,6 +305,7 @@ func (p *Pipeline) processPath(ctx context.Context, path string) {
 			MTime:     mtime,
 			Size:      info.Size(),
 			Status:    types.StatusAnalyzing,
+			Email:     email,
 			CreatedAt: now,
 		},
 	}
@@ -310,6 +325,7 @@ func (p *Pipeline) processPath(ctx context.Context, path string) {
 			Status:     types.StatusAnalyzed,
 			AnalyzedAt: &now,
 			EXIF:       r.exif,
+			Email:      email,
 			CreatedAt:  now,
 		},
 		AnalysisResult: *r.analysis,

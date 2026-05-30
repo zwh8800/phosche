@@ -22,9 +22,24 @@ import (
 	"github.com/zwh8800/phosche/internal/types"
 )
 
+// buildEmailFilter 构建基于 email 的访问过滤条件。
+// 匹配规则：文档无 email 字段 或 字段值为空 或（userEmail 非空时）字段值等于 userEmail。
+func buildEmailFilter(userEmail string) map[string]any {
+	should := []any{
+		map[string]any{"bool": map[string]any{"must_not": map[string]any{"exists": map[string]any{"field": "email"}}}},
+		map[string]any{"term": map[string]any{"email": ""}},
+	}
+	if userEmail != "" {
+		should = append(should, map[string]any{"term": map[string]any{"email": userEmail}})
+	}
+	return map[string]any{"bool": map[string]any{"should": should, "minimum_should_match": 1}}
+}
+
 // Searcher 定义照片搜索操作的接口，供测试 mock 使用。
 type Searcher interface {
-	Search(ctx context.Context, indexName string, req *types.SearchRequest) (*types.SearchResponse, error)
+	Search(ctx context.Context, indexName string, req *types.SearchRequest, userEmail string) (*types.SearchResponse, error)
+	GetFilters(ctx context.Context, indexName string, userEmail string) (*types.FiltersResponse, error)
+	GetStats(ctx context.Context, indexName string, userEmail string) (*types.StatsResponse, error)
 }
 
 // SearchService 提供基于 Elasticsearch 的全文搜索和条件过滤查询。
@@ -44,9 +59,10 @@ func NewSearchService(client *indexer.ESClient) *SearchService {
 //  2. 序列化为 JSON，通过 esapi.SearchRequest 发送
 //  3. 调用 parseSearchResponse 解析 ES 响应
 //
+// userEmail 用于基于 email 的访问过滤，限制搜索结果仅包含用户有权访问的文档。
 // 调试日志会输出截断后的查询 JSON（最多 500 字符）和结果命中数。
-func (s *SearchService) Search(ctx context.Context, indexName string, req *types.SearchRequest) (*types.SearchResponse, error) {
-	query := s.buildQuery(req)
+func (s *SearchService) Search(ctx context.Context, indexName string, req *types.SearchRequest, userEmail string) (*types.SearchResponse, error) {
+	query := s.buildQuery(req, userEmail)
 	bodyBytes, err := json.Marshal(query)
 	if err != nil {
 		return nil, fmt.Errorf("marshal query: %w", err)
@@ -85,10 +101,11 @@ func (s *SearchService) Search(ctx context.Context, indexName string, req *types
 //   - camera_model: 最多 20 个相机型号
 //
 // 返回的 FiltersResponse 用于填充搜索页面的下拉筛选器。
-func (s *SearchService) GetFilters(ctx context.Context, indexName string) (*types.FiltersResponse, error) {
+func (s *SearchService) GetFilters(ctx context.Context, indexName string, userEmail string) (*types.FiltersResponse, error) {
 	slog.Debug("ES get filters", "index", indexName)
 	query := map[string]any{
 		"size": 0,
+		"query": buildEmailFilter(userEmail),
 		"aggs": map[string]any{
 			"tags": map[string]any{
 				"terms": map[string]any{"field": "tags.keyword", "size": 50},
@@ -138,8 +155,9 @@ func (s *SearchService) GetFilters(ctx context.Context, indexName string) (*type
 //  5. 日期范围过滤：date_time_original 的 gte/lte
 //  6. 词项过滤：tags.keyword、objects.keyword 的 terms 查询
 //  7. 精确匹配：scene_type、status、camera_model 的 term 查询
-//  8. 组合：must + filter 子句包装为 bool 查询；无任何条件时使用 match_all
-func (s *SearchService) buildQuery(req *types.SearchRequest) map[string]any {
+// 8. 组合：must + filter 子句包装为 bool 查询；无任何条件时使用 match_all
+// 9. Email 访问过滤：始终添加 email 过滤条件，限制可见范围
+func (s *SearchService) buildQuery(req *types.SearchRequest, userEmail string) map[string]any {
 	page := req.Page
 	if page <= 0 {
 		page = 1
@@ -171,6 +189,9 @@ func (s *SearchService) buildQuery(req *types.SearchRequest) map[string]any {
 
 	var must []any
 	var filter []any
+
+	// Email 访问过滤：始终添加，限制文档可见范围
+	filter = append(filter, buildEmailFilter(userEmail))
 
 	// 全文搜索：multi_match 跨 description/tags/objects/text 四个字段
 	if req.Query != "" {
@@ -345,11 +366,12 @@ func (s *SearchService) parseSearchResponse(body io.Reader, req *types.SearchReq
 //   - by_status: terms aggregation on status 字段，按处理状态分组计数
 //   - recent: filter aggregation，统计最近 1 小时内创建的文档数
 //   - track_total_hits: true，精确统计文档总数（非近似值）
-func (s *SearchService) GetStats(ctx context.Context, indexName string) (*types.StatsResponse, error) {
+func (s *SearchService) GetStats(ctx context.Context, indexName string, userEmail string) (*types.StatsResponse, error) {
 	slog.Debug("ES get stats", "index", indexName)
 	query := map[string]any{
 		"size":             0,
 		"track_total_hits": true,
+		"query":            buildEmailFilter(userEmail),
 		"aggs": map[string]any{
 			"by_status": map[string]any{
 				"terms": map[string]any{"field": "status", "size": 10},

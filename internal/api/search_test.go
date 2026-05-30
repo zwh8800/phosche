@@ -19,15 +19,14 @@ type mockSearcher struct {
 	err  error
 }
 
-func (m *mockSearcher) Search(ctx context.Context, indexName string, req *types.SearchRequest) (*types.SearchResponse, error) {
+func (m *mockSearcher) Search(ctx context.Context, indexName string, req *types.SearchRequest, userEmail string) (*types.SearchResponse, error) {
 	return m.resp, m.err
 }
 
-func (m *mockSearcher) GetFilters(_ context.Context, _ string) (*types.FiltersResponse, error) {
-	return &types.FiltersResponse{}, nil
+func (m *mockSearcher) GetFilters(_ context.Context, _ string, _ string) (*types.FiltersResponse, error) {
+	return nil, nil
 }
-
-func (m *mockSearcher) GetStats(_ context.Context, _ string) (*types.StatsResponse, error) {
+func (m *mockSearcher) GetStats(_ context.Context, _ string, _ string) (*types.StatsResponse, error) {
 	return &types.StatsResponse{}, nil
 }
 

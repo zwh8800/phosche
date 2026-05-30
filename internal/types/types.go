@@ -125,6 +125,7 @@ type Photo struct {
 	AnalyzedAt *int64    `json:"analyzed_at,omitempty"`
 	EXIF       *EXIFInfo `json:"exif,omitempty"`
 	CreatedAt  int64     `json:"created_at"`
+	Email      string    `json:"email,omitempty" es:"keyword"`
 }
 
 // GeoInfo 存储照片的逆地理编码信息（由 GPS 坐标通过 Amap API 获取）。

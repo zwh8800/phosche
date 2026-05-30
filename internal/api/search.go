@@ -36,7 +36,7 @@ func (s *Server) searchHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := s.searchService.Search(r.Context(), s.IndexName, &req)
+	resp, err := s.searchService.Search(r.Context(), s.IndexName, &req, UserEmailFromContext(r.Context()))
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"error": "search failed"})

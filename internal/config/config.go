@@ -4,6 +4,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -23,8 +24,34 @@ type WatchConfig struct {
 	Recursive   bool     `yaml:"recursive"`      // 递归监控
 	DebounceMs  int      `yaml:"debounce_ms"`    // 去抖间隔毫秒
 	MinDirDepth int      `yaml:"min_dir_depth"`  // 最小深度
-	ExcludeDirs []string `yaml:"exclude_dirs"`       // 排除的目录名列表
-	SkipInitialScan bool   `yaml:"skip_initial_scan"` // 跳过启动时扫描，默认 false（即扫描）
+	ExcludeDirs    []string          `yaml:"exclude_dirs"`        // 排除的目录名列表
+	SkipInitialScan bool            `yaml:"skip_initial_scan"`  // 跳过启动时扫描，默认 false（即扫描）
+	PrivateDirs    map[string][]string `yaml:"private_dirs"`    // 私有目录及其授权用户邮箱列表
+}
+
+func (w WatchConfig) OwnerEmail(path string) string {
+	for dir, emails := range w.PrivateDirs {
+		if strings.HasPrefix(path, dir) {
+			if len(emails) > 0 {
+				return emails[0]
+			}
+		}
+	}
+	return ""
+}
+
+func (w WatchConfig) IsAuthorized(path string, userEmail string) bool {
+	for dir, emails := range w.PrivateDirs {
+		if strings.HasPrefix(path, dir) {
+			for _, email := range emails {
+				if email == userEmail {
+					return true
+				}
+			}
+			return false
+		}
+	}
+	return true
 }
 
 // LLMConfig 是 AI 分析配置，控制 LLM 后端的选择和分析参数。

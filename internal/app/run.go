@@ -104,6 +104,7 @@ func Run(distFS fs.FS, configPath string) {
 		Dirs:              cfg.Watch.Directories,
 		Recursive:         cfg.Watch.Recursive,
 		ExcludeDirs:       cfg.Watch.ExcludeDirs,
+		PrivateDirs:       cfg.Watch.PrivateDirs,
 		Concurrency:       cfg.LLM.Concurrency,
 		SkipInitialScan:   cfg.Watch.SkipInitialScan,
 	})
@@ -124,6 +125,7 @@ func Run(distFS fs.FS, configPath string) {
 	router := api.NewRouter(apiSrv)
 
 	photoHandler := static.PhotoHandler(cfg.Watch.Directories)
+	photoHandler = wrapPrivateAccess(photoHandler, cfg.Watch)
 
 	httpHandler := newMux(router, photoHandler, distFS, cfg.Server.DevMode)
 
@@ -189,6 +191,18 @@ func newMux(router http.Handler, photoHandler http.Handler, distFS fs.FS, devMod
 		default:
 			http.NotFound(w, r)
 		}
+	})
+}
+
+// wrapPrivateAccess 为私有目录的静态文件提供访问控制。
+// 若请求路径属于私有目录，但 JWT email 不匹配 → 403。
+func wrapPrivateAccess(next http.Handler, wCfg config.WatchConfig) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !wCfg.IsAuthorized(r.URL.Path, api.UserEmailFromContext(r.Context())) {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
 	})
 }
 

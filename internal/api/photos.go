@@ -37,7 +37,7 @@ func (s *Server) handleGetPhotos(w http.ResponseWriter, r *http.Request) {
 		PageSize: pageSize,
 	}
 
-	resp, err := s.searchService.Search(r.Context(), s.IndexName, req)
+	resp, err := s.searchService.Search(r.Context(), s.IndexName, req, UserEmailFromContext(r.Context()))
 	if err != nil {
 		slog.Error("photo search failed", "error", err)
 		writeError(w, http.StatusInternalServerError, "search failed")
@@ -60,7 +60,7 @@ func (s *Server) handleCleanup(w http.ResponseWriter, r *http.Request) {
 		PageSize: 10000,
 	}
 
-	resp, err := s.searchService.Search(r.Context(), s.IndexName, req)
+	resp, err := s.searchService.Search(r.Context(), s.IndexName, req, UserEmailFromContext(r.Context()))
 	if err != nil {
 		slog.Error("cleanup search failed", "error", err)
 		writeError(w, http.StatusInternalServerError, "search failed during cleanup")
