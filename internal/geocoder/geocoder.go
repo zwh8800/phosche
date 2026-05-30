@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -30,6 +31,12 @@ func (g *Geocoder) ReverseGeocode(ctx context.Context, lat, lon float64) (*types
 	}
 
 	url := fmt.Sprintf("%s?key=%s&location=%f,%f", g.baseURL, g.apiKey, lon, lat)
+
+	slog.Debug("geocoder: reverse geocode request",
+		"lat", lat,
+		"lon", lon,
+		"url", fmt.Sprintf("%s?key=***&location=%f,%f", g.baseURL, lon, lat),
+	)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -72,6 +79,14 @@ func (g *Geocoder) ReverseGeocode(ctx context.Context, lat, lon float64) (*types
 	if c, ok := result.Regeocode.AddressComponent.City.(string); ok {
 		city = c
 	}
+
+	slog.Debug("geocoder: reverse geocode response",
+		"formatted_address", result.Regeocode.FormattedAddress,
+		"country", result.Regeocode.AddressComponent.Country,
+		"province", result.Regeocode.AddressComponent.Province,
+		"city", city,
+		"district", result.Regeocode.AddressComponent.District,
+	)
 
 	return &types.GeoInfo{
 		Country:          result.Regeocode.AddressComponent.Country,
