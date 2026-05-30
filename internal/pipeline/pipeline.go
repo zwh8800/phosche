@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/zwh8800/phosche/internal/cache"
 	"github.com/zwh8800/phosche/internal/decoder"
 	"github.com/zwh8800/phosche/internal/geocoder"
 	"github.com/zwh8800/phosche/internal/types"
@@ -60,6 +61,7 @@ type PipelineConfig struct {
 	Analyzer          Analyzer         // LLM 分析器
 	Geocoder          *geocoder.Geocoder // 逆地理编码器
 	Indexer           Indexer          // ES 索引服务
+	Cache             *cache.Generator // 照片缓存生成器（缩略图 + HEIC 转 JPEG）
 	IndexName         string           // ES 索引名称
 	Dirs              []string         // 监控的目录列表
 	Recursive         bool             // 是否递归监控子目录
@@ -342,6 +344,16 @@ func (p *Pipeline) processPath(ctx context.Context, path string) {
 	p.pendingMu.Lock()
 	delete(p.pending, path)
 	p.pendingMu.Unlock()
+
+	// 生成图片缓存（缩略图 + HEIC 转 JPEG），缓存已存在时自动跳过
+	if p.cfg.Cache != nil {
+		if err := p.cfg.Cache.GenerateThumb(path); err != nil {
+			slog.Warn("pipeline: cache thumb generation failed", "path", path, "error", err)
+		}
+		if err := p.cfg.Cache.GenerateFull(path); err != nil {
+			slog.Warn("pipeline: cache full generation failed", "path", path, "error", err)
+		}
+	}
 }
 
 // decodeAnalyzeResult 是 decodeAndAnalyze 的返回结构，包含解码后的 EXIF 信息和 AI 分析结果。

@@ -37,6 +37,7 @@ server:
   port: 8080
   dev_mode: true
   log_level: info
+  cache_dir: ""
 
 env:
   amap_key: ""

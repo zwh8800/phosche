@@ -67,7 +67,7 @@ function PhotoCard({ photo }: { photo: PhotoDocument }) {
     >
       <div className="aspect-square overflow-hidden rounded-lg bg-gray-100 relative">
         <img
-          src={`${photoSrc(photo.path)}?w=400&convert=1`}
+          src={`${photoSrc(photo.path)}?thumb=1`}
           alt={photo.description || '照片'}
           className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
           loading="lazy"

@@ -15,6 +15,7 @@ import (
 
 	"github.com/zwh8800/phosche/internal/analyzer"
 	"github.com/zwh8800/phosche/internal/api"
+	"github.com/zwh8800/phosche/internal/cache"
 	"github.com/zwh8800/phosche/internal/config"
 	"github.com/zwh8800/phosche/internal/geocoder"
 	"github.com/zwh8800/phosche/internal/indexer"
@@ -87,6 +88,8 @@ func Run(distFS fs.FS, configPath string) {
 		slog.Info("geocoding disabled: no amap_key configured")
 	}
 
+	cacheGen := cache.NewGenerator(cfg.Server.CacheDir)
+
 	// 创建文件监控器（基于 fsnotify，带去抖功能）和目录扫描器
 	fsWatcher := watcher.NewFSNotifyWatcher(watcher.WatcherConfig{
 		DebounceMs: cfg.Watch.DebounceMs,
@@ -100,6 +103,7 @@ func Run(distFS fs.FS, configPath string) {
 		Analyzer:          imgAnalyzer,
 		Geocoder:          geoCoder,
 		Indexer:           indexerSvc,
+		Cache:             cacheGen,
 		IndexName:         cfg.Elasticsearch.IndexName,
 		Dirs:              cfg.Watch.Directories,
 		Recursive:         cfg.Watch.Recursive,
@@ -124,7 +128,7 @@ func Run(distFS fs.FS, configPath string) {
 	apiSrv := api.NewServer(searchSvc, indexerSvc, cfg.Elasticsearch.IndexName)
 	router := api.NewRouter(apiSrv)
 
-	photoHandler := static.PhotoHandler(cfg.Watch.Directories)
+	photoHandler := static.PhotoHandler(cfg.Watch.Directories, cacheGen)
 	photoHandler = wrapPrivateAccess(photoHandler, cfg.Watch)
 
 	httpHandler := newMux(router, photoHandler, distFS, cfg.Server.DevMode)

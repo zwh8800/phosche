@@ -93,6 +93,7 @@ type ServerConfig struct {
 	Port     int    `yaml:"port"`      // 监听端口
 	DevMode  bool   `yaml:"dev_mode"`  // 开发模式开关
 	LogLevel string `yaml:"log_level"` // 日志级别（debug/info/warn/error）
+	CacheDir string `yaml:"cache_dir"` // 照片缓存目录，空表示不缓存（实时生成）
 }
 
 // EnvConfig 是环境变量配置，包含外部服务的 API Key 等。

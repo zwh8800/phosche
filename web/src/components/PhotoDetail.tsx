@@ -160,7 +160,7 @@ function PhotoDetailModal({
   }, [handleKeyDown]);
 
   const imageUrl = `/photos/${photo.path.replace(/^\/+/, '')}`;
-  const displayUrl = `${imageUrl}?convert=1&w=1400`;
+  const displayUrl = `${imageUrl}?convert=1`;
 
   const dateStr = photo.exif?.date_time_original
     ? new Date(photo.exif.date_time_original).toLocaleDateString('zh-CN', {

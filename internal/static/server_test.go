@@ -6,7 +6,13 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/zwh8800/phosche/internal/cache"
 )
+
+func photoHandler(basePaths []string) http.Handler {
+	return PhotoHandler(basePaths, cache.NewGenerator(""))
+}
 
 func TestPhotoHandler_ServeJPEG(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -15,7 +21,7 @@ func TestPhotoHandler_ServeJPEG(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	handler := PhotoHandler([]string{tmpDir})
+	handler := photoHandler([]string{tmpDir})
 
 	req := httptest.NewRequest(http.MethodGet, "/photos/test.jpg", nil)
 	rec := httptest.NewRecorder()
@@ -33,7 +39,7 @@ func TestPhotoHandler_ServeJPEG(t *testing.T) {
 func TestPhotoHandler_PathTraversal(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	handler := PhotoHandler([]string{tmpDir})
+	handler := photoHandler([]string{tmpDir})
 
 	req := httptest.NewRequest(http.MethodGet, "/photos/../etc/passwd", nil)
 	rec := httptest.NewRecorder()
@@ -52,7 +58,7 @@ func TestPhotoHandler_NonImageExtension(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	handler := PhotoHandler([]string{tmpDir})
+	handler := photoHandler([]string{tmpDir})
 
 	req := httptest.NewRequest(http.MethodGet, "/photos/test.txt", nil)
 	rec := httptest.NewRecorder()
@@ -67,7 +73,7 @@ func TestPhotoHandler_NonImageExtension(t *testing.T) {
 func TestPhotoHandler_FileNotFound(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	handler := PhotoHandler([]string{tmpDir})
+	handler := photoHandler([]string{tmpDir})
 
 	req := httptest.NewRequest(http.MethodGet, "/photos/nonexistent.jpg", nil)
 	rec := httptest.NewRecorder()
@@ -86,7 +92,7 @@ func TestPhotoHandler_CacheControl(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	handler := PhotoHandler([]string{tmpDir})
+	handler := photoHandler([]string{tmpDir})
 
 	req := httptest.NewRequest(http.MethodGet, "/photos/test.jpg", nil)
 	rec := httptest.NewRecorder()
@@ -104,7 +110,7 @@ func TestPhotoHandler_CacheControl(t *testing.T) {
 func TestPhotoHandler_DirectoryRequest(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	handler := PhotoHandler([]string{tmpDir})
+	handler := photoHandler([]string{tmpDir})
 
 	req := httptest.NewRequest(http.MethodGet, "/photos/", nil)
 	rec := httptest.NewRecorder()
@@ -123,7 +129,7 @@ func TestPhotoHandler_CaseInsensitiveExt(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	handler := PhotoHandler([]string{tmpDir})
+	handler := photoHandler([]string{tmpDir})
 
 	req := httptest.NewRequest(http.MethodGet, "/photos/test.JPG", nil)
 	rec := httptest.NewRecorder()
@@ -138,7 +144,7 @@ func TestPhotoHandler_CaseInsensitiveExt(t *testing.T) {
 func TestPhotoHandler_PathTraversalEncoded(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	handler := PhotoHandler([]string{tmpDir})
+	handler := photoHandler([]string{tmpDir})
 
 	// URL-encoded path traversal: %2e%2e%2f = ../
 	req := httptest.NewRequest(http.MethodGet, "/photos/%2e%2e%2fetc%2fpasswd", nil)
@@ -162,7 +168,7 @@ func TestPhotoHandler_SubdirectoryFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	handler := PhotoHandler([]string{tmpDir})
+	handler := photoHandler([]string{tmpDir})
 
 	req := httptest.NewRequest(http.MethodGet, "/photos/sub/photo.webp", nil)
 	rec := httptest.NewRecorder()
@@ -186,7 +192,7 @@ func TestPhotoHandler_MultiBasePath(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	handler := PhotoHandler([]string{dir1, dir2})
+	handler := photoHandler([]string{dir1, dir2})
 
 	req := httptest.NewRequest(http.MethodGet, "/photos/photo.jpg", nil)
 	rec := httptest.NewRecorder()
@@ -201,7 +207,7 @@ func TestPhotoHandler_MultiBasePath_NotFound(t *testing.T) {
 	dir1 := t.TempDir()
 	dir2 := t.TempDir()
 
-	handler := PhotoHandler([]string{dir1, dir2})
+	handler := photoHandler([]string{dir1, dir2})
 
 	req := httptest.NewRequest(http.MethodGet, "/photos/missing.jpg", nil)
 	rec := httptest.NewRecorder()
@@ -215,7 +221,7 @@ func TestPhotoHandler_MultiBasePath_NotFound(t *testing.T) {
 func TestPhotoHandler_MultiBasePath_PathTraversal(t *testing.T) {
 	dir1 := t.TempDir()
 
-	handler := PhotoHandler([]string{dir1})
+	handler := photoHandler([]string{dir1})
 
 	req := httptest.NewRequest(http.MethodGet, "/photos/../etc/passwd", nil)
 	rec := httptest.NewRecorder()
@@ -223,5 +229,24 @@ func TestPhotoHandler_MultiBasePath_PathTraversal(t *testing.T) {
 
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("expected 404, got %d", rec.Code)
+	}
+}
+
+func TestPhotoHandler_ConvertParamNonHEIC(t *testing.T) {
+	tmpDir := t.TempDir()
+	jpgPath := filepath.Join(tmpDir, "test.jpg")
+	if err := os.WriteFile(jpgPath, []byte("fake jpeg data"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	handler := photoHandler([]string{tmpDir})
+
+	req := httptest.NewRequest(http.MethodGet, "/photos/test.jpg?convert=1", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	resp := rec.Result()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected status 200, got %d", resp.StatusCode)
 	}
 }
