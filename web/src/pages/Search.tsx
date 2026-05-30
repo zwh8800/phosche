@@ -90,7 +90,7 @@ const PhotoCard = memo(function PhotoCard({ photo }: { photo: PhotoDocument }) {
     >
       <div className="relative aspect-[4/3] bg-gray-100 overflow-hidden">
         <img
-          src={`/photos/${photo.path.replace(/^\/+/, '')}`}
+          src={`/photos/${photo.path.replace(/^\/+/, '')}?w=400&convert=1`}
           alt={photo.description || photo.path}
           loading="lazy"
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"

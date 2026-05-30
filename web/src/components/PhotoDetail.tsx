@@ -295,7 +295,15 @@ function PhotoDetailModal({
               alt={photo.description || '照片'}
               className="w-full h-full object-contain"
               loading="eager"
+              onError={(e) => {
+                const el = e.currentTarget;
+                el.style.display = 'none';
+                el.nextElementSibling?.classList.remove('hidden');
+              }}
             />
+            <div className="hidden absolute inset-0 flex items-center justify-center bg-gray-900 text-gray-400 text-sm">
+              无法加载图片
+            </div>
           </div>
 
           {/* ── Sidebar ── */}

@@ -49,13 +49,21 @@ function PhotoCard({ photo }: { photo: PhotoDocument }) {
       onClick={() => navigate(`/photo/${encodeURIComponent(photo.path)}`)}
       className="group cursor-pointer text-left"
     >
-      <div className="aspect-square overflow-hidden rounded-lg bg-gray-100">
+      <div className="aspect-square overflow-hidden rounded-lg bg-gray-100 relative">
         <img
-          src={photoSrc(photo.path)}
+          src={`${photoSrc(photo.path)}?w=400&convert=1`}
           alt={photo.description || '照片'}
           className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
           loading="lazy"
+          onError={(e) => {
+            const el = e.currentTarget;
+            el.style.display = 'none';
+            el.nextElementSibling?.classList.remove('hidden');
+          }}
         />
+        <div className="hidden absolute inset-0 flex items-center justify-center bg-gray-100 text-gray-400 text-sm">
+          无法加载图片
+        </div>
       </div>
 
       <div className="mt-2 space-y-1.5">
