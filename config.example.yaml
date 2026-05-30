@@ -5,7 +5,7 @@ watch:
   debounce_ms: 500
   min_dir_depth: 1
   exclude_dirs: []
-  initial_scan: true
+  skip_initial_scan: false
 
 llm:
   provider: ollama

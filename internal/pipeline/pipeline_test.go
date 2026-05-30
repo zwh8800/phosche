@@ -210,7 +210,7 @@ func TestPipeline_E2E(t *testing.T) {
 		IndexName:   "photos",
 		Dirs:        []string{dir},
 		Concurrency: 1,
-	InitialScan: true,
+	SkipInitialScan: false,
 		QueueSize:   10,
 	})
 
@@ -256,7 +256,7 @@ func TestPipeline_Failure(t *testing.T) {
 		IndexName:   "photos",
 		Dirs:        []string{dir},
 		Concurrency: 1,
-	InitialScan: true,
+	SkipInitialScan: false,
 		QueueSize:   10,
 	})
 
@@ -297,7 +297,7 @@ func TestPipeline_LLMUnavailable(t *testing.T) {
 		IndexName:         "photos",
 		Dirs:              []string{dir},
 		Concurrency:       1,
-	InitialScan:       true,
+	SkipInitialScan:       false,
 		QueueSize:         10,
 		RetryInterval:     50 * time.Millisecond,
 		MaxPendingRetries: 2,
@@ -342,7 +342,7 @@ func TestPipeline_Concurrency(t *testing.T) {
 		IndexName:   "photos",
 		Dirs:        []string{dir},
 		Concurrency: 2,
-	InitialScan: true,
+	SkipInitialScan: false,
 		QueueSize:   10,
 	})
 
@@ -381,7 +381,7 @@ func TestPipeline_GracefulShutdown(t *testing.T) {
 		IndexName:   "photos",
 		Dirs:        []string{dir},
 		Concurrency: 1,
-	InitialScan: true,
+	SkipInitialScan: false,
 		QueueSize:   10,
 	})
 
@@ -425,7 +425,7 @@ func TestPipeline_Backpressure(t *testing.T) {
 		IndexName:   "photos",
 		Dirs:        []string{dir},
 		Concurrency: 1,
-	InitialScan: true,
+	SkipInitialScan: false,
 		QueueSize:   1,
 	})
 
@@ -463,7 +463,7 @@ func TestPipeline_WatcherEvent(t *testing.T) {
 		IndexName:   "photos",
 		Dirs:        []string{dir},
 		Concurrency: 1,
-	InitialScan: true,
+	SkipInitialScan: false,
 		QueueSize:   10,
 	})
 
@@ -506,7 +506,7 @@ func TestPipeline_StatusUpdate(t *testing.T) {
 		IndexName:   "photos",
 		Dirs:        []string{dir},
 		Concurrency: 1,
-	InitialScan: true,
+	SkipInitialScan: false,
 		QueueSize:   10,
 	})
 
