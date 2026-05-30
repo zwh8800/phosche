@@ -169,11 +169,16 @@ function PhotoDetailModal({
     <div className="fixed inset-0 z-50" role="dialog" aria-modal="true">
       <div
         className="absolute inset-0 bg-black/75 backdrop-blur-xs"
-        onClick={onClose}
       />
 
-      <div className="relative z-10 flex items-center justify-center w-full h-full p-3 sm:p-6">
-        <div className="relative flex flex-col lg:flex-row w-full max-w-[1100px] max-h-[92vh] bg-white rounded-2xl shadow-2xl overflow-hidden animate-[fadeIn_0.2s_ease-out]">
+      <div
+        className="relative z-10 flex items-center justify-center w-full h-full p-3 sm:p-6"
+        onClick={onClose}
+      >
+        <div
+          className="relative flex flex-col lg:flex-row w-full max-w-[1100px] max-h-[92vh] bg-white rounded-2xl shadow-2xl overflow-hidden animate-[fadeIn_0.2s_ease-out]"
+          onClick={(e) => e.stopPropagation()}
+        >
           <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
             <a
               href={imageUrl}
