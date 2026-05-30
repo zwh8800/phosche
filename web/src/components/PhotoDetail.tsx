@@ -160,6 +160,7 @@ function PhotoDetailModal({
   }, [handleKeyDown]);
 
   const imageUrl = `/photos/${photo.path.replace(/^\/+/, '')}`;
+  const displayUrl = `${imageUrl}?convert=1&w=1400`;
 
   const dateStr = photo.exif?.date_time_original
     ? new Date(photo.exif.date_time_original).toLocaleDateString('zh-CN', {
@@ -291,7 +292,7 @@ function PhotoDetailModal({
           {/* ── Image area ── */}
           <div className="relative flex items-center justify-center bg-gray-900 lg:w-[55%] min-h-[280px] lg:min-h-0 max-h-[50vh] lg:max-h-full">
             <img
-              src={imageUrl}
+              src={displayUrl}
               alt={photo.description || '照片'}
               className="w-full h-full object-contain"
               loading="eager"
