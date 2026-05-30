@@ -380,9 +380,47 @@ func (p *Pipeline) decodeAndAnalyze(ctx context.Context, path string) *decodeAna
 	} else {
 		slog.Debug("pipeline: no GPS data", "path", path)
 	}
-	if geoInfo != nil {
-		locationContext = geoInfo.FormattedAddress
+
+	var ctxParts []string
+	if decodeResult.EXIF != nil {
+		e := decodeResult.EXIF
+		if e.DateTimeOriginal != "" {
+			ctxParts = append(ctxParts, "拍摄时间: "+e.DateTimeOriginal)
+		}
+		if e.CameraModel != "" {
+			ctxParts = append(ctxParts, "相机: "+e.CameraModel)
+		}
+		if e.LensModel != "" {
+			ctxParts = append(ctxParts, "镜头: "+e.LensModel)
+		}
+		if e.FocalLength != "" {
+			ctxParts = append(ctxParts, "焦距: "+e.FocalLength)
+		}
+		if e.Aperture != "" {
+			ctxParts = append(ctxParts, "光圈: "+e.Aperture)
+		}
+		if e.ISO != 0 {
+			ctxParts = append(ctxParts, fmt.Sprintf("ISO: %d", e.ISO))
+		}
+		if e.GPSLat != 0 && e.GPSLon != 0 {
+			ctxParts = append(ctxParts, fmt.Sprintf("GPS: %.6f, %.6f", e.GPSLat, e.GPSLon))
+		}
 	}
+	if geoInfo != nil {
+		addrParts := make([]string, 0, 3)
+		for _, s := range []string{geoInfo.Province, geoInfo.City, geoInfo.District} {
+			if s != "" {
+				addrParts = append(addrParts, s)
+			}
+		}
+		if len(addrParts) > 0 {
+			ctxParts = append(ctxParts, "拍摄位置: "+strings.Join(addrParts, ""))
+		}
+		if geoInfo.FormattedAddress != "" && geoInfo.FormattedAddress != strings.Join(addrParts, "") {
+			ctxParts = append(ctxParts, "详细地址: "+geoInfo.FormattedAddress)
+		}
+	}
+	locationContext = strings.Join(ctxParts, "\n")
 
 	imageBytes, err := os.ReadFile(path)
 	if err != nil {

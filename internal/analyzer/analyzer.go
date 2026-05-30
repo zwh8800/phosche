@@ -151,7 +151,7 @@ func (a *ImageAnalyzer) Analyze(ctx context.Context, imageData []byte, locationC
 
 	prompt := a.prompt
 	if locationContext != "" {
-		prompt = a.prompt + "\n\n照片拍摄位置：" + locationContext
+		prompt = a.prompt + "\n\n## 图片信息\n\n" + locationContext
 	}
 
 	originalSize := len(imageData)
