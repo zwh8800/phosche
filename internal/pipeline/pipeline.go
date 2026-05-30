@@ -220,10 +220,13 @@ func (p *Pipeline) forwardEvents(ctx context.Context, eventCh <-chan types.FileE
 }
 
 func (p *Pipeline) isExcluded(path string) bool {
-	cleaned := filepath.Clean(path)
-	parts := strings.Split(cleaned, string(filepath.Separator))
-	for _, part := range parts {
-		for _, d := range p.cfg.ExcludeDirs {
+	for _, d := range p.cfg.ExcludeDirs {
+		// 前缀匹配：/Volumes/photo/#recycle 匹配 /Volumes/photo/#recycle/xxx
+		if strings.HasPrefix(path, d+string(filepath.Separator)) || path == d {
+			return true
+		}
+		// 目录名匹配：#recycle 匹配任意路径中名为 #recycle 的目录
+		for _, part := range strings.Split(filepath.Clean(path), string(filepath.Separator)) {
 			if part == d {
 				return true
 			}
