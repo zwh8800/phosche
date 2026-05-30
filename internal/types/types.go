@@ -127,11 +127,22 @@ type Photo struct {
 	CreatedAt  int64     `json:"created_at"`
 }
 
-// PhotoDocument 将 Photo（照片元数据）与 AnalysisResult（AI 分析结果）组合为扁平化文档，用于 Elasticsearch 索引。
+// GeoInfo 存储照片的逆地理编码信息（由 GPS 坐标通过 Amap API 获取）。
+type GeoInfo struct {
+	Country          string `json:"country,omitempty" es:"keyword"`
+	Province         string `json:"province,omitempty" es:"keyword"`
+	City             string `json:"city,omitempty" es:"keyword"`
+	District         string `json:"district,omitempty" es:"keyword"`
+	Address          string `json:"address,omitempty" es:"text"`
+	FormattedAddress string `json:"formatted_address,omitempty" es:"text"`
+}
+
+// PhotoDocument 将 Photo（照片元数据）与 AnalysisResult（AI 分析结果）、GeoInfo（逆地理编码信息）组合为扁平化文档，用于 Elasticsearch 索引。
 // 通过内嵌结构体，所有字段在 ES 中处于同一层级。
 type PhotoDocument struct {
 	Photo
 	AnalysisResult
+	GeoInfo
 }
 
 // SearchRequest 是照片搜索请求参数，支持全文搜索、多条件过滤和分页。

@@ -36,8 +36,23 @@ export interface AnalysisResult {
   confidence?: number;
 }
 
+export interface GeoInfo {
+  country?: string;
+  province?: string;
+  city?: string;
+  district?: string;
+  address?: string;
+  formatted_address?: string;
+}
+
 export interface PhotoDocument extends Photo, AnalysisResult {
   exif?: EXIFInfo;
+  country?: string;
+  province?: string;
+  city?: string;
+  district?: string;
+  address?: string;
+  formatted_address?: string;
 }
 
 export interface SearchRequest {

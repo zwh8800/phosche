@@ -13,7 +13,7 @@ import (
 // mappingVersion 追踪当前索引映射的版本号，用于迁移检测。
 // 当映射结构发生变化时，应递增此版本号。启动时若检测到 ES 中
 // 已有索引的 _meta.version 与此不一致，会发出告警但不会自动迁移。
-const mappingVersion = "2"
+const mappingVersion = "3"
 
 // indexMapping 定义 ES 索引的 settings 和 mappings。
 //   - number_of_shards: 1（单分片，适用于单节点部署）
@@ -39,6 +39,12 @@ const mappingVersion = "2"
 //   | created_at          | date     | 文档创建时间                               |
 //   | gps_lat             | double   | GPS 纬度                                  |
 //   | gps_lon             | double   | GPS 经度                                  |
+//   | country             | keyword  | 国家（Amap 逆地理编码）                    |
+//   | province            | keyword  | 省份（Amap 逆地理编码）                    |
+//   | city                | keyword  | 城市（Amap 逆地理编码）                    |
+//   | district            | keyword  | 区县（Amap 逆地理编码）                    |
+//   | address             | text     | 详细地址（Amap 逆地理编码）                |
+//   | formatted_address   | text     | 格式化地址（Amap 逆地理编码）              |
 //
 // _meta.version 用于运行时检测映射版本是否匹配，发现不匹配时仅日志告警，不自动重建。
 var indexMapping = map[string]any{
@@ -74,6 +80,12 @@ var indexMapping = map[string]any{
 			"created_at":         map[string]any{"type": "date"},
 			"gps_lat":            map[string]any{"type": "double"},
 			"gps_lon":            map[string]any{"type": "double"},
+			"country":            map[string]any{"type": "keyword"},
+			"province":           map[string]any{"type": "keyword"},
+			"city":               map[string]any{"type": "keyword"},
+			"district":           map[string]any{"type": "keyword"},
+			"address":            map[string]any{"type": "text"},
+			"formatted_address":  map[string]any{"type": "text"},
 		},
 	},
 }

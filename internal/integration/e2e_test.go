@@ -77,7 +77,7 @@ type mockAnalyzer struct {
 	result *types.AnalysisResult
 }
 
-func (m *mockAnalyzer) Analyze(_ context.Context, _ []byte) (*types.AnalysisResult, error) {
+func (m *mockAnalyzer) Analyze(_ context.Context, _ []byte, _ string) (*types.AnalysisResult, error) {
 	return m.result, nil
 }
 

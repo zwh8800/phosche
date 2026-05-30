@@ -18,10 +18,12 @@ import (
 	"log/slog"
 	"net"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/zwh8800/phosche/internal/decoder"
+	"github.com/zwh8800/phosche/internal/geocoder"
 	"github.com/zwh8800/phosche/internal/types"
 	"github.com/zwh8800/phosche/internal/watcher"
 )
@@ -38,7 +40,7 @@ const (
 // Analyzer 是 LLM 图片分析的抽象接口。
 // 实现者负责将图片数据发送给 AI 模型并返回结构化的分析结果。
 type Analyzer interface {
-	Analyze(ctx context.Context, imageData []byte) (*types.AnalysisResult, error)
+	Analyze(ctx context.Context, imageData []byte, locationContext string) (*types.AnalysisResult, error)
 }
 
 // Indexer 是流水线所需的索引操作抽象接口。
@@ -55,6 +57,7 @@ type PipelineConfig struct {
 	Watcher           watcher.Watcher  // 文件系统监控器（fsnotify 实现）
 	Scanner           watcher.Scanner  // 目录扫描器（启动时遍历已有文件）
 	Analyzer          Analyzer         // LLM 分析器
+	Geocoder          *geocoder.Geocoder // 逆地理编码器
 	Indexer           Indexer          // ES 索引服务
 	IndexName         string           // ES 索引名称
 	Dirs              []string         // 监控的目录列表
@@ -283,6 +286,9 @@ func (p *Pipeline) processPath(ctx context.Context, path string) {
 		},
 		AnalysisResult: *r.analysis,
 	}
+	if r.geo != nil {
+		doc.GeoInfo = *r.geo
+	}
 
 	if err := p.cfg.Indexer.IndexPhoto(ctx, doc, p.cfg.IndexName); err != nil {
 		slog.Warn("pipeline: index failed", "path", path, "error", err)
@@ -298,6 +304,7 @@ func (p *Pipeline) processPath(ctx context.Context, path string) {
 // decodeAnalyzeResult 封装图片解码和 AI 分析的联合结果。
 type decodeAnalyzeResult struct {
 	exif     *types.EXIFInfo       // 从图片中提取的 EXIF 元数据
+	geo      *types.GeoInfo        // 逆地理编码结果
 	analysis *types.AnalysisResult // LLM 返回的结构化分析结果
 }
 
@@ -311,6 +318,31 @@ func (p *Pipeline) decodeAndAnalyze(ctx context.Context, path string) *decodeAna
 		return nil
 	}
 
+	var geoInfo *types.GeoInfo
+	locationContext := ""
+	if decodeResult.EXIF != nil && decodeResult.EXIF.GPSLat != 0 && decodeResult.EXIF.GPSLon != 0 {
+		if p.cfg.Geocoder != nil {
+			geoInfo, err = p.cfg.Geocoder.ReverseGeocode(ctx, decodeResult.EXIF.GPSLat, decodeResult.EXIF.GPSLon)
+			if err != nil {
+				slog.Warn("pipeline: reverse geocode failed", "path", path, "error", err)
+				geoInfo = nil
+			}
+		}
+	}
+	if geoInfo != nil {
+		parts := make([]string, 0, 3)
+		if geoInfo.Province != "" {
+			parts = append(parts, geoInfo.Province)
+		}
+		if geoInfo.City != "" {
+			parts = append(parts, geoInfo.City)
+		}
+		if geoInfo.District != "" {
+			parts = append(parts, geoInfo.District)
+		}
+		locationContext = strings.Join(parts, "")
+	}
+
 	imageBytes, err := os.ReadFile(path)
 	if err != nil {
 		slog.Warn("pipeline: read file failed", "path", path, "error", err)
@@ -318,7 +350,7 @@ func (p *Pipeline) decodeAndAnalyze(ctx context.Context, path string) *decodeAna
 		return nil
 	}
 
-	analysis, err := p.cfg.Analyzer.Analyze(ctx, imageBytes)
+	analysis, err := p.cfg.Analyzer.Analyze(ctx, imageBytes, locationContext)
 	if err != nil {
 		slog.Warn("pipeline: analysis failed", "path", path, "error", err)
 		p.updateErrorStatus(ctx, path, err)
@@ -327,6 +359,7 @@ func (p *Pipeline) decodeAndAnalyze(ctx context.Context, path string) *decodeAna
 
 	return &decodeAnalyzeResult{
 		exif:     decodeResult.EXIF,
+		geo:      geoInfo,
 		analysis: analysis,
 	}
 }

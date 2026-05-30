@@ -79,7 +79,7 @@ func TestAnalyzer_ValidResponse(t *testing.T) {
 	}
 	analyzer := NewImageAnalyzer(mock, "", 2, 30*time.Second)
 
-	result, err := analyzer.Analyze(context.Background(), makeTestJPEG())
+	result, err := analyzer.Analyze(context.Background(), makeTestJPEG(), "")
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -101,7 +101,7 @@ func TestAnalyzer_RetrySuccess(t *testing.T) {
 	}
 	analyzer := NewImageAnalyzer(mock, "", 3, 30*time.Second)
 
-	result, err := analyzer.Analyze(context.Background(), makeTestJPEG())
+	result, err := analyzer.Analyze(context.Background(), makeTestJPEG(), "")
 	if err != nil {
 		t.Fatalf("expected no error after retry, got %v", err)
 	}
@@ -123,7 +123,7 @@ func TestAnalyzer_RetryExhausted(t *testing.T) {
 	}
 	analyzer := NewImageAnalyzer(mock, "", 2, 30*time.Second)
 
-	_, err := analyzer.Analyze(context.Background(), makeTestJPEG())
+	_, err := analyzer.Analyze(context.Background(), makeTestJPEG(), "")
 	if err == nil {
 		t.Fatal("expected error after exhausting retries")
 	}
@@ -140,7 +140,7 @@ func TestAnalyzer_MissingField(t *testing.T) {
 	}
 	analyzer := NewImageAnalyzer(mock, "", 2, 30*time.Second)
 
-	_, err := analyzer.Analyze(context.Background(), makeTestJPEG())
+	_, err := analyzer.Analyze(context.Background(), makeTestJPEG(), "")
 	if err == nil {
 		t.Fatal("expected validation error for missing description")
 	}
@@ -154,7 +154,7 @@ func TestAnalyzer_NonRetryableError(t *testing.T) {
 	}
 	analyzer := NewImageAnalyzer(mock, "", 2, 30*time.Second)
 
-	_, err := analyzer.Analyze(context.Background(), makeTestJPEG())
+	_, err := analyzer.Analyze(context.Background(), makeTestJPEG(), "")
 	if err == nil {
 		t.Fatal("expected error for 4xx")
 	}
@@ -167,7 +167,7 @@ func TestAnalyzer_Timeout(t *testing.T) {
 	blocking := &blockingMockClient{}
 	analyzer := NewImageAnalyzer(blocking, "", 2, 100*time.Millisecond)
 
-	_, err := analyzer.Analyze(context.Background(), makeTestJPEG())
+	_, err := analyzer.Analyze(context.Background(), makeTestJPEG(), "")
 	if err == nil {
 		t.Fatal("expected context deadline error")
 	}
@@ -193,7 +193,7 @@ func TestAnalyzer_ImageResize(t *testing.T) {
 		maxImageDim: 200,
 	}
 
-	_, err := analyzer.Analyze(context.Background(), originalData)
+	_, err := analyzer.Analyze(context.Background(), originalData, "")
 	if err != nil {
 		t.Fatalf("Analyze failed: %v", err)
 	}

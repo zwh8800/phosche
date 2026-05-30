@@ -14,6 +14,7 @@ type Config struct {
 	LLM           LLMConfig    `yaml:"llm"`
 	Elasticsearch ESConfig     `yaml:"elasticsearch"`
 	Server        ServerConfig `yaml:"server"`
+	Env           EnvConfig    `yaml:"env"`
 }
 
 // WatchConfig 是文件监控配置，控制照片目录的监控行为。
@@ -63,6 +64,11 @@ type ServerConfig struct {
 	Port     int    `yaml:"port"`      // 监听端口
 	DevMode  bool   `yaml:"dev_mode"`  // 开发模式开关
 	LogLevel string `yaml:"log_level"` // 日志级别（debug/info/warn/error）
+}
+
+// EnvConfig 是环境变量配置，包含外部服务的 API Key 等。
+type EnvConfig struct {
+	AMAPKey string `yaml:"amap_key"`
 }
 
 // LoadConfig 加载并解析 YAML 配置文件，应用默认值，校验必填项。

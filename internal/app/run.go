@@ -16,6 +16,7 @@ import (
 	"github.com/zwh8800/phosche/internal/analyzer"
 	"github.com/zwh8800/phosche/internal/api"
 	"github.com/zwh8800/phosche/internal/config"
+	"github.com/zwh8800/phosche/internal/geocoder"
 	"github.com/zwh8800/phosche/internal/indexer"
 	"github.com/zwh8800/phosche/internal/pipeline"
 	"github.com/zwh8800/phosche/internal/search"
@@ -81,6 +82,11 @@ func Run(distFS fs.FS, configPath string) {
 		time.Duration(cfg.LLM.TimeoutSeconds)*time.Second,
 	)
 
+	geoCoder := geocoder.NewGeocoder(cfg.Env.AMAPKey)
+	if cfg.Env.AMAPKey == "" {
+		slog.Info("geocoding disabled: no amap_key configured")
+	}
+
 	// 创建文件监控器（基于 fsnotify，带去抖功能）和目录扫描器
 	fsWatcher := watcher.NewFSNotifyWatcher(watcher.WatcherConfig{
 		DebounceMs: cfg.Watch.DebounceMs,
@@ -92,6 +98,7 @@ func Run(distFS fs.FS, configPath string) {
 		Watcher:           fsWatcher,
 		Scanner:           dirScanner,
 		Analyzer:          imgAnalyzer,
+		Geocoder:          geoCoder,
 		Indexer:           indexerSvc,
 		IndexName:         cfg.Elasticsearch.IndexName,
 		Dirs:              cfg.Watch.Directories,
