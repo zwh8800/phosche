@@ -310,7 +310,7 @@ function PhotoDetailModal({
                 {hasAnalysis ? (
                   <>
                     {photo.description && (
-                      <p className="text-base lg:text-lg font-medium text-gray-900 leading-relaxed mb-8">
+                      <p className="text-base lg:text-lg font-medium text-gray-900 leading-relaxed">
                         {photo.description}
                       </p>
                     )}
@@ -318,7 +318,7 @@ function PhotoDetailModal({
                     {(photo.scene_type ||
                       photo.people_count > 0 ||
                       photo.has_text) && (
-                      <div className="flex flex-wrap items-center gap-3 mb-4">
+                      <div className="flex flex-wrap items-center gap-3 mt-4 mb-4">
                         {photo.scene_type && (
                           <SceneTypeBadge type={photo.scene_type} />
                         )}
