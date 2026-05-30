@@ -118,12 +118,12 @@ type ImageAnalyzer struct {
 	prompt      string        // 分析提示词，指导 LLM 如何描述图片内容
 	maxRetries  int           // 最大重试次数
 	timeout     time.Duration // 单次分析请求的超时时间
-	maxImageDim int           // 图片最大尺寸（像素），超过此尺寸将被等比缩放（默认 1536）
+	maxImageDim int           // 图片最大尺寸（像素），超过此尺寸将被等比缩放（默认 1024）
 }
 
 // NewImageAnalyzer 创建一个新的 ImageAnalyzer 实例。
 // 如果 prompt 为空，则使用 DefaultPrompt 作为默认分析提示词。
-// maxImageDim 固定为 1536 像素。
+// maxImageDim 固定为 1024 像素。
 func NewImageAnalyzer(client LLMClient, prompt string, maxRetries int, timeout time.Duration) *ImageAnalyzer {
 	if prompt == "" {
 		prompt = DefaultPrompt
@@ -133,7 +133,7 @@ func NewImageAnalyzer(client LLMClient, prompt string, maxRetries int, timeout t
 		prompt:      prompt,
 		maxRetries:  maxRetries,
 		timeout:     timeout,
-		maxImageDim: 1536,
+		maxImageDim: 1024,
 	}
 }
 
@@ -233,7 +233,7 @@ func truncate(s string, maxLen int) string {
 // preprocessImage 对原始图片数据进行预处理以减小传输体积。
 // 处理流程：
 //  1. 解码图片数据
-//  2. 如果宽高均不超过 maxImageDim（1536px），保持原始尺寸，重新编码为 JPEG 质量 85%
+//  2. 如果宽高均不超过 maxImageDim（1024px），保持原始尺寸，重新编码为 JPEG 质量 85%
 //  3. 如果超过限制，使用 CatmullRom 插值算法等比缩放至 maxImageDim 以内
 //  4. 将缩放后的图片编码为 JPEG 质量 85% 并返回
 func (a *ImageAnalyzer) preprocessImage(data []byte) ([]byte, error) {
