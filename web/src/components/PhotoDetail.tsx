@@ -367,7 +367,7 @@ function PhotoDetailModal({
                     {photo.colors.length > 0 && (
                       <div className="flex items-center gap-2 mb-4">
                         <span className="text-xs text-gray-400">主色调</span>
-                        <div className="flex gap-1.5">
+                        <div className="flex flex-wrap gap-1.5">
                           {photo.colors.map((c) => (
                             <div key={c.name} className="flex items-center gap-1.5">
                               <div
