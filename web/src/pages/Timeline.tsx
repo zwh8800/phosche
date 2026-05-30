@@ -4,6 +4,22 @@ import { useRef, useEffect, useMemo } from 'react';
 import { fetchPhotos } from '../api/photos';
 import type { PhotoDocument } from '../types';
 
+const STATUS_LABELS: Record<string, string> = {
+  analyzed: '已分析',
+  analyzing: '分析中',
+  failed: '失败',
+  pending_analysis: '待分析',
+  unanalyzed: '未分析',
+};
+
+const STATUS_COLORS: Record<string, string> = {
+  analyzed: 'bg-green-100 text-green-700',
+  analyzing: 'bg-yellow-100 text-yellow-700',
+  failed: 'bg-red-100 text-red-700',
+  pending_analysis: 'bg-gray-100 text-gray-600',
+  unanalyzed: 'bg-gray-100 text-gray-600',
+};
+
 function extractDate(photo: PhotoDocument): string {
   const exifDate = photo.exif?.date_time_original;
   if (exifDate) {
@@ -64,30 +80,51 @@ function PhotoCard({ photo }: { photo: PhotoDocument }) {
         <div className="hidden absolute inset-0 flex items-center justify-center bg-gray-100 text-gray-400 text-sm">
           无法加载图片
         </div>
+        {photo.status === 'analyzing' && (
+          <span className={`absolute top-2 right-2 text-[10px] px-1.5 py-0.5 rounded font-medium ${STATUS_COLORS.analyzing}`}>
+            {STATUS_LABELS.analyzing}
+          </span>
+        )}
       </div>
 
       <div className="mt-2 space-y-1.5">
-        {photo.description && (
-          <p className="line-clamp-2 text-sm leading-snug text-gray-700">
-            {photo.description}
-          </p>
-        )}
-        {photo.tags && photo.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {photo.tags.slice(0, 3).map((tag) => (
-              <span
-                key={tag}
-                className="inline-block rounded bg-purple-50 px-1.5 py-0.5 text-xs text-purple-700"
-              >
-                {tag}
-              </span>
-            ))}
-            {photo.tags.length > 3 && (
-              <span className="text-xs text-gray-400">
-                +{photo.tags.length - 3}
-              </span>
+        {photo.status === 'analyzing' ? (
+          <>
+            <div className="animate-pulse space-y-1.5">
+              <div className="h-3 w-full rounded bg-gray-200" />
+              <div className="h-3 w-3/4 rounded bg-gray-200" />
+            </div>
+            <div className="animate-pulse flex flex-wrap gap-1">
+              <div className="h-5 w-10 rounded bg-gray-200" />
+              <div className="h-5 w-12 rounded bg-gray-200" />
+              <div className="h-5 w-8 rounded bg-gray-200" />
+            </div>
+          </>
+        ) : (
+          <>
+            {photo.description && (
+              <p className="line-clamp-2 text-sm leading-snug text-gray-700">
+                {photo.description}
+              </p>
             )}
-          </div>
+            {photo.tags && photo.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {photo.tags.slice(0, 3).map((tag) => (
+                  <span
+                    key={tag}
+                    className="inline-block rounded bg-purple-50 px-1.5 py-0.5 text-xs text-purple-700"
+                  >
+                    {tag}
+                  </span>
+                ))}
+                {photo.tags.length > 3 && (
+                  <span className="text-xs text-gray-400">
+                    +{photo.tags.length - 3}
+                  </span>
+                )}
+              </div>
+            )}
+          </>
         )}
       </div>
     </button>

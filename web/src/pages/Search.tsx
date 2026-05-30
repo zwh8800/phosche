@@ -113,32 +113,51 @@ const PhotoCard = memo(function PhotoCard({ photo }: { photo: PhotoDocument }) {
         {dateLabel && (
           <p className="text-xs text-gray-500">{dateLabel}</p>
         )}
-        {photo.description && (
-          <p className="text-sm text-gray-800 line-clamp-2 leading-snug">
-            {photo.description}
-          </p>
-        )}
-        {photo.scene_type && (
-          <span className="inline-block text-[11px] px-2 py-0.5 bg-purple-50 text-purple-600 rounded-full font-medium">
-            {SCENE_TYPE_LABELS[photo.scene_type] || photo.scene_type}
-          </span>
-        )}
-        {photo.tags && photo.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {photo.tags.slice(0, 3).map((tag) => (
-              <span
-                key={tag}
-                className="text-[10px] px-1.5 py-px bg-gray-100 text-gray-600 rounded"
-              >
-                {tag}
-              </span>
-            ))}
-            {photo.tags.length > 3 && (
-              <span className="text-[10px] text-gray-400">
-                +{photo.tags.length - 3}
+        {photo.status === 'analyzing' ? (
+          <>
+            <div className="animate-pulse space-y-2">
+              <div className="h-3 w-full rounded bg-gray-200" />
+              <div className="h-3 w-3/4 rounded bg-gray-200" />
+            </div>
+            <div className="animate-pulse">
+              <div className="inline-block h-5 w-12 rounded-full bg-gray-200" />
+            </div>
+            <div className="animate-pulse flex gap-1">
+              <div className="h-4 w-10 rounded bg-gray-200" />
+              <div className="h-4 w-12 rounded bg-gray-200" />
+              <div className="h-4 w-8 rounded bg-gray-200" />
+            </div>
+          </>
+        ) : (
+          <>
+            {photo.description && (
+              <p className="text-sm text-gray-800 line-clamp-2 leading-snug">
+                {photo.description}
+              </p>
+            )}
+            {photo.scene_type && (
+              <span className="inline-block text-[11px] px-2 py-0.5 bg-purple-50 text-purple-600 rounded-full font-medium">
+                {SCENE_TYPE_LABELS[photo.scene_type] || photo.scene_type}
               </span>
             )}
-          </div>
+            {photo.tags && photo.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {photo.tags.slice(0, 3).map((tag) => (
+                  <span
+                    key={tag}
+                    className="text-[10px] px-1.5 py-px bg-gray-100 text-gray-600 rounded"
+                  >
+                    {tag}
+                  </span>
+                ))}
+                {photo.tags.length > 3 && (
+                  <span className="text-[10px] text-gray-400">
+                    +{photo.tags.length - 3}
+                  </span>
+                )}
+              </div>
+            )}
+          </>
         )}
       </div>
     </Link>
