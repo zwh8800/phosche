@@ -23,6 +23,7 @@
  * - 防抖搜索：任何筛选条件变化后等待 300ms 自动触发搜索
  * - 懒加载：searchActive 控制查询是否启用，首次搜索后才激活
  */
+
 import {
   useState,
   useEffect,
@@ -43,9 +44,10 @@ import type {
 const PAGE_SIZE = 20;
 
 /**
- * 格式化文件修改时间戳为中文日期
- * @param ts - 秒级 Unix 时间戳
- * @returns 格式化的中文日期字符串，如 "2024/01/15"
+ * 格式化时间戳为中文日期字符串
+ *
+ * @param ts - Unix 时间戳（秒）
+ * @returns 中文格式日期（如 "2024年01月15日"）
  */
 function formatMtime(ts?: number): string {
   if (!ts) return '';
@@ -57,9 +59,13 @@ function formatMtime(ts?: number): string {
 }
 
 /**
- * 格式化 EXIF 拍摄日期为 YYYY-MM-DD 格式
- * @param raw - ISO 格式的日期字符串
- * @returns 格式化后的日期字符串
+ * 格式化 EXIF 日期字符串为 YYYY-MM-DD 格式
+ *
+ * EXIF 中的日期格式通常为 "2024:01:15 10:30:00"，此函数尝试解析后
+ * 转为标准 ISO 格式（2024-01-15）。若解析失败则截取前 10 个字符。
+ *
+ * @param raw - EXIF 原始日期字符串
+ * @returns 格式化后的日期字符串（如 "2024-01-15"），无效输入返回空串
  */
 function formatExifDate(raw?: string): string {
   if (!raw) return '';
@@ -69,7 +75,10 @@ function formatExifDate(raw?: string): string {
 }
 
 /**
- * 加载中旋转指示器组件
+ * 加载中旋转指示器
+ *
+ * 居中显示一个紫色旋转圆环，用于搜索结果加载时的视觉反馈。
+ * 使用 Tailwind 的 animate-spin 类实现 CSS 旋转动画。
  */
 function Spinner() {
   return (
@@ -80,7 +89,10 @@ function Spinner() {
 }
 
 /**
- * 骨架屏占位卡片组件（搜索结果用，4:3 比例）
+ * 骨架屏卡片占位组件
+ *
+ * 在搜索结果加载过程中显示灰色占位块，模拟照片卡片的布局
+ * （图片区域 + 两行文字），使用 animate-pulse 实现脉冲动画效果。
  */
 function SkeletonCard() {
   return (
@@ -94,7 +106,7 @@ function SkeletonCard() {
   );
 }
 
-/** 照片状态 → 中文标签映射 */
+/** 照片处理状态的中文标签映射，用于在卡片上显示状态徽章 */
 const STATUS_LABELS: Record<string, string> = {
   analyzed: '已分析',
   analyzing: '分析中',
@@ -124,7 +136,7 @@ const SCENE_TYPE_LABELS: Record<string, string> = {
 };
 
 /**
- * 搜索结果照片卡片组件（使用 memo 优化渲染性能）
+ * 照片卡片组件（使用 memo 优化渲染性能）
  *
  * 展示单张搜索结果照片的缩略图、拍摄日期、AI 分析描述、场景类型和标签。
  * 点击跳转到照片详情页（/photo/{path}）。

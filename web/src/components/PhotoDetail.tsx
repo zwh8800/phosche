@@ -1,7 +1,35 @@
+/**
+ * 照片详情模态框组件
+ *
+ * 使用 React Portal 在页面最顶层渲染照片详情弹窗，覆盖在原始页面之上。
+ * 通过键盘方向键（←/→）支持上一张/下一张导航，Escape 键关闭弹窗。
+ *
+ * 布局结构：
+ * - 半透明黑色遮罩层，模糊背景（backdrop-blur）
+ * - 居中弹窗卡片：左侧为照片显示区（55%），右侧为信息面板（45%）
+ * - 信息面板分三个区域：AI 分析、拍摄信息（EXIF）、文件信息
+ *
+ * 技术要点：
+ * - 使用 createPortal 将 DOM 渲染到 document.body 下，避免父容器层叠上下文限制
+ * - 弹窗打开时锁定 body 滚动（overflow: hidden），关闭时恢复原始值
+ * - 键盘事件监听在 useEffect 中注册/清理
+ * - 点击遮罩层关闭弹窗，点击弹窗内部阻止事件冒泡
+ * - 弹窗入场动画通过动态注入 @keyframes 实现
+ */
 import { useEffect, useCallback, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { PhotoDocument } from '../types';
 
+/**
+ * 照片详情模态框的属性接口
+ *
+ * @property photo - 当前展示的照片文档对象，包含 EXIF、AI 分析结果等完整数据
+ * @property onClose - 关闭弹窗的回调函数，由父组件提供
+ * @property onPrev - 切换到上一张照片的回调函数，可选；不提供时隐藏上一张按钮
+ * @property onNext - 切换到下一张照片的回调函数，可选；不提供时隐藏下一张按钮
+ * @property hasPrev - 是否存在上一张照片，控制上一张按钮的显示/隐藏
+ * @property hasNext - 是否存在下一张照片，控制下一张按钮的显示/隐藏
+ */
 interface PhotoDetailModalProps {
   photo: PhotoDocument;
   onClose: () => void;
@@ -11,6 +39,13 @@ interface PhotoDetailModalProps {
   hasNext?: boolean;
 }
 
+/**
+ * 标签颜色调色板
+ *
+ * 为 AI 识别的标签提供 8 种不同的颜色方案，通过 tagColor 哈希函数
+ * 根据标签文字内容均匀分配颜色，确保同一标签始终显示相同颜色。
+ * 每个色组包含背景色（-100）和文字色（-700）两个 Tailwind 类。
+ */
 const TAG_COLORS = [
   'bg-rose-100 text-rose-700',
   'bg-amber-100 text-amber-700',
@@ -22,6 +57,15 @@ const TAG_COLORS = [
   'bg-orange-100 text-orange-700',
 ];
 
+/**
+ * 处理状态对应的颜色映射表
+ *
+ * - analyzed: 绿色，表示分析成功
+ * - analyzing: 黄色，表示正在分析中
+ * - failed: 红色，表示分析失败
+ * - pending_analysis: 灰色，等待重试
+ * - unanalyzed: 灰色，尚未开始分析
+ */
 const STATUS_COLORS: Record<string, string> = {
   analyzed: 'bg-green-100 text-green-700',
   analyzing: 'bg-yellow-100 text-yellow-700',
@@ -30,6 +74,9 @@ const STATUS_COLORS: Record<string, string> = {
   unanalyzed: 'bg-gray-100 text-gray-600',
 };
 
+/**
+ * 处理状态对应的中文标签映射表
+ */
 const STATUS_LABELS: Record<string, string> = {
   analyzed: '已分析',
   analyzing: '分析中',
@@ -38,6 +85,12 @@ const STATUS_LABELS: Record<string, string> = {
   unanalyzed: '未分析',
 };
 
+/**
+ * 场景类型对应的中文标签映射表
+ *
+ * 覆盖 outdoor（室外）、indoor（室内）、underwater（水下）、
+ * aerial（航拍）、studio（影棚）、night（夜景）、unknown（未知）七种场景。
+ */
 const SCENE_TYPE_LABELS: Record<string, string> = {
   outdoor: '室外',
   indoor: '室内',
@@ -48,6 +101,24 @@ const SCENE_TYPE_LABELS: Record<string, string> = {
   unknown: '未知',
 };
 
+/**
+ * 标签颜色哈希分配函数
+ *
+ * 基于标签字符串内容计算哈希值，从 TAG_COLORS 调色板中均匀选取颜色。
+ * 使用 DJB2 哈希算法（由 Dan Bernstein 发明），具有分布均匀、计算快速的特点。
+ * 同一标签始终返回相同颜色，保证视觉一致性。
+ *
+ * @param tag - 标签文字
+ * @returns Tailwind CSS 颜色类名，格式如 "bg-rose-100 text-rose-700"
+ */
+/**
+ * 根据标签文本计算确定性的颜色
+ * 使用 DJB2 哈希算法对标签字符串生成哈希值，然后取模分配到预设的颜色数组中。
+ * 确保相同标签在不同渲染周期始终显示相同颜色。
+ *
+ * @param tag - 标签文本字符串
+ * @returns Tailwind CSS 样式类字符串，用于标签的背景色和文字色
+ */
 function tagColor(tag: string): string {
   let hash = 0;
   for (let i = 0; i < tag.length; i++) {
@@ -56,6 +127,26 @@ function tagColor(tag: string): string {
   return TAG_COLORS[Math.abs(hash) % TAG_COLORS.length];
 }
 
+/**
+ * 格式化光圈值为标准显示格式
+ *
+ * - 如果值已包含 "f/" 或 "F/" 前缀，直接返回原值
+ * - 如果是纯数字字符串，格式化为 "f/{数字}" 形式
+ * - 其他情况（如异常值），原样返回
+ *
+ * @param aperture - 光圈原始值，如 "1.8" 或 "f/1.8"
+ * @returns 格式化后的光圈字符串，如 "f/1.8"
+ */
+/**
+ * 格式化光圈值
+ * 处理多种光圈值格式：
+ * - 已包含 f/ 前缀的直接返回
+ * - 纯数字格式自动添加 f/ 前缀
+ * - 无法解析的值原样返回
+ *
+ * @param aperture - 光圈原始字符串（如 "1.8"、"f/1.8"、"F/2.8"）
+ * @returns 格式化后的光圈字符串
+ */
 function formatAperture(aperture: string): string {
   if (aperture.startsWith('f/') || aperture.startsWith('F/')) return aperture;
   const num = parseFloat(aperture);
@@ -63,6 +154,24 @@ function formatAperture(aperture: string): string {
   return aperture;
 }
 
+/**
+ * 格式化文件大小为人类可读格式
+ *
+ * 根据字节数自动选择单位：
+ * - ≥ 1 MB：以 MB 为单位保留一位小数
+ * - ≥ 1 KB：以 KB 为单位保留一位小数
+ * - < 1 KB：以 B 为单位显示整数字节数
+ *
+ * @param bytes - 文件字节数
+ * @returns 格式化后的文件大小字符串，如 "3.7 MB"、"128.0 KB"、"512 B"
+ */
+/**
+ * 将字节数格式化为人类可读的文件大小字符串
+ * 根据文件大小自动选择合适的单位（B、KB、MB），保留一位小数。
+ *
+ * @param bytes - 文件大小（字节数）
+ * @returns 格式化后的文件大小字符串（如 "3.5 MB"、"256.0 KB"）
+ */
 function formatSize(bytes: number): string {
   if (bytes >= 1024 * 1024) {
     return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
@@ -73,6 +182,15 @@ function formatSize(bytes: number): string {
   return `${bytes} B`;
 }
 
+/**
+ * 将 Unix 时间戳格式化为中文日期时间字符串
+ *
+ * 输入为 Unix 秒级时间戳（非毫秒级），使用 toLocaleString 转换为
+ * 中文格式：YYYY/MM/DD HH:mm:ss。
+ *
+ * @param ts - Unix 秒级时间戳
+ * @returns 中文格式化日期字符串，如 "2024/01/15 14:30:00"
+ */
 function formatTimestamp(ts: number): string {
   return new Date(ts * 1000).toLocaleString('zh-CN', {
     year: 'numeric',
@@ -84,9 +202,30 @@ function formatTimestamp(ts: number): string {
   });
 }
 
+/**
+ * 剪贴板复制按钮组件
+ *
+ * 点击时将指定文本复制到系统剪贴板，复制成功后显示对勾图标反馈，
+ * 1.5 秒后自动恢复为复制图标。使用 navigator.clipboard.writeText API。
+ *
+ * @param props.text - 需要复制到剪贴板的文本内容（如文件路径）
+ */
+/**
+ * 复制文本到剪贴板的按钮组件
+ * 点击后将传入的文本复制到系统剪贴板，并在 1.5 秒内显示勾号图标表示成功。
+ * 使用 navigator.clipboard API 实现复制功能。
+ *
+ * @param text - 需要复制到剪贴板的文本内容
+ */
 function CopyButton({ text }: { text: string }) {
+  /** 复制成功状态标志，true 时显示勾号图标，1.5 秒后自动重置 */
   const [copied, setCopied] = useState(false);
 
+  /**
+   * 复制操作处理函数
+   * 调用 clipboard API 写入文本，成功后设置 copied 状态为 true，
+   * 并在 1.5 秒后自动重置。失败时静默忽略。
+   */
   const handleCopy = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(text);
@@ -104,6 +243,7 @@ function CopyButton({ text }: { text: string }) {
       title={copied ? '已复制' : '复制'}
       aria-label="复制"
     >
+      {/* 根据 copied 状态切换显示勾号图标或复制图标 */}
       {copied ? (
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M2 6l3 3 5-6" />
@@ -118,7 +258,25 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
+/**
+ * 场景类型徽章组件
+ *
+ * 根据场景类型标识符显示对应的 emoji 图标和中文标签。
+ * 内置七种场景映射：outdoor（🌳室外）、indoor（🏠室内）、
+ * underwater（🌊水下）、aerial（🛩️航拍）、studio（🎬影棚）、
+ * night（🌙夜景）、unknown（🤷未知）。未知类型默认显示 📷 图标。
+ *
+ * @param props.type - 场景类型标识符，如 "outdoor"、"indoor"
+ */
+/**
+ * 场景类型徽章组件
+ * 显示 AI 分析出的场景类型（室内、室外、水下等），并配有对应的 emoji 图标。
+ * 使用 SCENE_TYPE_LABELS 映射获取中文标签，未知类型显示默认 emoji。
+ *
+ * @param type - 后端 AI 分析返回的场景类型字符串
+ */
 function SceneTypeBadge({ type }: { type: string }) {
+  /** 场景类型到 emoji 的映射表 */
   const emoji: Record<string, string> = {
     outdoor: '🌳', indoor: '🏠', underwater: '🌊',
     aerial: '🛩️', studio: '🎬', night: '🌙', unknown: '🤷',
@@ -132,6 +290,39 @@ function SceneTypeBadge({ type }: { type: string }) {
   );
 }
 
+/**
+ * 照片详情模态框主组件
+ *
+ * 使用 React Portal 渲染到 document.body，展示照片大图及完整的元数据信息。
+ * 布局分为左（55% 图片区）右（45% 信息面板）两部分：
+ *   - 图片区：深色背景，图片自适应居中，覆盖下载/关闭/上一张/下一张按钮
+ *   - 信息面板：三个信息区块——AI 分析、拍摄信息（EXIF）、文件信息
+ *
+ * 键盘导航：
+ *   - Escape：关闭弹窗
+ *   - ArrowLeft：切换到上一张照片（需 hasPrev 为 true）
+ *   - ArrowRight：切换到下一张照片（需 hasNext 为 true）
+ *
+ * @param props.photo  - 当前展示的照片文档对象
+ * @param props.onClose - 关闭弹窗回调
+ * @param props.onPrev  - 切换到上一张的回调（可选）
+ * @param props.onNext  - 切换到下一张的回调（可选）
+ * @param props.hasPrev - 是否存在上一张（可选）
+ * @param props.hasNext - 是否存在下一张（可选）
+ */
+/**
+ * 照片详情模态框主组件
+ *
+ * 使用 React Portal 将弹窗渲染到 document.body 下，遮罩层覆盖整个视口。
+ * 支持键盘快捷键（Escape 关闭、← 上一张、→ 下一张）。
+ *
+ * @param photo - 当前展示的照片文档对象
+ * @param onClose - 关闭弹窗回调，点击遮罩、关闭按钮或按 Escape 时触发
+ * @param onPrev - 切换上一张照片回调，可选；不存在时隐藏上一张按钮
+ * @param onNext - 切换下一张照片回调，可选；不存在时隐藏下一张按钮
+ * @param hasPrev - 是否存在上一张，控制上一张按钮条件渲染
+ * @param hasNext - 是否存在下一张，控制下一张按钮条件渲染
+ */
 function PhotoDetailModal({
   photo,
   onClose,
@@ -140,6 +331,18 @@ function PhotoDetailModal({
   hasPrev,
   hasNext,
 }: PhotoDetailModalProps) {
+  // 键盘导航处理：Escape 键关闭弹窗，←/→ 键切换照片
+  /**
+   * 键盘事件处理器（使用 useCallback 优化性能）
+   *
+   * 支持三个键盘快捷键：
+   * - Escape：关闭弹窗，调用 onClose
+   * - ArrowLeft（←）：切换到上一张，需 hasPrev 和 onPrev 同时存在
+   * - ArrowRight（→）：切换到下一张，需 hasNext 和 onNext 同时存在
+   *
+   * 依赖项为 onClose/onPrev/onNext/hasPrev/hasNext，任一变化时重新创建函数引用，
+   * 确保 useEffect 中的事件监听器始终绑定最新的回调。
+   */
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -149,6 +352,18 @@ function PhotoDetailModal({
     [onClose, onPrev, onNext, hasPrev, hasNext],
   );
 
+  // 注册键盘事件监听和 body 滚动锁定，组件卸载时自动清理
+  /**
+   * 副作用：弹窗打开/关闭时的全局状态管理
+   *
+   * 挂载时：
+   * 1. 注册全局键盘事件监听器，支持键盘导航
+   * 2. 保存当前 body overflow 值，然后设置为 'hidden' 锁定背景滚动
+   *
+   * 卸载时（清理函数）：
+   * 1. 移除键盘事件监听器
+   * 2. 恢复 body overflow 为之前保存的值，恢复页面滚动
+   */
   useEffect(() => {
     document.addEventListener('keydown', handleKeyDown);
     const prev = document.body.style.overflow;
@@ -159,9 +374,12 @@ function PhotoDetailModal({
     };
   }, [handleKeyDown]);
 
+  // 构造照片原始文件 URL（去除路径前导斜杠）
   const imageUrl = `/photos/${photo.path.replace(/^\/+/, '')}`;
+  // displayUrl 追加 ?convert=1，后端将 HEIC 等格式转换为 JPEG 供浏览器直接显示
   const displayUrl = `${imageUrl}?convert=1`;
 
+  // 格式化 EXIF 拍摄时间为中文完整日期（年月日 + 星期 + 时分）
   const dateStr = photo.exif?.date_time_original
     ? new Date(photo.exif.date_time_original).toLocaleDateString('zh-CN', {
         year: 'numeric',
@@ -173,6 +391,7 @@ function PhotoDetailModal({
       })
     : null;
 
+  // 判断是否有可供展示的 EXIF 数据：任一关键字段（相机、镜头、焦距、光圈、快门、ISO、GPS）存在即视为有
   const hasExif =
     photo.exif &&
     (photo.exif.camera_model ||
@@ -184,6 +403,7 @@ function PhotoDetailModal({
       photo.exif.date_time_original ||
       photo.exif.gps_lat != null);
 
+  // 判断是否有 AI 分析结果数据：描述、标签、物体、场景类型、颜色中任一字段存在即有分析内容
   const hasAnalysis =
     photo.description ||
     photo.tags?.length > 0 ||
@@ -191,6 +411,7 @@ function PhotoDetailModal({
     photo.scene_type ||
     photo.colors?.length > 0;
 
+  // 使用 createPortal 将弹窗渲染到 document.body 下，避免被父容器的层叠上下文和 overflow 限制
   return createPortal(
     <div className="fixed inset-0 z-50" role="dialog" aria-modal="true">
       <div
@@ -289,8 +510,12 @@ function PhotoDetailModal({
             </button>
           )}
 
-          {/* ── Image area ── */}
+          {/* ── Image area ── 照片显示区域 ── */}
           <div className="relative flex items-center justify-center bg-gray-900 lg:w-[55%] min-h-[280px] lg:min-h-0 max-h-[50vh] lg:max-h-full">
+            {/*
+             * 图片加载失败时隐藏 <img> 元素，显示相邻的 "无法加载图片" 占位文字。
+             * onError 触发后：1) 设置 img display:none；2) 显示相邻的 fallback div
+             */}
             <img
               src={displayUrl}
               alt={photo.description || '照片'}
@@ -302,15 +527,21 @@ function PhotoDetailModal({
                 el.nextElementSibling?.classList.remove('hidden');
               }}
             />
+            {/* 图片加载失败时的占位提示（默认 hidden，通过 onError 显示） */}
             <div className="hidden absolute inset-0 flex items-center justify-center bg-gray-900 text-gray-400 text-sm">
               无法加载图片
             </div>
           </div>
 
-          {/* ── Sidebar ── */}
+          {/* ── Sidebar ── 右侧信息面板 ── */}
           <div className="flex flex-col lg:w-[45%] overflow-y-auto">
             <div className="p-6 lg:p-8 space-y-6">
-              {/* ── Section 1: AI 分析 ── */}
+              {/* ── Section 1: AI 分析 ── AI 分析结果 ── */}
+              {/*
+               * AI 分析区域：条件渲染。
+               * hasAnalysis 为 true 时展示完整的分析结果（描述、场景、标签、颜色、物体、文字、置信度）；
+               * hasAnalysis 为 false 时根据 photo.status 显示不同的状态提示文案。
+               */}
               <section>
                 <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
                   AI 分析
@@ -324,6 +555,10 @@ function PhotoDetailModal({
                       </p>
                     )}
 
+                    {/*
+                     * 元信息行：场景类型 + 人数 + 含文字标记
+                     * 三者任一存在时整行渲染，各自独立条件控制显示
+                     */}
                     {(photo.scene_type ||
                       photo.people_count > 0 ||
                       photo.has_text) && (
@@ -366,6 +601,10 @@ function PhotoDetailModal({
                       </div>
                     )}
 
+                    {/*
+                     * 标签列表：使用 tagColor 哈希函数为每个标签分配确定性的颜色，
+                     * 以圆角 pill 样式展示，视觉上区分不同类别的标签。
+                     */}
                     {photo.tags?.length > 0 && (
                       <div className="flex flex-wrap gap-2 mb-4">
                         {photo.tags.map((t) => (
@@ -379,6 +618,10 @@ function PhotoDetailModal({
                       </div>
                     )}
 
+                    {/*
+                     * 主色调列表：圆形色块（使用后端返回的 hex 值作为 background-color）
+                     * 配合颜色名称显示，直观展示照片的主要色彩倾向。
+                     */}
                     {photo.colors?.length > 0 && (
                       <div className="mb-4">
                         <span className="text-xs text-gray-400 block mb-2">主色调</span>
@@ -396,6 +639,10 @@ function PhotoDetailModal({
                       </div>
                     )}
 
+                    {/*
+                     * 画面物体列表：AI 从照片中检测到的物体或元素，
+                     * 以灰色边框标签展示，区分于 AI 标签的彩色样式。
+                     */}
                     {photo.objects?.length > 0 && (
                       <div className="mb-4">
                         <span className="text-xs text-gray-400 block mb-2">
@@ -414,6 +661,10 @@ function PhotoDetailModal({
                       </div>
                     )}
 
+                    {/*
+                     * 提取文字区域：AI 从照片中识别出的文字内容（OCR 结果），
+                     * 仅在 has_text 为 true 且 text 字段非空时渲染。
+                     */}
                     {photo.has_text && photo.text && (
                       <div className="mb-4 p-3 rounded-lg border border-gray-200 bg-gray-50">
                         <span className="text-xs text-gray-400 block mb-2">
@@ -425,6 +676,10 @@ function PhotoDetailModal({
                       </div>
                     )}
 
+                    {/*
+                     * 置信度：AI 分析结果的置信度（0~1 之间的小数），
+                     * 转换为百分比显示，表征分析结果的可靠程度。
+                     */}
                     {photo.confidence != null && (
                       <p className="text-xs text-gray-400">
                         置信度: {Math.round(photo.confidence * 100)}%
@@ -444,7 +699,12 @@ function PhotoDetailModal({
                 )}
               </section>
 
-              {/* ── Section 2: 拍摄信息 ── */}
+              {/* ── Section 2: 拍摄信息 ── EXIF 拍摄信息 ── */}
+              {/*
+               * 拍摄信息区域：条件渲染。
+               * hasExif 为 true 时展示完整的 EXIF 元数据（相机型号、镜头、拍摄参数、GPS、地址）；
+               * hasExif 为 false 时显示 "暂无 EXIF 数据" 提示。
+               */}
               <section>
                 <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
                   拍摄信息
@@ -452,6 +712,10 @@ function PhotoDetailModal({
 
                 {hasExif ? (
                   <>
+                    {/*
+                     * 相机 + 镜头型号组合：两者任一存在时整块渲染，
+                     * 相机型号加粗显示，镜头型号以次级文字展示。
+                     */}
                     {(photo.exif!.camera_model ||
                       photo.exif!.lens_model) && (
                       <div className="mb-4">
@@ -468,6 +732,10 @@ function PhotoDetailModal({
                       </div>
                     )}
 
+                    {/*
+                     * 拍摄参数行：焦距 / 光圈（formatAperture 格式化）/ 快门速度 / ISO，
+                     * 以灰色等宽字体徽章排列显示。
+                     */}
                     {(photo.exif!.focal_length ||
                       photo.exif!.aperture ||
                       photo.exif!.shutter_speed ||
@@ -496,10 +764,15 @@ function PhotoDetailModal({
                       </div>
                     )}
 
+                    {/* 拍摄日期：中文长格式（含星期），如 "2024年1月15日 星期一 14:30" */}
                     {dateStr && (
                       <p className="text-sm text-gray-500 mb-2">{dateStr}</p>
                     )}
 
+                    {/*
+                     * GPS 坐标：十进制格式，纬度/经度保留 6 位小数，
+                     * 使用等宽字体以保持对齐。
+                     */}
                     {photo.exif!.gps_lat != null &&
                       photo.exif!.gps_lon != null && (
                         <p className="text-xs text-gray-400 font-mono">
@@ -508,6 +781,10 @@ function PhotoDetailModal({
                         </p>
                       )}
 
+                    {/*
+                     * 格式化地址：优先展示高德逆地理编码返回的完整地址，
+                     * 若无则拼接省/市/区三级行政区域名称。
+                     */}
                     {(photo.formatted_address || photo.city) && (
                       <div className="flex items-start gap-2 mt-2">
                         <svg className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -528,12 +805,20 @@ function PhotoDetailModal({
               </section>
 
               {/* ── Section 3: 文件信息 ── */}
+              {/*
+               * 文件信息区域：始终渲染（文件元数据必然存在）。
+               * 展示路径（带复制按钮）、大小、修改时间、创建时间、分析时间、处理状态。
+               */}
               <section>
                 <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
                   文件信息
                 </h3>
 
                 <div className="space-y-2.5 text-sm">
+                  {/*
+                   * 文件路径行：等宽字体 + 自动换行（break-all），
+                   * 右侧附带 CopyButton 组件便于复制路径。
+                   */}
                   <div className="flex items-start gap-2">
                     <span className="text-gray-400 shrink-0">路径</span>
                     <span className="font-mono text-gray-600 break-all text-xs leading-relaxed flex-1">
@@ -542,6 +827,9 @@ function PhotoDetailModal({
                     <CopyButton text={photo.path} />
                   </div>
 
+                  {/*
+                   * 文件大小：通过 formatSize 自动选择合适的单位（MB/KB/B）展示。
+                   */}
                   <div className="flex items-center gap-2">
                     <span className="text-gray-400 shrink-0">大小</span>
                     <span className="font-mono text-gray-700 text-sm">
@@ -549,6 +837,7 @@ function PhotoDetailModal({
                     </span>
                   </div>
 
+                  {/* 文件最后修改时间（Unix 时间戳格式化为中文日期） */}
                   <div className="flex items-center gap-2">
                     <span className="text-gray-400 shrink-0">修改时间</span>
                     <span className="font-mono text-gray-700 text-sm">
@@ -556,6 +845,7 @@ function PhotoDetailModal({
                     </span>
                   </div>
 
+                  {/* 文件创建时间（即照片被索引到 ES 的时间） */}
                   <div className="flex items-center gap-2">
                     <span className="text-gray-400 shrink-0">创建时间</span>
                     <span className="font-mono text-gray-700 text-sm">
@@ -563,6 +853,9 @@ function PhotoDetailModal({
                     </span>
                   </div>
 
+                  {/*
+                   * AI 分析时间：条件渲染，仅 analyzed 状态的照片有 analyzed_at 字段。
+                   */}
                   {photo.analyzed_at != null && (
                     <div className="flex items-center gap-2">
                       <span className="text-gray-400 shrink-0">分析时间</span>
@@ -572,6 +865,10 @@ function PhotoDetailModal({
                     </div>
                   )}
 
+                  {/*
+                   * 处理状态：使用 STATUS_COLORS 映射颜色，STATUS_LABELS 映射中文标签，
+                   * 颜色兜底使用 unanalyzed 的灰色样式，文字兜底显示原始状态字符串。
+                   */}
                   <div className="flex items-center gap-2">
                     <span className="text-gray-400 shrink-0">状态</span>
                     <span
@@ -587,6 +884,11 @@ function PhotoDetailModal({
         </div>
       </div>
 
+      {/*
+       * 弹窗入场动画：通过内联 <style> 标签注入 @keyframes fadeIn。
+       * 动画从透明 + 略微缩小（scale 0.97）过渡到完整大小和不透明度，
+       * 持续 0.2 秒，ease-out 缓动实现快速进入后平滑停止。
+       */}
       <style>{`
         @keyframes fadeIn {
           from { opacity: 0; transform: scale(0.97); }

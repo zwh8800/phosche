@@ -1,25 +1,26 @@
 /**
- * 时间线页面组件
+ * 时间线页面（Timeline）
  *
- * 按拍摄日期分组展示所有已导入照片，支持无限滚动加载。
+ * 页面定位：
+ * 照片库的主页，按拍摄日期分组展示所有已导入的照片，
+ * 支持无限滚动加载和状态过滤筛选。
  *
  * 功能特性：
- * - 按日期分组展示照片（useMemo 缓存分组结果，日期降序排列）
- * - 无限滚动加载（IntersectionObserver 监听哨兵元素，阈值 0.1）
- * - 滚动位置恢复（加载更多前后保持视图稳定，避免页面跳动）
- * - 加载状态骨架屏（SkeletonCard，Tailwind animate-pulse 脉冲动画）
- * - 错误状态与空状态处理
- * - 分析中照片显示脉冲动画占位
+ * - 按日期分组展示全部照片（useMemo 缓存分组结果）
+ * - 无限滚动加载（IntersectionObserver 监听哨兵元素）
+ * - 加载状态显示骨架屏（SkeletonCard，脉冲动画）
+ * - 错误状态与空状态处理（错误提示 / 引导用户导入照片）
+ * - 分析中照片显示脉冲动画占位（animate-pulse）
  *
  * 数据流：
- * useInfiniteQuery 分页获取（每页 50 张）
- * → pages.flatMap 合并所有页数据
- * → extractDate 提取拍摄日期（优先 EXIF，回退 mtime）
- * → Map 分组 → 日期降序排列 → 渲染日期分组网格
+ * useInfiniteQuery 分页获取 → pages.flatMap 合并所有页数据
+ * → extractDate 提取拍摄日期 → Map 分组 → 日期降序排列
+ * → 渲染日期分组网格
  *
  * 交互逻辑：
  * - 点击照片卡片 → navigate 跳转到 /photo/{path} 详情页
  * - 滚动至底部哨兵元素 → IntersectionObserver 触发 fetchNextPage
+ * - 加载下一页时保存并恢复滚动位置（避免页面跳动）
  *
  * 组件结构：
  * - SkeletonCard：加载中的骨架占位卡片（脉冲动画）
@@ -66,14 +67,14 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 /**
- * 从照片元数据中提取日期字符串（YYYY-MM-DD 格式）
+ * 从照片文档中提取日期字符串
  *
- * 优先使用 EXIF 拍摄时间（date_time_original），
- * 若不可用则回退到文件修改时间（mtime）。
- * 自动检测 mtime 是秒级还是毫秒级时间戳。
+ * 优先级：EXIF 拍摄时间（date_time_original）> 文件修改时间（mtime）
+ * 返回格式：YYYY-MM-DD，兜底返回 '未知日期'
+ * mtime 自动检测时间戳单位：大于 1e12 视为毫秒级，否则视为秒级
  *
- * @param photo - 照片文档对象
- * @returns 格式化的日期字符串，无法解析时返回 '未知日期'
+ * @param photo - 照片文档对象（包含 EXIF 元数据和文件 mtime）
+ * @returns 格式化的日期字符串（YYYY-MM-DD），无法解析时返回 '未知日期'
  */
 function extractDate(photo: PhotoDocument): string {
   // 优先尝试从 EXIF 数据提取拍摄日期
@@ -93,6 +94,9 @@ function extractDate(photo: PhotoDocument): string {
 /**
  * 将日期字符串格式化为中文显示格式
  *
+ * 拆分 YYYY-MM-DD 格式字符串，重组为中文日期表达。
+ * 月/日部分去掉前导零（parseInt 后自动处理）。
+ *
  * @param dateStr - YYYY-MM-DD 格式的日期字符串
  * @returns 中文格式，如 "2024年1月15日"
  */
@@ -103,22 +107,12 @@ function formatDateLabel(dateStr: string): string {
 }
 
 /**
- * 将 ISO 日期字符串格式化为中文日期标签
+ * 构建照片 URL 路径
  *
- * 输入：'2024-01-15' → 输出：'2024年1月15日'
- * 用于在日期分组标题中以用户友好的中文格式展示日期
+ * 拼接 /photos/ 前缀，并去除 path 中可能的前导斜杠以防止路径错误
  *
- * @param dateStr - ISO 格式日期字符串 (YYYY-MM-DD)
- * @returns 中文格式的日期标签，如 "2024年1月15日"
- */
-/**
- * 将日期字符串格式化为中文显示格式
- *
- * 拆分 YYYY-MM-DD 格式字符串，重组为中文日期表达。
- * 月/日部分去掉前导零（parseInt 后自动处理）。
- *
- * @param dateStr - YYYY-MM-DD 格式的日期字符串
- * @returns 中文格式，如 "2024年1月15日"
+ * @param path - 照片文件中继路径
+ * @returns 完整的照片 URL 路径
  */
 function photoSrc(path: string): string {
   return `/photos/${path.replace(/^\/+/, '')}`;
@@ -129,6 +123,7 @@ function photoSrc(path: string): string {
  *
  * 在数据加载期间显示脉冲动画的灰色占位块，
  * 模拟真实卡片的布局（正方形图片 + 两行文字）。
+ * 使用 Tailwind animate-pulse 实现呼吸闪烁效果。
  */
 function SkeletonCard() {
   return (
@@ -146,11 +141,11 @@ function SkeletonCard() {
  * 单张照片展示卡片组件
  *
  * 功能：
- * - 显示照片缩略图（带懒加载）
- * - 图片加载失败时显示占位文字
- * - 分析中的照片显示状态标签和骨架屏描述
- * - 已分析的照片显示 AI 生成的描述和标签（最多 3 个）
- * - 点击跳转到照片详情页
+ * - 显示照片缩略图（带懒加载 loading="lazy"）
+ * - 图片加载失败时隐藏 img 标签并显示占位文字
+ * - 分析中的照片显示右上角状态标签 + 骨架屏描述占位
+ * - 已分析的照片显示 AI 生成的描述和标签（最多 3 个 + 溢出计数）
+ * - 点击跳转到照片详情页（/photo/{path}）
  *
  * @param photo - 照片文档对象，包含路径、描述、标签、状态等信息
  */
@@ -163,8 +158,13 @@ function PhotoCard({ photo }: { photo: PhotoDocument }) {
       onClick={() => navigate(`/photo/${encodeURIComponent(photo.path)}`)}
       className="group cursor-pointer text-left"
     >
+      {/* 缩略图区域：方形裁剪，悬停时有缩放动画 */}
       <div className="aspect-square overflow-hidden rounded-lg bg-gray-100 relative">
-        {/* 照片缩略图，懒加载；加载失败时隐藏 img 并显示占位文字 */}
+        {/*
+         * 照片缩略图，使用 ?thumb=1 参数请求后端缩略图服务
+         * loading="lazy" 启用浏览器原生懒加载
+         * onError 处理图片加载失败：隐藏 img 标签，显示占位文字
+         */}
         <img
           src={`${photoSrc(photo.path)}?thumb=1`}
           alt={photo.description || '照片'}
@@ -176,10 +176,14 @@ function PhotoCard({ photo }: { photo: PhotoDocument }) {
             el.nextElementSibling?.classList.remove('hidden');
           }}
         />
+        {/*
+         * 图片加载失败时的占位文字
+         * 初始状态 hidden，onError 触发后显示
+         */}
         <div className="hidden absolute inset-0 flex items-center justify-center bg-gray-100 text-gray-400 text-sm">
           无法加载图片
         </div>
-        {/* 分析中的照片显示右上角状态标签 */}
+        {/* 分析中状态：右上角显示"分析中"黄色标签 */}
         {photo.status === 'analyzing' && (
           <span className={`absolute top-2 right-2 text-[10px] px-1.5 py-0.5 rounded font-medium ${STATUS_COLORS.analyzing}`}>
             {STATUS_LABELS.analyzing}
@@ -188,13 +192,18 @@ function PhotoCard({ photo }: { photo: PhotoDocument }) {
       </div>
 
       <div className="mt-2 space-y-1.5">
-        {/* 分析中：显示骨架屏占位；已分析：显示描述和标签 */}
+        {/*
+         * 分析中 → 显示骨架屏占位（模拟文字 + 标签形状）
+         * 已分析  → 显示 AI 生成的真实描述和标签
+         */}
         {photo.status === 'analyzing' ? (
           <>
+            {/* 分析中：骨架屏模拟两行文字描述 */}
             <div className="animate-pulse space-y-1.5">
               <div className="h-3 w-full rounded bg-gray-200" />
               <div className="h-3 w-3/4 rounded bg-gray-200" />
             </div>
+            {/* 分析中：骨架屏模拟三个标签 */}
             <div className="animate-pulse flex flex-wrap gap-1">
               <div className="h-5 w-10 rounded bg-gray-200" />
               <div className="h-5 w-12 rounded bg-gray-200" />
@@ -203,13 +212,13 @@ function PhotoCard({ photo }: { photo: PhotoDocument }) {
           </>
         ) : (
           <>
-            {/* AI 生成的照片描述，最多显示 2 行 */}
+            {/* AI 生成的照片描述，line-clamp-2 限制最多显示 2 行 */}
             {photo.description && (
               <p className="line-clamp-2 text-sm leading-snug text-gray-700">
                 {photo.description}
               </p>
             )}
-            {/* 标签列表，最多显示 3 个，超出部分显示 +N */}
+            {/* 标签列表：最多显示 3 个标签，超出部分显示 +N 计数 */}
             {photo.tags && photo.tags.length > 0 && (
               <div className="flex flex-wrap gap-1">
                 {photo.tags.slice(0, 3).map((tag) => (
@@ -242,22 +251,23 @@ function PhotoCard({ photo }: { photo: PhotoDocument }) {
  * - IntersectionObserver 实现无限滚动
  * - 按拍摄日期对照片进行分组，日期降序排列
  * - 滚动位置记忆：加载下一页时保存滚动位置，数据到达后恢复
- * - 三种状态渲染：加载中（骨架屏）、错误、空数据
+ * - 四种渲染状态：加载中（骨架屏）、错误、空数据、正常内容
  *
  * 数据流：
  * useInfiniteQuery(pages) → flatMap 合并所有页 → extractDate 分组 → 渲染
  */
 export default function Timeline() {
-  // 无限滚动哨兵元素引用，IntersectionObserver 监听此元素
+  /** 无限滚动哨兵元素引用，IntersectionObserver 监听此元素是否进入视口 */
   const sentinelRef = useRef<HTMLDivElement>(null);
-  // 记录加载下一页前的滚动位置，用于数据到达后恢复
+  /** 记录加载下一页前的滚动位置，用于新数据到达后恢复，防止页面跳动 */
   const scrollPositionRef = useRef<number>(0);
 
   /**
-   * useInfiniteQuery 配置：
-   * - queryKey: 'photos' 用于缓存和自动失效
-   * - getNextPageParam: 根据 total 和 page_size 计算是否有下一页
-   * - 每页加载 50 张照片
+   * useInfiniteQuery 配置说明：
+   * - queryKey: ['photos'] — React Query 缓存键，用于缓存管理和自动失效
+   * - queryFn: 调用 fetchPhotos API，默认 pageParam=1，每页 50 条
+   * - getNextPageParam: 根据 total/page_size 计算总页数，判断是否还有下一页
+   * - initialPageParam: 起始页码为 1
    */
   const {
     data,
@@ -279,10 +289,14 @@ export default function Timeline() {
   });
 
   /**
-   * 无限滚动实现：
-   * 使用 IntersectionObserver 监听哨兵元素，
-   * 当哨兵进入视口（阈值 10%）且有下一页且未在加载中时，
-   * 记录当前滚动位置并触发加载下一页。
+   * 无限滚动副作用
+   *
+   * 使用 IntersectionObserver 监听哨兵元素（sentinelRef），
+   * 当哨兵元素进入视口（threshold=0.1，即 10% 可见）且满足条件时：
+   * 1. 有下一页数据（hasNextPage）
+   * 2. 当前未在加载中（!isFetchingNextPage）
+   * 则记录当前滚动位置并触发 fetchNextPage 加载更多数据。
+   * 组件卸载时自动断开 observer 连接，防止内存泄漏。
    */
   useEffect(() => {
     const sentinel = sentinelRef.current;
@@ -304,9 +318,11 @@ export default function Timeline() {
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   /**
-   * 滚动位置恢复：
-   * 新数据加载完成后，恢复到之前保存的滚动位置，
-   * 避免因内容高度变化导致的页面跳动。
+   * 滚动位置恢复副作用
+   *
+   * 当新数据加载完成（isFetchingNextPage 变为 false 且 data 更新）时，
+   * 如果之前保存了滚动位置，则恢复到该位置并清零记录。
+   * 避免因新数据插入导致视口内容跳跃。
    */
   useEffect(() => {
     if (scrollPositionRef.current > 0 && !isFetchingNextPage) {
@@ -316,11 +332,13 @@ export default function Timeline() {
   }, [data, isFetchingNextPage]);
 
   /**
-   * 按日期分组照片：
-   * 1. 将所有分页的照片合并为一个数组
-   * 2. 使用 extractDate 提取每张照片的日期
-   * 3. 按日期分组到 Map 中
-   * 4. 按日期降序排列（最新的在前）
+   * 按日期分组照片（useMemo 缓存，仅在 data 变化时重新计算）
+   *
+   * 处理步骤：
+   * 1. 将所有分页数据（pages）的照片数组扁平化合并
+   * 2. 遍历每张照片，使用 extractDate 提取日期字符串
+   * 3. 按日期分组存入 Map<string, PhotoDocument[]>
+   * 4. 转换为数组并按日期降序排列（最新的日期在前）
    */
   const groupedPhotos = useMemo(() => {
     const allPhotos = data?.pages.flatMap((page) => page.photos) ?? [];
@@ -339,8 +357,8 @@ export default function Timeline() {
     return [...groups.entries()].sort(([a], [b]) => b.localeCompare(a));
   }, [data]);
 
-  // 错误状态：显示错误图标 + 错误信息
-  // 错误状态：显示错误图标和错误信息
+  // ========== 条件渲染：错误状态 ==========
+  // 请求失败时显示警告图标和具体错误信息
   if (isError) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-gray-500">
@@ -365,7 +383,8 @@ export default function Timeline() {
     );
   }
 
-  // 加载中状态：显示 6 个骨架屏卡片
+  // ========== 条件渲染：初始加载中 ==========
+  // 首屏数据尚未加载完成，显示 6 个骨架屏卡片占位
   if (isLoading) {
     return (
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
@@ -376,7 +395,8 @@ export default function Timeline() {
     );
   }
 
-  // 空数据状态：显示引导文字
+  // ========== 条件渲染：空数据 ==========
+  // 数据加载完成但没有照片时，显示空状态引导提示
   if (groupedPhotos.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-gray-400">
@@ -401,16 +421,32 @@ export default function Timeline() {
     );
   }
 
-  // 主渲染：按日期分组的照片网格
+  // ========== 主渲染：按日期分组的照片内容 ==========
   return (
     <div className="space-y-8">
-      {/* 按日期分组渲染，每个日期一个 section */}
+      {/*
+       * 按日期分组迭代渲染：
+       * 每组包含一个 sticky 定位的日期标题（带毛玻璃效果）
+       * 和一个响应式照片网格（2/3/4 列自适应）
+       */}
       {groupedPhotos.map(([dateStr, photos]) => (
         <section key={dateStr}>
-          {/* 日期标题，sticky 定位在顶部，半透明背景 + 毛玻璃效果 */}
+          {/*
+           * 日期分组标题
+           * sticky top-0：滚动时固定在顶部
+           * backdrop-blur-sm：半透明毛玻璃效果
+           * z-10：确保标题在照片卡片之上
+           */}
           <h2 className="sticky top-0 z-10 mb-4 bg-gray-50/90 py-2 text-lg font-semibold text-gray-800 backdrop-blur-sm">
             {formatDateLabel(dateStr)}
           </h2>
+          {/*
+           * 响应式照片网格：
+           * - 移动端：2 列
+           * - md 断点（768px）：3 列
+           * - lg 断点（1024px）：4 列
+           * gap-4 提供统一的卡片间距
+           */}
           <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
             {photos.map((photo) => (
               <PhotoCard key={photo.id} photo={photo} />
@@ -419,10 +455,19 @@ export default function Timeline() {
         </section>
       ))}
 
-      {/* 无限滚动哨兵元素，进入视口时触发加载下一页 */}
+      {/*
+       * 无限滚动哨兵元素
+       * IntersectionObserver 监听此元素进入视口，
+       * 触发 fetchNextPage 加载更多数据。
+       * h-4 确保有足够的高度被 observer 检测到。
+       */}
       <div ref={sentinelRef} className="h-4" />
 
-      {/* 加载下一页时显示骨架屏 */}
+      {/*
+       * 加载下一页时的骨架屏占位
+       * isFetchingNextPage 为 true 时显示 4 个骨架屏卡片，
+       * 提示用户数据正在加载中。
+       */}
       {isFetchingNextPage && (
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
@@ -431,7 +476,11 @@ export default function Timeline() {
         </div>
       )}
 
-      {/* 全部加载完毕提示 */}
+      {/*
+       * 全部加载完成提示
+       * hasNextPage 为 false 且存在数据时，在底部显示
+       * "已加载全部照片" 的结束提示文字。
+       */}
       {!hasNextPage && groupedPhotos.length > 0 && (
         <p className="py-8 text-center text-sm text-gray-400">已加载全部照片</p>
       )}
