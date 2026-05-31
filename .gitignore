@@ -30,6 +30,7 @@ test-results/
 
 # Configuration (keep only example)
 config.yaml
+config.prd.yaml
 
 # Development tools
 opencode.json
