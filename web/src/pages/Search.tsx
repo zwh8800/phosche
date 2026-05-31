@@ -217,7 +217,7 @@ export default function Search() {
     enabled: searchActive,
   });
 
-  // Auto-search on mount if URL has params; debounce on filter changes
+  // Auto-search on mount if URL has params; debounce on filter/query changes
   useEffect(() => {
     if (initialMount.current) {
       initialMount.current = false;
@@ -235,7 +235,7 @@ export default function Search() {
     }, 300);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateFrom, dateTo, sceneType, cameraModel, selectedTags]);
+  }, [query, dateFrom, dateTo, sceneType, cameraModel, selectedTags]);
 
   // Infinite scroll sentinel
   useEffect(() => {
