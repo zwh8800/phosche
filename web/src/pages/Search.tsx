@@ -332,17 +332,15 @@ export default function Search() {
 
   /**
    * 防抖自动搜索 effect：
-   * - 首次挂载时：如果 URL 有参数则自动激活搜索
+   * - 首次挂载时：自动激活搜索（显示所有照片）
    * - 后续变化：300ms 防抖后自动同步 URL 并触发搜索
    * - 防抖避免用户快速输入时频繁请求
    */
   useEffect(() => {
     if (initialMount.current) {
       initialMount.current = false;
-      if (searchParams.toString()) {
-        setSearchActive(true);
-        refetch();
-      }
+      setSearchActive(true);
+      refetch();
       return;
     }
 
