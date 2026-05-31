@@ -2,8 +2,8 @@
   <defs>
     <!-- Background gradient - vibrant red -->
     <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#ef4444;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#dc2626;stop-opacity:1" />
+      <stop offset="0%" style="stop-color:#ff2442;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#e61e3a;stop-opacity:1" />
     </linearGradient>
     
     <!-- Subtle inner glow -->

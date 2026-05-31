@@ -224,7 +224,7 @@ function PhotoCard({ photo }: { photo: PhotoDocument }) {
                 {photo.tags.slice(0, 3).map((tag) => (
                   <span
                     key={tag}
-                    className="inline-block rounded bg-purple-50 px-1.5 py-0.5 text-xs text-purple-700"
+                    className="inline-block rounded bg-red-50 px-1.5 py-0.5 text-xs text-red-700"
                   >
                     {tag}
                   </span>

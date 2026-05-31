@@ -47,14 +47,14 @@ interface PhotoDetailModalProps {
  * 每个色组包含背景色（-100）和文字色（-700）两个 Tailwind 类。
  */
 const TAG_COLORS = [
-  'bg-rose-100 text-rose-700',
+  'bg-red-100 text-red-700',
   'bg-amber-100 text-amber-700',
   'bg-emerald-100 text-emerald-700',
   'bg-sky-100 text-sky-700',
-  'bg-violet-100 text-violet-700',
-  'bg-fuchsia-100 text-fuchsia-700',
-  'bg-teal-100 text-teal-700',
   'bg-orange-100 text-orange-700',
+  'bg-rose-100 text-rose-700',
+  'bg-teal-100 text-teal-700',
+  'bg-pink-100 text-pink-700',
 ];
 
 /**

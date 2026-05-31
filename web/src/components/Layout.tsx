@@ -27,8 +27,8 @@ function Layout() {
 
   /** 导航链接的基础 CSS 类名：内边距、圆角、字号、过渡动画 */
   const baseLinkClass = 'px-3 py-2 rounded text-sm font-medium transition-colors';
-  /** 当前活动链接的高亮样式：白色文字 + 紫色背景 */
-  const activeClass = 'text-white bg-purple-600';
+  /** 当前活动链接的高亮样式：白色文字 + 红色背景 */
+  const activeClass = 'text-white bg-red-600';
   /** 非活动链接的默认样式：灰色文字 + 悬停效果 */
   const inactiveClass = 'text-gray-700 hover:text-gray-900 hover:bg-gray-100';
 

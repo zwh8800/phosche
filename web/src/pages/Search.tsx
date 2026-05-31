@@ -83,7 +83,7 @@ function formatExifDate(raw?: string): string {
 function Spinner() {
   return (
     <div className="flex items-center justify-center py-12">
-      <div className="w-8 h-8 border-3 border-gray-200 border-t-purple-500 rounded-full animate-spin" />
+      <div className="w-8 h-8 border-3 border-gray-200 border-t-red-500 rounded-full animate-spin" />
     </div>
   );
 }
@@ -213,7 +213,7 @@ const PhotoCard = memo(function PhotoCard({ photo }: { photo: PhotoDocument }) {
             )}
             {/* 场景类型标签 */}
             {photo.scene_type && (
-              <span className="inline-block text-[11px] px-2 py-0.5 bg-purple-50 text-purple-600 rounded-full font-medium">
+              <span className="inline-block text-[11px] px-2 py-0.5 bg-red-50 text-red-600 rounded-full font-medium">
                 {SCENE_TYPE_LABELS[photo.scene_type] || photo.scene_type}
               </span>
             )}
@@ -464,13 +464,13 @@ export default function Search() {
             value={query}
             onChange={(e: ChangeEvent<HTMLInputElement>) => setQuery(e.target.value)}
             placeholder="输入关键词搜索照片…"
-            className="w-full pl-9 pr-4 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white placeholder-gray-400"
+            className="w-full pl-9 pr-4 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white placeholder-gray-400"
           />
         </div>
         <button
           type="submit"
           disabled={isLoading}
-          className="px-5 py-2.5 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 rounded-lg transition-colors"
+          className="px-5 py-2.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 rounded-lg transition-colors"
         >
           搜索
         </button>
@@ -482,7 +482,7 @@ export default function Search() {
           type="button"
           onClick={() => setShowFilters((v) => !v)}
           className={`inline-flex items-center gap-1.5 text-sm font-medium transition-colors ${
-            showFilters ? 'text-purple-600' : 'text-gray-600 hover:text-gray-900'
+            showFilters ? 'text-red-600' : 'text-gray-600 hover:text-gray-900'
           }`}
         >
           <svg
@@ -500,7 +500,7 @@ export default function Search() {
           </svg>
           筛选条件
           {activeFilterCount > 0 && (
-            <span className="inline-flex items-center justify-center w-5 h-5 text-[11px] font-semibold text-white bg-purple-500 rounded-full">
+            <span className="inline-flex items-center justify-center w-5 h-5 text-[11px] font-semibold text-white bg-red-500 rounded-full">
               {activeFilterCount}
             </span>
           )}
@@ -520,14 +520,14 @@ export default function Search() {
                 type="date"
                 value={dateFrom}
                 onChange={(e: ChangeEvent<HTMLInputElement>) => setDateFrom(e.target.value)}
-                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white"
+                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
               />
               <span className="text-xs text-gray-400">至</span>
               <input
                 type="date"
                 value={dateTo}
                 onChange={(e: ChangeEvent<HTMLInputElement>) => setDateTo(e.target.value)}
-                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white"
+                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
               />
             </div>
           </div>
@@ -541,7 +541,7 @@ export default function Search() {
               id="filter-scene"
               value={sceneType}
               onChange={(e: ChangeEvent<HTMLSelectElement>) => setSceneType(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white"
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
             >
               <option value="">全部</option>
               {(filters?.scene_types || []).map((s) => (
@@ -559,7 +559,7 @@ export default function Search() {
               id="filter-camera"
               value={cameraModel}
               onChange={(e: ChangeEvent<HTMLSelectElement>) => setCameraModel(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white"
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
             >
               <option value="">全部</option>
               {(filters?.cameras || []).map((c) => (
@@ -582,7 +582,7 @@ export default function Search() {
                       onClick={() => toggleTag(tag)}
                       className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${
                         active
-                          ? 'bg-purple-100 text-purple-700 border border-purple-300'
+                          ? 'bg-red-100 text-red-700 border border-red-300'
                           : 'bg-gray-100 text-gray-600 border border-transparent hover:bg-gray-200'
                       }`}
                     >
@@ -621,7 +621,7 @@ export default function Search() {
           <button
             type="button"
             onClick={() => refetch()}
-            className="mt-3 text-sm text-purple-600 hover:text-purple-700 font-medium"
+            className="mt-3 text-sm text-red-600 hover:text-red-700 font-medium"
           >
             重试
           </button>
