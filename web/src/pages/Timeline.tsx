@@ -28,7 +28,7 @@ function extractDate(photo: PhotoDocument): string {
   }
   // Auto-detect unix-seconds vs milliseconds
   const ts =
-    photo.created_at > 1e12 ? photo.created_at : photo.created_at * 1000;
+    photo.mtime > 1e12 ? photo.mtime : photo.mtime * 1000;
   const d = new Date(ts);
   if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
   return '未知日期';
