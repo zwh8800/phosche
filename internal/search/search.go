@@ -202,12 +202,12 @@ func (s *SearchService) buildQuery(req *types.SearchRequest, userEmail string) m
 	// Email 访问过滤：始终添加，限制文档可见范围
 	filter = append(filter, buildEmailFilter(userEmail))
 
-	// 全文搜索：multi_match 跨 description/tags/objects/text 四个字段
+	// 全文搜索：multi_match 跨 description/tags/objects/text/formatted_address 六个字段
 	if req.Query != "" {
 		must = append(must, map[string]any{
 			"multi_match": map[string]any{
 				"query":  req.Query,
-				"fields": []string{"description", "tags", "objects", "text"},
+				"fields": []string{"description", "tags", "objects", "text", "address", "formatted_address"},
 			},
 		})
 	}

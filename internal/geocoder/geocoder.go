@@ -88,11 +88,18 @@ func (g *Geocoder) ReverseGeocode(ctx context.Context, lat, lon float64) (*types
 		"district", result.Regeocode.AddressComponent.District,
 	)
 
+	country := result.Regeocode.AddressComponent.Country
+	province := result.Regeocode.AddressComponent.Province
+	district := result.Regeocode.AddressComponent.District
+
+	address := country + province + city + district
+
 	return &types.GeoInfo{
-		Country:          result.Regeocode.AddressComponent.Country,
-		Province:         result.Regeocode.AddressComponent.Province,
+		Country:          country,
+		Province:         province,
 		City:             city,
-		District:         result.Regeocode.AddressComponent.District,
+		District:         district,
+		Address:          address,
 		FormattedAddress: result.Regeocode.FormattedAddress,
 	}, nil
 }
