@@ -1,3 +1,28 @@
+/**
+ * 搜索页面
+ *
+ * 功能特性：
+ * - 关键词全文搜索 + 多条件筛选
+ * - 搜索条件和 URL 查询参数双向同步（useSearchParams）
+ * - 筛选条件变化后 300ms 防抖自动搜索
+ * - 无限滚动加载搜索结果
+ * - 手动提交搜索（回车/点击按钮）
+ * - 重置所有筛选条件
+ *
+ * 筛选项：
+ * - 拍摄日期范围（date_from / date_to）
+ * - 场景类型（scene_type）：室外/室内/水下/航拍等
+ * - 相机型号（camera_model）
+ * - 标签（tags）：多选，逗号分隔
+ *
+ * 数据流：
+ * fetchFilters（获取筛选项）→ useInfiniteQuery（带筛选条件的搜索）→ 渲染结果网格
+ *
+ * 状态管理：
+ * - URL 驱动：页面初始化时从 searchParams 恢复所有筛选条件
+ * - 防抖搜索：任何筛选条件变化后等待 300ms 自动触发搜索
+ * - 懒加载：searchActive 控制查询是否启用，首次搜索后才激活
+ */
 import {
   useState,
   useEffect,
@@ -14,8 +39,14 @@ import type {
   PhotoDocument,
 } from '../types';
 
+/** 每页搜索结果数量 */
 const PAGE_SIZE = 20;
 
+/**
+ * 格式化文件修改时间戳为中文日期
+ * @param ts - 秒级 Unix 时间戳
+ * @returns 格式化的中文日期字符串，如 "2024/01/15"
+ */
 function formatMtime(ts?: number): string {
   if (!ts) return '';
   return new Date(ts * 1000).toLocaleDateString('zh-CN', {
@@ -25,6 +56,11 @@ function formatMtime(ts?: number): string {
   });
 }
 
+/**
+ * 格式化 EXIF 拍摄日期为 YYYY-MM-DD 格式
+ * @param raw - ISO 格式的日期字符串
+ * @returns 格式化后的日期字符串
+ */
 function formatExifDate(raw?: string): string {
   if (!raw) return '';
   const d = new Date(raw);
@@ -32,6 +68,9 @@ function formatExifDate(raw?: string): string {
   return raw.slice(0, 10);
 }
 
+/**
+ * 加载中旋转指示器组件
+ */
 function Spinner() {
   return (
     <div className="flex items-center justify-center py-12">
@@ -40,6 +79,9 @@ function Spinner() {
   );
 }
 
+/**
+ * 骨架屏占位卡片组件（搜索结果用，4:3 比例）
+ */
 function SkeletonCard() {
   return (
     <div className="animate-pulse">
@@ -52,6 +94,7 @@ function SkeletonCard() {
   );
 }
 
+/** 照片状态 → 中文标签映射 */
 const STATUS_LABELS: Record<string, string> = {
   analyzed: '已分析',
   analyzing: '分析中',
@@ -60,6 +103,7 @@ const STATUS_LABELS: Record<string, string> = {
   unanalyzed: '未分析',
 };
 
+/** 照片处理状态对应的 Tailwind 颜色类，用于状态徽章的背景色和文字色 */
 const STATUS_COLORS: Record<string, string> = {
   analyzed: 'bg-green-100 text-green-700',
   analyzing: 'bg-yellow-100 text-yellow-700',
@@ -68,6 +112,7 @@ const STATUS_COLORS: Record<string, string> = {
   unanalyzed: 'bg-gray-100 text-gray-600',
 };
 
+/** 场景类型的中文标签映射，用于在卡片和筛选器中显示场景名称 */
 const SCENE_TYPE_LABELS: Record<string, string> = {
   outdoor: '室外',
   indoor: '室内',
@@ -78,7 +123,22 @@ const SCENE_TYPE_LABELS: Record<string, string> = {
   unknown: '未知',
 };
 
+/**
+ * 搜索结果照片卡片组件（使用 memo 优化渲染性能）
+ *
+ * 展示单张搜索结果照片的缩略图、拍摄日期、AI 分析描述、场景类型和标签。
+ * 点击跳转到照片详情页（/photo/{path}）。
+ *
+ * 渲染逻辑：
+ * - 图片加载失败时隐藏 <img>，显示"无法加载图片"占位文字
+ * - 右上角显示处理状态徽章（颜色由 STATUS_COLORS 决定）
+ * - 分析中状态（analyzing）显示骨架屏动画，等待分析完成
+ * - 标签最多显示 3 个，超出数量显示 "+N" 提示
+ *
+ * @param photo - 照片文档数据，包含路径、EXIF、AI 分析结果等
+ */
 const PhotoCard = memo(function PhotoCard({ photo }: { photo: PhotoDocument }) {
+  // 优先使用 EXIF 拍摄日期，回退到文件修改时间
   const dateLabel =
     formatExifDate(photo.exif?.date_time_original) ||
     formatMtime(photo.mtime);
@@ -89,6 +149,7 @@ const PhotoCard = memo(function PhotoCard({ photo }: { photo: PhotoDocument }) {
       className="group block rounded-xl overflow-hidden bg-white border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
     >
       <div className="relative aspect-[4/3] bg-gray-100 overflow-hidden">
+        {/* 照片缩略图，加载失败时隐藏并显示占位文字 */}
         <img
           src={`/photos/${photo.path.replace(/^\/+/, '')}?thumb=1`}
           alt={photo.description || photo.path}
@@ -103,6 +164,7 @@ const PhotoCard = memo(function PhotoCard({ photo }: { photo: PhotoDocument }) {
         <div className="hidden absolute inset-0 flex items-center justify-center bg-gray-100 text-gray-400 text-sm">
           无法加载图片
         </div>
+        {/* 右上角状态标签 */}
         <span
           className={`absolute top-2 right-2 text-[10px] px-1.5 py-0.5 rounded font-medium ${STATUS_COLORS[photo.status] || STATUS_COLORS.unanalyzed}`}
         >
@@ -113,6 +175,7 @@ const PhotoCard = memo(function PhotoCard({ photo }: { photo: PhotoDocument }) {
         {dateLabel && (
           <p className="text-xs text-gray-500">{dateLabel}</p>
         )}
+        {/* 分析中：显示骨架屏占位；已分析：显示描述、场景类型和标签 */}
         {photo.status === 'analyzing' ? (
           <>
             <div className="animate-pulse space-y-2">
@@ -130,16 +193,19 @@ const PhotoCard = memo(function PhotoCard({ photo }: { photo: PhotoDocument }) {
           </>
         ) : (
           <>
+            {/* AI 生成的照片描述 */}
             {photo.description && (
               <p className="text-sm text-gray-800 line-clamp-2 leading-snug">
                 {photo.description}
               </p>
             )}
+            {/* 场景类型标签 */}
             {photo.scene_type && (
               <span className="inline-block text-[11px] px-2 py-0.5 bg-purple-50 text-purple-600 rounded-full font-medium">
                 {SCENE_TYPE_LABELS[photo.scene_type] || photo.scene_type}
               </span>
             )}
+            {/* 标签列表，最多显示 3 个 */}
             {photo.tags && photo.tags.length > 0 && (
               <div className="flex flex-wrap gap-1">
                 {photo.tags.slice(0, 3).map((tag) => (
@@ -164,9 +230,31 @@ const PhotoCard = memo(function PhotoCard({ photo }: { photo: PhotoDocument }) {
   );
 });
 
+/**
+ * 搜索页面主组件
+ *
+ * 核心功能：
+ * - 全文关键词搜索 + 多条件筛选
+ * - URL 同步：所有筛选条件通过 useSearchParams 同步到 URL
+ * - 防抖自动搜索：筛选条件变化后 300ms 自动触发搜索
+ * - 无限滚动加载（IntersectionObserver）
+ * - 筛选面板可折叠，显示活跃筛选数量
+ *
+ * 状态管理：
+ * - useState: 管理各筛选条件（query, dateFrom, dateTo, sceneType, cameraModel, selectedTags）
+ * - useSearchParams: URL 参数双向同步
+ * - useInfiniteQuery: 搜索结果分页加载
+ * - useQuery: 获取可用筛选选项（标签、场景类型、相机型号）
+ *
+ * URL 参数映射：
+ * query → keywords, date_from → dateFrom, date_to → dateTo,
+ * scene_type → sceneType, camera_model → cameraModel, tags → selectedTags
+ */
 export default function Search() {
+  // URL 搜索参数管理，实现筛选条件的 URL 同步
   const [searchParams, setSearchParams] = useSearchParams();
 
+  // 筛选条件状态，初始化时从 URL 参数读取
   const [query, setQuery] = useState(searchParams.get('query') || '');
   const [dateFrom, setDateFrom] = useState(searchParams.get('date_from') || '');
   const [dateTo, setDateTo] = useState(searchParams.get('date_to') || '');
@@ -176,17 +264,30 @@ export default function Search() {
     const raw = searchParams.get('tags');
     return raw ? raw.split(',').filter(Boolean) : [];
   });
+  // 筛选面板展开/折叠状态
   const [showFilters, setShowFilters] = useState(false);
+  // 搜索激活标志，控制 useInfiniteQuery 是否执行
   const [searchActive, setSearchActive] = useState(false);
+  // 无限滚动哨兵元素引用
   const sentinelRef = useRef<HTMLDivElement>(null);
+  // 标记是否为首次挂载，首次挂载时根据 URL 参数决定是否自动搜索
   const initialMount = useRef(true);
 
+  /**
+   * 获取可用筛选选项（标签、场景类型、相机型号）
+   * 缓存 5 分钟，避免重复请求
+   */
   const { data: filters } = useQuery<FiltersResponse>({
     queryKey: ['filters'],
     queryFn: fetchFilters,
     staleTime: 5 * 60 * 1000,
   });
 
+  /**
+   * 搜索结果无限查询
+   * queryKey 包含所有筛选条件，任一变化都会重新查询
+   * enabled: searchActive 控制是否执行搜索（首次需 URL 有参数才激活）
+   */
   const {
     data,
     fetchNextPage,
@@ -217,7 +318,12 @@ export default function Search() {
     enabled: searchActive,
   });
 
-  // Auto-search on mount if URL has params; debounce on filter/query changes
+  /**
+   * 防抖自动搜索 effect：
+   * - 首次挂载时：如果 URL 有参数则自动激活搜索
+   * - 后续变化：300ms 防抖后自动同步 URL 并触发搜索
+   * - 防抖避免用户快速输入时频繁请求
+   */
   useEffect(() => {
     if (initialMount.current) {
       initialMount.current = false;
@@ -228,6 +334,7 @@ export default function Search() {
       return;
     }
 
+    // 300ms 防抖：延迟同步 URL 并触发搜索
     const timer = setTimeout(() => {
       setSearchParams(buildParams(), { replace: true });
       if (!searchActive) setSearchActive(true);
@@ -237,7 +344,11 @@ export default function Search() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, dateFrom, dateTo, sceneType, cameraModel, selectedTags]);
 
-  // Infinite scroll sentinel
+  /**
+   * 无限滚动实现：
+   * IntersectionObserver 监听哨兵元素，
+   * 当哨兵进入视口且有下一页时触发加载。
+   */
   useEffect(() => {
     const sentinel = sentinelRef.current;
     if (!sentinel) return;
@@ -255,6 +366,10 @@ export default function Search() {
     return () => observer.disconnect();
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
+  /**
+   * 表单提交处理：同步 URL 参数并触发搜索
+   * 阻止默认表单提交行为，手动控制搜索流程
+   */
   const handleSearch = (e?: FormEvent) => {
     e?.preventDefault();
     setSearchParams(buildParams(), { replace: true });
@@ -262,6 +377,10 @@ export default function Search() {
     refetch();
   };
 
+  /**
+   * 将当前筛选状态构建为 URL 查询参数
+   * 仅包含有值的参数，空值不写入 URL
+   */
   const buildParams = (): URLSearchParams => {
     const p = new URLSearchParams();
     if (query) p.set('query', query);
@@ -273,12 +392,20 @@ export default function Search() {
     return p;
   };
 
+  /**
+   * 切换标签选中状态
+   * 已选中则移除，未选中则添加
+   */
   const toggleTag = (tag: string) => {
     setSelectedTags((prev) =>
       prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
     );
   };
 
+  /**
+   * 重置所有筛选条件到初始状态
+   * 清空所有 useState 和 URL 参数，关闭搜索结果
+   */
   const resetFilters = () => {
     setDateFrom('');
     setDateTo('');
@@ -290,6 +417,7 @@ export default function Search() {
     setSearchActive(false);
   };
 
+  // 计算当前活跃的筛选条件数量（用于显示角标）
   const activeFilterCount =
     (dateFrom ? 1 : 0) +
     (dateTo ? 1 : 0) +
@@ -297,12 +425,15 @@ export default function Search() {
     (cameraModel ? 1 : 0) +
     selectedTags.length;
 
+  // 合并所有分页的搜索结果为一个数组
   const allPhotos = data?.pages.flatMap((page) => page.hits) ?? [];
+  // 获取搜索结果总数和总页数（从第一页数据中提取）
   const total = data?.pages[0]?.total ?? 0;
   const totalPages = data?.pages[0]?.total_pages ?? 0;
 
   return (
     <div className="space-y-6">
+      {/* 搜索输入框 + 提交按钮 */}
       <form onSubmit={handleSearch} className="flex gap-2">
         <div className="relative flex-1">
           <svg
@@ -335,6 +466,7 @@ export default function Search() {
         </button>
       </form>
 
+      {/* 筛选面板切换按钮 */}
       <div>
         <button
           type="button"
@@ -365,11 +497,13 @@ export default function Search() {
         </button>
       </div>
 
+      {/* 筛选面板：日期范围、场景类型、相机型号、标签多选 */}
       {showFilters && (
         <div className="p-5 bg-white border border-gray-200 rounded-xl space-y-5">
+          {/* 日期范围筛选：起始日期 → 结束日期 */}
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-2">
-              拍摄日期
+               拍摄日期
             </label>
             <div className="flex items-center gap-2">
               <input
@@ -388,9 +522,10 @@ export default function Search() {
             </div>
           </div>
 
+          {/* 场景类型下拉筛选 */}
           <div>
             <label htmlFor="filter-scene" className="block text-xs font-medium text-gray-500 mb-2">
-              场景类型
+               场景类型
             </label>
             <select
               id="filter-scene"
@@ -405,9 +540,10 @@ export default function Search() {
             </select>
           </div>
 
+          {/* 相机型号下拉筛选 */}
           <div>
             <label htmlFor="filter-camera" className="block text-xs font-medium text-gray-500 mb-2">
-              相机型号
+               相机型号
             </label>
             <select
               id="filter-camera"
@@ -422,6 +558,7 @@ export default function Search() {
             </select>
           </div>
 
+          {/* 标签多选：从 filters 接口获取可选标签列表 */}
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-2">标签</label>
             {filters?.tags && filters.tags.length > 0 ? (
@@ -449,6 +586,7 @@ export default function Search() {
             )}
           </div>
 
+          {/* 重置按钮：有激活的筛选条件时显示 */}
           {activeFilterCount > 0 && (
             <div className="pt-1">
               <button
@@ -463,8 +601,10 @@ export default function Search() {
         </div>
       )}
 
+      {/* 初始加载状态：显示旋转加载器 */}
       {isLoading && <Spinner />}
 
+      {/* 错误状态：显示错误信息 + 重试按钮 */}
       {isError && (
         <div className="text-center py-12">
           <p className="text-sm text-red-500">{(error as Error)?.message || '搜索失败'}</p>
@@ -478,6 +618,7 @@ export default function Search() {
         </div>
       )}
 
+      {/* 空结果：搜索已完成但未找到匹配照片 */}
       {!isLoading && !isError && allPhotos.length === 0 && data && (
         <div className="text-center py-16">
           <svg
@@ -497,21 +638,26 @@ export default function Search() {
         </div>
       )}
 
+      {/* 搜索结果展示 */}
       {allPhotos.length > 0 && (
         <>
+          {/* 结果统计：总数 + 分页信息 */}
           <p className="text-xs text-gray-400">
             共找到 <span className="font-medium text-gray-600">{total}</span> 张照片
             {totalPages > 1 && <>，第 {data?.pages.length}/{totalPages} 页</>}
           </p>
 
+          {/* 响应式照片网格 */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
             {allPhotos.map((photo) => (
               <PhotoCard key={photo.path} photo={photo} />
             ))}
           </div>
 
+          {/* 无限滚动哨兵 */}
           <div ref={sentinelRef} className="h-4" />
 
+          {/* 加载更多时的骨架屏 */}
           {isFetchingNextPage && (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
               {Array.from({ length: 4 }).map((_, i) => (
@@ -520,6 +666,7 @@ export default function Search() {
             </div>
           )}
 
+          {/* 全部加载完成提示 */}
           {!hasNextPage && (
             <p className="py-8 text-center text-sm text-gray-400">已加载全部照片</p>
           )}
