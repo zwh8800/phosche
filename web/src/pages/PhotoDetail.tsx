@@ -5,7 +5,7 @@ import PhotoDetailModal from '../components/PhotoDetail';
 
 function PhotoDetail() {
   const { '*': wildcard } = useParams<{ '*': string }>();
-  const id = wildcard ? decodeURIComponent(wildcard).replace(/^\/+/, '') : '';
+  const id = wildcard ? decodeURIComponent(wildcard) : '';
   const navigate = useNavigate();
 
   const { data, isLoading, error, refetch } = useQuery({

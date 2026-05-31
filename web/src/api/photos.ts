@@ -40,7 +40,7 @@ export async function searchPhotos(req: SearchRequest): Promise<SearchResponse> 
 }
 
 export async function fetchPhotoDetail(id: string): Promise<PhotoDocument> {
-  const { data } = await apiClient.get<PhotoDocument>(`/photos/${id}`);
+  const { data } = await apiClient.get<PhotoDocument>(`/photos/${encodeURIComponent(id)}`);
   return data;
 }
 
