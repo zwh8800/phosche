@@ -116,7 +116,49 @@ go run ./cmd/phosche/ -config config.yaml
 
 适用于 Elasticsearch 已单独部署（或使用云服务）的场景，通过 `docker run` 启动 phosche 容器。
 
-**1. 获取镜像：**
+**1. 启动 Elasticsearch（含 IK 中文分词插件）：**
+
+phosche 依赖 IK 分词插件进行中文全文搜索。如果需要本地启动 ES，使用以下命令：
+
+```bash
+docker run -d \
+  --name elasticsearch \
+  -p 9200:9200 \
+  -e "discovery.type=single-node" \
+  -e "xpack.security.enabled=false" \
+  -e "ES_JAVA_OPTS=-Xms512m -Xmx512m" \
+  -v esdata:/usr/share/elasticsearch/data \
+  docker.elastic.co/elasticsearch/elasticsearch:8.17.0 \
+  bash -c '
+    if [ ! -d /usr/share/elasticsearch/plugins/analysis-ik ]; then
+      elasticsearch-plugin install -b https://get.infini.cloud/elasticsearch/analysis-ik/8.17.0
+    fi
+    /usr/local/bin/docker-entrypoint.sh eswrapper
+  '
+```
+
+或者使用项目提供的 `Dockerfile.es` 构建包含 IK 插件的镜像：
+
+```bash
+docker build -t phosche-es -f Dockerfile.es .
+docker run -d \
+  --name elasticsearch \
+  -p 9200:9200 \
+  -e "discovery.type=single-node" \
+  -e "xpack.security.enabled=false" \
+  -e "ES_JAVA_OPTS=-Xms512m -Xmx512m" \
+  -v esdata:/usr/share/elasticsearch/data \
+  phosche-es
+```
+
+验证 ES 和 IK 插件是否正常：
+
+```bash
+curl http://localhost:9200/_cat/plugins
+# 应输出: xxxxx analysis-ik 8.17.0
+```
+
+**2. 获取 phosche 镜像：**
 
 ```bash
 # 方式 A：从 Docker Hub 拉取（推荐）
@@ -126,7 +168,7 @@ docker pull zwh8800/phosche:latest
 docker build -t phosche .
 ```
 
-**2. 准备配置文件：**
+**3. 准备配置文件：**
 
 ```bash
 cp config.example.yaml config.yaml
@@ -150,7 +192,7 @@ llm:
   provider: openai   # 或 ollama（见下方网络说明）
 ```
 
-**3. 启动容器：**
+**4. 启动容器：**
 
 ```bash
 docker run -d \

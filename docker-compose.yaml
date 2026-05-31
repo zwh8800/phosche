@@ -1,6 +1,8 @@
 services:
   elasticsearch:
-    image: elasticsearch:8.17.0
+    build:
+      context: .
+      dockerfile: Dockerfile.es
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
