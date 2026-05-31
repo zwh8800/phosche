@@ -198,7 +198,19 @@ func extractExifFromHEIC(path string) (*exif.Exif, error) {
 		return nil, fmt.Errorf("find exif box: %w", err)
 	}
 
-	x, err := exif.Decode(bytes.NewReader(exifBytes))
+	// 预置 JPEG APP1 marker 格式，goexif.Decode 需要此格式
+	marker := []byte{0xFF, 0xE1}
+	exifHeader := []byte{0x45, 0x78, 0x69, 0x66, 0x00, 0x00} // "Exif\0\0"
+	length := len(exifBytes) + len(exifHeader)
+	lengthBytes := []byte{byte(length >> 8), byte(length & 0xFF)}
+
+	app1Data := make([]byte, 0, 2+2+len(exifHeader)+len(exifBytes))
+	app1Data = append(app1Data, marker...)
+	app1Data = append(app1Data, lengthBytes...)
+	app1Data = append(app1Data, exifHeader...)
+	app1Data = append(app1Data, exifBytes...)
+
+	x, err := exif.Decode(bytes.NewReader(app1Data))
 	if err != nil {
 		return nil, fmt.Errorf("parse exif: %w", err)
 	}
