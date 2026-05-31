@@ -427,8 +427,8 @@ func (p *Pipeline) decodeAndAnalyze(ctx context.Context, path string) *decodeAna
 		}
 	}
 	if geoInfo != nil {
-		addrParts := make([]string, 0, 3)
-		for _, s := range []string{geoInfo.Province, geoInfo.City, geoInfo.District} {
+		addrParts := make([]string, 0, 6)
+		for _, s := range []string{geoInfo.Province, geoInfo.City, geoInfo.District, geoInfo.Township, geoInfo.BusinessArea, geoInfo.Street, geoInfo.StreetNumber} {
 			if s != "" {
 				addrParts = append(addrParts, s)
 			}
