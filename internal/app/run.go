@@ -211,21 +211,43 @@ func wrapPrivateAccess(next http.Handler, wCfg config.WatchConfig) http.Handler 
 }
 
 // spaHandler 提供 SPA 单页应用静态文件服务。对于不存在的文件路径，回退到 index.html 以支持客户端路由。
+// http.FileServer 会将 /index.html 自动重定向到 ./，导致无限循环，因此 index.html 需要单独处理。
 func spaHandler(distFS fs.FS) http.Handler {
-	fileServer := http.FileServer(http.FS(distFS))
+	subFS, err := fs.Sub(distFS, "web/dist")
+	if err != nil {
+		slog.Error("failed to create sub filesystem for SPA", "error", err)
+		return http.NotFoundHandler()
+	}
+	fileServer := http.FileServer(http.FS(subFS))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path
-		if path == "/" {
-			r.URL.Path = "/index.html"
-			fileServer.ServeHTTP(w, r)
+		cleanPath := strings.TrimPrefix(r.URL.Path, "/")
+
+		if cleanPath == "" || cleanPath == "index.html" {
+			serveIndexHTML(w, subFS)
 			return
 		}
-		cleanPath := strings.TrimPrefix(path, "/")
-		if _, err := fs.Stat(distFS, cleanPath); err != nil {
-			r.URL.Path = "/index.html"
+
+		if f, err := subFS.Open(cleanPath); err == nil {
+			defer f.Close()
+			if stat, err := f.Stat(); err == nil && !stat.IsDir() {
+				fileServer.ServeHTTP(w, r)
+				return
+			}
 		}
-		fileServer.ServeHTTP(w, r)
+
+		serveIndexHTML(w, subFS)
 	})
+}
+
+// serveIndexHTML 绕过 http.FileServer 直接提供 index.html，避免其对 /index.html → ./ 的重定向。
+func serveIndexHTML(w http.ResponseWriter, fsys fs.FS) {
+	data, err := fs.ReadFile(fsys, "index.html")
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write(data)
 }
 
 // parseLogLevel 将日志级别字符串转换为 slog.Level。
