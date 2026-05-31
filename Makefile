@@ -20,4 +20,4 @@ clean:
 	rm -rf web/dist
 
 run:
-	go run ./cmd/phosche/ -config config.example.yaml
+	go run ./cmd/phosche/ -config config.yaml
