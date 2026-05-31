@@ -14,7 +14,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=frontend-builder /app/web/dist ./web/dist
-RUN CGO_ENABLED=0 go build -v -o phosche .
+RUN CGO_ENABLED=0 go build -o phosche .
 
 # Stage 3: Runtime
 FROM alpine:latest
