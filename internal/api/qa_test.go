@@ -224,7 +224,7 @@ func TestQA_StaticFileServer(t *testing.T) {
 	require.NoError(t, err)
 	f.Close()
 
-	handler := static.PhotoHandler([]string{tempDir})
+	handler := static.PhotoHandler([]string{tempDir}, nil)
 	ts := httptest.NewServer(handler)
 	defer ts.Close()
 

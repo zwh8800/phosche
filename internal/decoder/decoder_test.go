@@ -28,6 +28,10 @@ func writeTestFile(t *testing.T, dir, name string, data []byte) string {
 	return path
 }
 
+func createFile(path string) (*os.File, error) {
+	return os.Create(path)
+}
+
 func generateTestJPEG(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -195,5 +199,48 @@ func TestEXIFExtraction_NoEXIF(t *testing.T) {
 
 	if result.EXIF != nil {
 		t.Errorf("expected nil EXIF for generated JPEG, got %+v", result.EXIF)
+	}
+}
+
+func TestEXIFExtraction_WithEXIF(t *testing.T) {
+	path, expected := generateTestJPEGWithEXIF(t)
+
+	result, err := DecodeImage(path)
+	if err != nil {
+		t.Fatalf("DecodeImage(%q) error: %v", path, err)
+	}
+
+	if result.EXIF == nil {
+		t.Fatal("expected non-nil EXIF, got nil")
+	}
+
+	exif := result.EXIF
+
+	if exif.DateTimeOriginal != expected.DateTimeOriginal {
+		t.Errorf("DateTimeOriginal: got %q, want %q", exif.DateTimeOriginal, expected.DateTimeOriginal)
+	}
+	if exif.CameraModel != expected.CameraModel {
+		t.Errorf("CameraModel: got %q, want %q", exif.CameraModel, expected.CameraModel)
+	}
+	if exif.LensModel != expected.LensModel {
+		t.Errorf("LensModel: got %q, want %q", exif.LensModel, expected.LensModel)
+	}
+	if exif.FocalLength != expected.FocalLength {
+		t.Errorf("FocalLength: got %q, want %q", exif.FocalLength, expected.FocalLength)
+	}
+	if exif.Aperture != expected.Aperture {
+		t.Errorf("Aperture: got %q, want %q", exif.Aperture, expected.Aperture)
+	}
+	if exif.ShutterSpeed != expected.ShutterSpeed {
+		t.Errorf("ShutterSpeed: got %q, want %q", exif.ShutterSpeed, expected.ShutterSpeed)
+	}
+	if exif.ISO != expected.ISO {
+		t.Errorf("ISO: got %d, want %d", exif.ISO, expected.ISO)
+	}
+	if exif.GPSLat != expected.GPSLat {
+		t.Errorf("GPSLat: got %f, want %f", exif.GPSLat, expected.GPSLat)
+	}
+	if exif.GPSLon != expected.GPSLon {
+		t.Errorf("GPSLon: got %f, want %f", exif.GPSLon, expected.GPSLon)
 	}
 }

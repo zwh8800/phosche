@@ -43,8 +43,13 @@ type mockScanner struct {
 	files []string
 }
 
-func (m *mockScanner) Scan(_ context.Context, _ []string, _ map[string]int64) ([]string, error) {
-	return m.files, nil
+func (m *mockScanner) Scan(_ context.Context, _ []string, _ map[string]int64) (<-chan string, error) {
+	ch := make(chan string, len(m.files))
+	for _, f := range m.files {
+		ch <- f
+	}
+	close(ch)
+	return ch, nil
 }
 
 type mockWatcher struct {

@@ -2,7 +2,6 @@
 package decoder
 
 import (
-	"bytes"
 	"fmt"
 	"image"
 	"image/jpeg"
@@ -16,10 +15,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/evanoberholster/imagemeta"
-	"github.com/evanoberholster/imagemeta/meta/exif"
+	"github.com/dsoprea/go-exif/v3"
+	exifcommon "github.com/dsoprea/go-exif/v3/common"
+	jpegstructure "github.com/dsoprea/go-jpeg-image-structure"
+	pngstructure "github.com/dsoprea/go-png-image-structure"
 	"github.com/gen2brain/heic"
-	goexif "github.com/rwcarlsen/goexif/exif"
 	"github.com/zwh8800/phosche/internal/types"
 	"golang.org/x/image/webp"
 )
@@ -89,74 +89,152 @@ func decodeHEIC(r io.Reader) (image.Image, error) {
 }
 
 // extractEXIF 从照片文件中提取 EXIF 元数据：拍摄时间、相机型号、镜头型号、焦距、光圈、快门速度、ISO、GPS 坐标。
-// 首先使用 imagemeta 库处理所有格式（JPEG、HEIC/HEIF、PNG 等）。
-// 如果 imagemeta 返回空数据且文件为 HEIC/HEIF 格式，则回退到 goexif + ISOBMFF 解析。
-func extractEXIF(path string) (*types.EXIFInfo, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, fmt.Errorf("open file for EXIF: %w", err)
-	}
-	defer f.Close()
-
-	ex, err := imagemeta.Decode(f)
-	if err == nil {
-		if info := exifToEXIFInfo(ex); info != nil {
-			return info, nil
+// 使用 dsoprea/go-exif/v3 库解析 EXIF 数据。
+func extractEXIF(path string) (info *types.EXIFInfo, err error) {
+	// 捕获 dsoprea/go-logging 可能产生的 panic
+	defer func() {
+		if e := recover(); e != nil {
+			err = fmt.Errorf("exif panic: %v", e)
 		}
-	}
+	}()
 
-	ext := strings.ToLower(filepath.Ext(path))
-	if ext == ".heic" || ext == ".heif" {
-		slog.Debug("decoder: imagemeta failed or returned empty, falling back to goexif for HEIC", "path", path)
-		return extractExifFromHEIC(path)
-	}
-
+	rawExif, err := extractRawExif(path)
 	if err != nil {
-		return nil, fmt.Errorf("decode EXIF: %w", err)
+		if err == exif.ErrNoExif {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("extract raw exif: %w", err)
 	}
-	return nil, nil
+	return parseExif(rawExif)
 }
 
-// exifToEXIFInfo 将 imagemeta 解析的 EXIF 数据转换为 types.EXIFInfo。
-// 如果所有字段均为空值，则返回 nil。
-func exifToEXIFInfo(ex exif.Exif) *types.EXIFInfo {
+// extractRawExif 从照片文件中提取原始 EXIF 字节。
+// JPEG/PNG 使用 dsoprea 格式专用库精确解析，WebP/HEIC 使用暴力搜索。
+func extractRawExif(path string) ([]byte, error) {
+	ext := strings.ToLower(filepath.Ext(path))
+
+	switch ext {
+	case ".jpg", ".jpeg":
+		return extractRawExifFromJPEG(path)
+	case ".png":
+		return extractRawExifFromPNG(path)
+	default:
+		// WebP/HEIC: go-webp-image-structure 无公开 API，go-heic-exif-extractor 需要 CGO
+		return exif.SearchFileAndExtractExif(path)
+	}
+}
+
+// extractRawExifFromJPEG 使用 go-jpeg-image-structure 解析 JPEG APP1 segment 中的 EXIF。
+func extractRawExifFromJPEG(path string) ([]byte, error) {
+	jpegmp := jpegstructure.NewJpegMediaParser()
+	sl, err := jpegmp.ParseFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("parse jpeg: %w", err)
+	}
+
+	_, rawExif, err := sl.Exif()
+	if err != nil {
+		return nil, fmt.Errorf("extract exif from jpeg: %w", err)
+	}
+	if len(rawExif) == 0 {
+		return nil, exif.ErrNoExif
+	}
+	return rawExif, nil
+}
+
+// extractRawExifFromPNG 使用 go-png-image-structure 解析 PNG iTXt chunk 中的 EXIF。
+func extractRawExifFromPNG(path string) ([]byte, error) {
+	pngmp := pngstructure.NewPngMediaParser()
+	ec, err := pngmp.ParseFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("parse png: %w", err)
+	}
+
+	cs, ok := ec.(*pngstructure.ChunkSlice)
+	if !ok {
+		return nil, fmt.Errorf("unexpected png type: %T", ec)
+	}
+
+	_, rawExif, err := cs.Exif()
+	if err != nil {
+		return nil, fmt.Errorf("extract exif from png: %w", err)
+	}
+	if len(rawExif) == 0 {
+		return nil, exif.ErrNoExif
+	}
+	return rawExif, nil
+}
+
+// parseExif 解析原始 EXIF 字节，提取所有需要的元数据字段。
+// 使用 exif.Collect 解析 IFD 结构，然后通过 IFD 路径导航提取各字段。
+func parseExif(rawExif []byte) (*types.EXIFInfo, error) {
+	im, err := exifcommon.NewIfdMappingWithStandard()
+	if err != nil {
+		return nil, fmt.Errorf("create ifd mapping: %w", err)
+	}
+
+	ti := exif.NewTagIndex()
+
+	_, index, err := exif.Collect(im, ti, rawExif)
+	if err != nil {
+		return nil, fmt.Errorf("collect exif: %w", err)
+	}
+
 	info := &types.EXIFInfo{}
 
-	if !ex.ExifIFD.DateTimeOriginal.IsZero() {
-		info.DateTimeOriginal = ex.ExifIFD.DateTimeOriginal.Format(time.RFC3339)
+	// IFD0 (root): Model
+	if v, err := getStringTag(index.RootIfd, "Model"); err == nil {
+		info.CameraModel = strings.TrimSpace(v)
 	}
 
-	info.CameraModel = strings.TrimSpace(ex.IFD0.Model)
-	info.LensModel = strings.TrimSpace(ex.ExifIFD.LensModel)
+	// IFD/Exif: DateTimeOriginal, LensModel, FocalLength, FNumber, ExposureTime, ISOSpeedRatings
+	if exifIfd, ok := index.Lookup["IFD/Exif"]; ok {
+		if v, err := getStringTag(exifIfd, "DateTimeOriginal"); err == nil {
+			// EXIF 时间格式: "2006:01:02 15:04:05" -> RFC3339
+			if t, tErr := time.Parse("2006:01:02 15:04:05", v); tErr == nil {
+				info.DateTimeOriginal = t.Format(time.RFC3339)
+			}
+		}
 
-	if fl := float64(ex.ExifIFD.FocalLength); fl > 0 {
-		info.FocalLength = fmt.Sprintf("%.1fmm", fl)
-	}
+		if v, err := getStringTag(exifIfd, "LensModel"); err == nil {
+			info.LensModel = strings.TrimSpace(v)
+		}
 
-	if fn := float64(ex.ExifIFD.FNumber); fn > 0 {
-		info.Aperture = fmt.Sprintf("f/%.1f", fn)
-	}
+		if v, err := getRationalTag(exifIfd, "FocalLength"); err == nil && v > 0 {
+			info.FocalLength = fmt.Sprintf("%.1fmm", v)
+		}
 
-	if et := float64(ex.ExifIFD.ExposureTime); et > 0 {
-		if et < 1 {
-			denom := math.Round(1.0 / et)
-			info.ShutterSpeed = fmt.Sprintf("1/%ds", int(denom))
-		} else {
-			info.ShutterSpeed = fmt.Sprintf("%.0fs", et)
+		if v, err := getRationalTag(exifIfd, "FNumber"); err == nil && v > 0 {
+			info.Aperture = fmt.Sprintf("f/%.1f", v)
+		}
+
+		if v, err := getRationalTag(exifIfd, "ExposureTime"); err == nil && v > 0 {
+			if v < 1 {
+				denom := math.Round(1.0 / v)
+				info.ShutterSpeed = fmt.Sprintf("1/%ds", int(denom))
+			} else {
+				info.ShutterSpeed = fmt.Sprintf("%.0fs", v)
+			}
+		}
+
+		if v, err := getShortTag(exifIfd, "ISOSpeedRatings"); err == nil && v > 0 {
+			info.ISO = int(v)
 		}
 	}
 
-	if iso := ex.ExifIFD.ISOSpeedRatings; iso > 0 {
-		info.ISO = int(iso)
+	// IFD/GPSInfo: GPS 坐标
+	if gpsIfd, ok := index.Lookup["IFD/GPSInfo"]; ok {
+		if gi, err := gpsIfd.GpsInfo(); err == nil {
+			if lat := gi.Latitude.Decimal(); lat != 0 {
+				info.GPSLat = roundGPS(lat)
+			}
+			if lon := gi.Longitude.Decimal(); lon != 0 {
+				info.GPSLon = roundGPS(lon)
+			}
+		}
 	}
 
-	if lat := ex.GPS.Latitude(); lat != 0 {
-		info.GPSLat = roundGPS(lat)
-	}
-	if lon := ex.GPS.Longitude(); lon != 0 {
-		info.GPSLon = roundGPS(lon)
-	}
-
+	// 如果所有字段都为空，返回 nil（保持与原实现一致的行为）
 	if info.DateTimeOriginal == "" &&
 		info.CameraModel == "" &&
 		info.LensModel == "" &&
@@ -165,119 +243,70 @@ func exifToEXIFInfo(ex exif.Exif) *types.EXIFInfo {
 		info.ShutterSpeed == "" &&
 		info.ISO == 0 &&
 		info.GPSLat == 0 && info.GPSLon == 0 {
-		return nil
+		return nil, nil
 	}
 
-	return info
+	return info, nil
+}
+
+// getStringTag 从 IFD 中提取字符串类型的 tag。
+func getStringTag(ifd *exif.Ifd, tagName string) (string, error) {
+	results, err := ifd.FindTagWithName(tagName)
+	if err != nil {
+		return "", err
+	}
+	v, err := results[0].Value()
+	if err != nil {
+		return "", err
+	}
+	s, ok := v.(string)
+	if !ok {
+		return "", fmt.Errorf("tag %s is not a string", tagName)
+	}
+	return s, nil
+}
+
+// getRationalTag 从 IFD 中提取有理数类型的 tag，返回 float64。
+// 用于 FocalLength、FNumber、ExposureTime 等字段。
+func getRationalTag(ifd *exif.Ifd, tagName string) (float64, error) {
+	results, err := ifd.FindTagWithName(tagName)
+	if err != nil {
+		return 0, err
+	}
+	v, err := results[0].Value()
+	if err != nil {
+		return 0, err
+	}
+	rationals, ok := v.([]exifcommon.Rational)
+	if !ok || len(rationals) == 0 {
+		return 0, fmt.Errorf("tag %s is not rational", tagName)
+	}
+	r := rationals[0]
+	if r.Denominator == 0 {
+		return 0, fmt.Errorf("tag %s has zero denominator", tagName)
+	}
+	return float64(r.Numerator) / float64(r.Denominator), nil
+}
+
+// getShortTag 从 IFD 中提取短整数类型的 tag。
+// 用于 ISOSpeedRatings 等字段。
+func getShortTag(ifd *exif.Ifd, tagName string) (uint16, error) {
+	results, err := ifd.FindTagWithName(tagName)
+	if err != nil {
+		return 0, err
+	}
+	v, err := results[0].Value()
+	if err != nil {
+		return 0, err
+	}
+	shorts, ok := v.([]uint16)
+	if !ok || len(shorts) == 0 {
+		return 0, fmt.Errorf("tag %s is not short", tagName)
+	}
+	return shorts[0], nil
 }
 
 // roundGPS 将 GPS 坐标四舍五入到 6 位小数。
 func roundGPS(v float64) float64 {
 	return math.Round(v*1e6) / 1e6
 }
-
-func extractExifFromHEIC(path string) (*types.EXIFInfo, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	exifBytes, err := findExifBox(data)
-	if err != nil {
-		return nil, err
-	}
-
-	x, err := goexif.Decode(bytes.NewReader(exifBytes))
-	if err != nil {
-		return nil, err
-	}
-	return goexifToEXIFInfo(x), nil
-}
-
-func findExifBox(data []byte) ([]byte, error) {
-	i := 0
-	for i < len(data)-8 {
-		boxSize := int(data[i])<<24 | int(data[i+1])<<16 | int(data[i+2])<<8 | int(data[i+3])
-		boxType := string(data[i+4 : i+8])
-		if boxSize < 8 {
-			i += 8
-			continue
-		}
-		if boxType == "Exif" {
-			return data[i+8 : i+boxSize], nil
-		}
-		if boxType == "moov" || boxType == "meta" || boxType == "iprp" || boxType == "ipco" {
-			result, err := findExifBox(data[i+8 : i+boxSize])
-			if err == nil {
-				return result, nil
-			}
-		}
-		i += boxSize
-	}
-	// 兜底：直接扫描 Exif\x00\x00 + TIFF header 模式
-	for j := 0; j < len(data)-10; j++ {
-		if data[j] == 'E' && data[j+1] == 'x' && data[j+2] == 'i' && data[j+3] == 'f' &&
-			data[j+4] == 0 && data[j+5] == 0 {
-			if j+8 < len(data) && ((data[j+6] == 'M' && data[j+7] == 'M') || (data[j+6] == 'I' && data[j+7] == 'I')) {
-				return data[j+6:], nil
-			}
-		}
-	}
-
-	return nil, fmt.Errorf("exif box not found")
-}
-
-func goexifToEXIFInfo(x *goexif.Exif) *types.EXIFInfo {
-	info := &types.EXIFInfo{}
-	if dt, err := x.DateTime(); err == nil {
-		info.DateTimeOriginal = dt.Format(time.RFC3339)
-	}
-	if tag, err := x.Get(goexif.Model); err == nil {
-		if s, sErr := tag.StringVal(); sErr == nil {
-			info.CameraModel = strings.TrimSpace(s)
-		}
-	}
-	if tag, err := x.Get(goexif.LensModel); err == nil {
-		if s, sErr := tag.StringVal(); sErr == nil {
-			info.LensModel = strings.TrimSpace(s)
-		}
-	}
-	if tag, err := x.Get(goexif.FocalLength); err == nil {
-		if num, den, rErr := tag.Rat2(0); rErr == nil && den != 0 {
-			info.FocalLength = fmt.Sprintf("%.1fmm", float64(num)/float64(den))
-		}
-	}
-	if tag, err := x.Get(goexif.FNumber); err == nil {
-		if num, den, rErr := tag.Rat2(0); rErr == nil && den != 0 {
-			fVal := float64(num) / float64(den)
-			info.Aperture = fmt.Sprintf("f/%.1f", fVal)
-		}
-	}
-	if tag, err := x.Get(goexif.ExposureTime); err == nil {
-		if num, den, rErr := tag.Rat2(0); rErr == nil && den != 0 {
-			info.ShutterSpeed = fmt.Sprintf("%d/%ds", num, den)
-		}
-	}
-	if tag, err := x.Get(goexif.ISOSpeedRatings); err == nil {
-		if iso, iErr := tag.Int(0); iErr == nil {
-			info.ISO = iso
-		}
-	}
-	if lat, lon, err := x.LatLong(); err == nil {
-		info.GPSLat = roundGPS(lat)
-		info.GPSLon = roundGPS(lon)
-	}
-
-	if info.DateTimeOriginal == "" &&
-		info.CameraModel == "" &&
-		info.LensModel == "" &&
-		info.FocalLength == "" &&
-		info.Aperture == "" &&
-		info.ShutterSpeed == "" &&
-		info.ISO == 0 &&
-		info.GPSLat == 0 && info.GPSLon == 0 {
-		return nil
-	}
-
-	return info
-}
-

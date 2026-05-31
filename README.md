@@ -40,7 +40,7 @@
 | 搜索引擎 | Elasticsearch 8.x（官方 go-elasticsearch 客户端） |
 | AI 分析 | Ollama（本地）/ OpenAI（云端），双协议统一接口 |
 | 图片解码 | 标准库 + golang.org/x/image/webp + gen2brain/heic |
-| EXIF 提取 | rwcarlsen/goexif |
+| EXIF 提取 | dsoprea/go-exif/v3 |
 | 文件监控 | fsnotify |
 | 前端框架 | React 19 + TypeScript 6 |
 | 构建工具 | Vite 8 |
