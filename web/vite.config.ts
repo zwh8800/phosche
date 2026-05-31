@@ -14,7 +14,7 @@ export default defineConfig({
         name: 'Phosche',
         short_name: 'Phosche',
         description: '个人照片搜索服务 — AI 驱动的照片分析与搜索',
-        theme_color: '#863bff',
+        theme_color: '#ef4444',
         background_color: '#ffffff',
         display: 'standalone',
         scope: '/',
