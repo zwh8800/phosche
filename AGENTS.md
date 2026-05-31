@@ -37,7 +37,7 @@ docker compose --profile ollama up -d       # + 本地 Ollama
 ### 处理流水线
 
 ```
-watch (fsnotify) → decode (JPEG/PNG/WebP/HEIC) → analyze (LLM) → index (ES) → serve (React SPA)
+watch (fsnotify) → decode (JPEG/PNG/WebP/HEIC) → analyze (LLM) → geocode (Amap) → index (ES) → serve (React SPA)
 ```
 
 编排在 `internal/pipeline/` 中，每个阶段是独立包，通过清晰接口交互。
@@ -76,6 +76,11 @@ unanalyzed → analyzing → failed（不可恢复错误）
 - 必填字段：`watch.directories`、`elasticsearch.addresses`、`llm.provider`
 - 配置加载逻辑：`internal/config/config.go`，带默认值和校验
 - 环境变量覆盖：设置 `CONFIG_PATH` 可覆盖默认 `config.yaml` 路径
+- `env` 配置项：
+  ```yaml
+  env:
+    amap_key: ""  # 高德地图 API Key（用于逆地理编码）
+  ```
 
 ## 前端（web/）
 
@@ -99,4 +104,7 @@ unanalyzed → analyzing → failed（不可恢复错误）
 - 所有 API 端点以 `/api/` 为前缀，`/health` 和 `/photos/*` 除外
 - 照片 ID 是文件路径的 SHA-256 哈希
 - 结构化日志：`log/slog`（JSON 格式）
+- EXIF 提取：dsoprea/go-exif/v3（JPEG/PNG），go-heic-exif-extractor（HEIC 兜底）
+- 逆地理编码：高德 API，格式化地址存入 ES
+- 缓存命名：`{photoID}_thumb.jpg` / `{photoID}_full.jpg`
 - `cache/` 目录已 gitignore（`internal/cache/` 生成的缩略图）
