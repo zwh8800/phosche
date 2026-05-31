@@ -43,3 +43,6 @@ opencode.json
 # OS
 .DS_Store
 Thumbs.db
+
+cache/
+!internal/cache/

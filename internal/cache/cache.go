@@ -33,6 +33,9 @@ type Generator struct {
 
 // NewGenerator 创建缓存生成器。cacheDir 为空时不会执行任何缓存操作。
 func NewGenerator(cacheDir string) *Generator {
+	if cacheDir != "" {
+		os.MkdirAll(cacheDir, 0755)
+	}
 	return &Generator{CacheDir: cacheDir}
 }
 

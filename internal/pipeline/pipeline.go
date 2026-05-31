@@ -289,6 +289,11 @@ func (p *Pipeline) processPath(ctx context.Context, path string) {
 	if err == nil && existingDoc != nil {
 		if existingDoc.Status == types.StatusAnalyzed && existingDoc.MTime == mtime {
 			slog.Debug("pipeline: skipping already analyzed", "path", path)
+			// 仍然生成缓存（可能之前分析时还没有缓存功能）
+			if p.cfg.Cache != nil {
+				p.cfg.Cache.GenerateThumb(path)
+				p.cfg.Cache.GenerateFull(path)
+			}
 			return
 		}
 	}
