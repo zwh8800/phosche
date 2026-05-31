@@ -9,6 +9,7 @@ import (
 	"image"
 	"image/jpeg"
 	_ "image/png"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -49,9 +50,11 @@ func (g *Generator) GenerateThumb(srcPath string) error {
 	id := PhotoID(srcPath)
 	dstPath := filepath.Join(g.CacheDir, id+"_thumb.jpg")
 	if _, err := os.Stat(dstPath); err == nil {
+		slog.Debug("cache: thumb already exists", "path", srcPath)
 		return nil
 	}
 
+	slog.Debug("cache: generating thumb", "path", srcPath)
 	img, err := decodeImage(srcPath)
 	if err != nil {
 		return err
@@ -85,13 +88,17 @@ func (g *Generator) GenerateFull(srcPath string) error {
 	id := PhotoID(srcPath)
 	dstPath := filepath.Join(g.CacheDir, id+"_full.jpg")
 	if _, err := os.Stat(dstPath); err == nil {
+		slog.Debug("cache: full already exists", "path", srcPath)
 		return nil
 	}
 
 	ext := strings.ToLower(filepath.Ext(srcPath))
 	if ext != ".heic" && ext != ".heif" {
+		slog.Debug("cache: skip full (not HEIC)", "path", srcPath)
 		return nil
 	}
+
+	slog.Debug("cache: generating full", "path", srcPath)
 
 	img, err := decodeImage(srcPath)
 	if err != nil {
