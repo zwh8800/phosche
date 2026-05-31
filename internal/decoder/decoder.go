@@ -2,10 +2,12 @@
 package decoder
 
 import (
+	"bytes"
 	"fmt"
 	"image"
 	"image/jpeg"
 	"image/png"
+	_ "image/gif"
 	"io"
 	"log/slog"
 	"os"
@@ -87,49 +89,57 @@ func decodeHEIC(r io.Reader) (image.Image, error) {
 	return img, nil
 }
 
-// extractEXIF 从 JPEG 文件中提取 EXIF 元数据：拍摄时间、相机型号、镜头型号、焦距、光圈、ISO、GPS 坐标。
+// extractEXIF 从照片文件中提取 EXIF 元数据：拍摄时间、相机型号、镜头型号、焦距、光圈、ISO、GPS 坐标。
+// 支持 JPEG 和 HEIC/HEIF 格式。JPEG 直接解析，HEIC 从 ISOBMFF 容器中提取 Exif box。
 // 如果所有字段均为空值（无有效 EXIF 数据），则返回 nil, nil。
 func extractEXIF(path string) (*types.EXIFInfo, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, fmt.Errorf("open file for EXIF: %w", err)
-	}
-	defer f.Close()
+	ext := strings.ToLower(filepath.Ext(path))
 
-	x, err := exif.Decode(f)
-	if err != nil {
-		return nil, fmt.Errorf("decode EXIF: %w", err)
+	var x *exif.Exif
+	var err error
+
+	if ext == ".heic" || ext == ".heif" {
+		x, err = extractExifFromHEIC(path)
+		if err != nil {
+			return nil, fmt.Errorf("decode HEIC EXIF: %w", err)
+		}
+	} else {
+		f, openErr := os.Open(path)
+		if openErr != nil {
+			return nil, fmt.Errorf("open file for EXIF: %w", openErr)
+		}
+		defer f.Close()
+
+		x, err = exif.Decode(f)
+		if err != nil {
+			return nil, fmt.Errorf("decode EXIF: %w", err)
+		}
 	}
 
 	info := &types.EXIFInfo{}
 
-	// 提取拍摄时间（DateTimeOriginal），格式化为 RFC3339
 	if dt, err := x.DateTime(); err == nil {
 		info.DateTimeOriginal = dt.Format(time.RFC3339)
 	}
 
-	// 提取相机型号（Make 标签的实际模型信息，而非制造商）
 	if tag, err := x.Get(exif.Model); err == nil {
 		if s, sErr := tag.StringVal(); sErr == nil {
 			info.CameraModel = strings.TrimSpace(s)
 		}
 	}
 
-	// 提取镜头型号（LensModel）
 	if tag, err := x.Get(exif.LensModel); err == nil {
 		if s, sErr := tag.StringVal(); sErr == nil {
 			info.LensModel = strings.TrimSpace(s)
 		}
 	}
 
-	// 提取焦距（FocalLength），以分数形式表示，转换为 "X.Xmm" 格式
 	if tag, err := x.Get(exif.FocalLength); err == nil {
 		if num, den, rErr := tag.Rat2(0); rErr == nil && den != 0 {
 			info.FocalLength = fmt.Sprintf("%.1fmm", float64(num)/float64(den))
 		}
 	}
 
-	// 提取光圈值（FNumber/F-Stop），转换为 "f/X.X" 格式
 	if tag, err := x.Get(exif.FNumber); err == nil {
 		if num, den, rErr := tag.Rat2(0); rErr == nil && den != 0 {
 			fVal := float64(num) / float64(den)
@@ -137,21 +147,18 @@ func extractEXIF(path string) (*types.EXIFInfo, error) {
 		}
 	}
 
-	// 提取快门速度（ExposureTime），转换为分数格式 "1/125s"
 	if tag, err := x.Get(exif.ExposureTime); err == nil {
 		if num, den, rErr := tag.Rat2(0); rErr == nil && den != 0 {
 			info.ShutterSpeed = fmt.Sprintf("%d/%ds", num, den)
 		}
 	}
 
-	// 提取 ISO 感光度（ISOSpeedRatings）
 	if tag, err := x.Get(exif.ISOSpeedRatings); err == nil {
 		if iso, iErr := tag.Int(0); iErr == nil {
 			info.ISO = iso
 		}
 	}
 
-	// 提取 GPS 坐标（纬度/经度），精确到 6 位小数
 	if lat, lon, err := x.LatLong(); err == nil {
 		info.GPSLat = roundGPS(lat)
 		info.GPSLon = roundGPS(lon)
@@ -175,4 +182,55 @@ func roundGPS(v float64) float64 {
 	s := strconv.FormatFloat(v, 'f', 6, 64)
 	result, _ := strconv.ParseFloat(s, 64)
 	return result
+}
+
+// extractExifFromHEIC 从 HEIC/HEIF 文件的 ISOBMFF 容器中提取 EXIF 数据。
+// ISOBMFF 盒子结构：4字节大小 + 4字节类型 + 内容。
+// EXIF 数据存储在类型为 "Exif" 的盒子中。
+func extractExifFromHEIC(path string) (*exif.Exif, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read file: %w", err)
+	}
+
+	exifBytes, err := findExifBox(data)
+	if err != nil {
+		return nil, fmt.Errorf("find exif box: %w", err)
+	}
+
+	x, err := exif.Decode(bytes.NewReader(exifBytes))
+	if err != nil {
+		return nil, fmt.Errorf("parse exif: %w", err)
+	}
+
+	return x, nil
+}
+
+func findExifBox(data []byte) ([]byte, error) {
+	i := 0
+	for i < len(data)-8 {
+		boxSize := int(data[i])<<24 | int(data[i+1])<<16 | int(data[i+2])<<8 | int(data[i+3])
+		boxType := string(data[i+4 : i+8])
+
+		if boxSize < 8 {
+			i += 8
+			continue
+		}
+
+		if boxType == "Exif" {
+			return data[i+8 : i+boxSize], nil
+		}
+
+		// 递归进入父盒子（如 moov, meta, iprp, ipco, ispe）
+		if boxType == "moov" || boxType == "meta" || boxType == "iprp" || boxType == "ipco" {
+			result, err := findExifBox(data[i+8 : i+boxSize])
+			if err == nil {
+				return result, nil
+			}
+		}
+
+		i += boxSize
+	}
+
+	return nil, fmt.Errorf("exif box not found")
 }
