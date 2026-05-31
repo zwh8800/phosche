@@ -135,6 +135,10 @@ type GeoInfo struct {
 	Province         string `json:"province,omitempty" es:"keyword"`
 	City             string `json:"city,omitempty" es:"keyword"`
 	District         string `json:"district,omitempty" es:"keyword"`
+	Township         string `json:"township,omitempty" es:"keyword"`
+	BusinessArea     string `json:"business_area,omitempty" es:"keyword"`
+	Street           string `json:"street,omitempty" es:"keyword"`
+	StreetNumber     string `json:"street_number,omitempty" es:"keyword"`
 	Address          string `json:"address,omitempty" es:"text"`
 	FormattedAddress string `json:"formatted_address,omitempty" es:"text"`
 }

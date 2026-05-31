@@ -63,6 +63,14 @@ func (g *Geocoder) ReverseGeocode(ctx context.Context, lat, lon float64) (*types
 				Province string `json:"province"`
 				City     any    `json:"city"`
 				District string `json:"district"`
+				Township string `json:"township"`
+				StreetNumber struct {
+					Street string      `json:"street"`
+					Number interface{} `json:"number"`
+				} `json:"streetNumber"`
+				BusinessAreas []struct {
+					Name string `json:"name"`
+				} `json:"businessAreas"`
 			} `json:"addressComponent"`
 		} `json:"regeocode"`
 	}
@@ -86,19 +94,36 @@ func (g *Geocoder) ReverseGeocode(ctx context.Context, lat, lon float64) (*types
 		"province", result.Regeocode.AddressComponent.Province,
 		"city", city,
 		"district", result.Regeocode.AddressComponent.District,
+		"township", result.Regeocode.AddressComponent.Township,
 	)
 
 	country := result.Regeocode.AddressComponent.Country
 	province := result.Regeocode.AddressComponent.Province
 	district := result.Regeocode.AddressComponent.District
+	township := result.Regeocode.AddressComponent.Township
 
-	address := country + province + city + district
+	street := result.Regeocode.AddressComponent.StreetNumber.Street
+	streetNumber := ""
+	if n, ok := result.Regeocode.AddressComponent.StreetNumber.Number.(string); ok {
+		streetNumber = n
+	}
+
+	businessArea := ""
+	if len(result.Regeocode.AddressComponent.BusinessAreas) > 0 {
+		businessArea = result.Regeocode.AddressComponent.BusinessAreas[0].Name
+	}
+
+	address := country + province + city + district + township + businessArea + street + streetNumber
 
 	return &types.GeoInfo{
 		Country:          country,
 		Province:         province,
 		City:             city,
 		District:         district,
+		Township:         township,
+		BusinessArea:     businessArea,
+		Street:           street,
+		StreetNumber:     streetNumber,
 		Address:          address,
 		FormattedAddress: result.Regeocode.FormattedAddress,
 	}, nil
