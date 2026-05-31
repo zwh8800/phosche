@@ -17,6 +17,7 @@ import (
 
 	"github.com/dsoprea/go-exif/v3"
 	exifcommon "github.com/dsoprea/go-exif/v3/common"
+	heicexif "github.com/dsoprea/go-heic-exif-extractor/v2"
 	jpegstructure "github.com/dsoprea/go-jpeg-image-structure"
 	pngstructure "github.com/dsoprea/go-png-image-structure"
 	"github.com/gen2brain/heic"
@@ -109,7 +110,7 @@ func extractEXIF(path string) (info *types.EXIFInfo, err error) {
 }
 
 // extractRawExif 从照片文件中提取原始 EXIF 字节。
-// JPEG/PNG 使用 dsoprea 格式专用库精确解析，WebP/HEIC 使用暴力搜索。
+// JPEG/PNG/HEIC 使用 dsoprea 格式专用库精确解析，WebP 使用暴力搜索。
 func extractRawExif(path string) ([]byte, error) {
 	ext := strings.ToLower(filepath.Ext(path))
 
@@ -118,23 +119,27 @@ func extractRawExif(path string) ([]byte, error) {
 		return extractRawExifFromJPEG(path)
 	case ".png":
 		return extractRawExifFromPNG(path)
+	case ".heic", ".heif":
+		return extractRawExifFromHEIC(path)
 	default:
-		// WebP/HEIC: go-webp-image-structure 无公开 API，go-heic-exif-extractor 需要 CGO
 		return exif.SearchFileAndExtractExif(path)
 	}
 }
 
 // extractRawExifFromJPEG 使用 go-jpeg-image-structure 解析 JPEG APP1 segment 中的 EXIF。
+// 解析失败时回退到暴力搜索。
 func extractRawExifFromJPEG(path string) ([]byte, error) {
 	jpegmp := jpegstructure.NewJpegMediaParser()
 	sl, err := jpegmp.ParseFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("parse jpeg: %w", err)
+		slog.Debug("decoder: jpeg parser failed, falling back to brute-force", "path", path, "error", err)
+		return exif.SearchFileAndExtractExif(path)
 	}
 
 	_, rawExif, err := sl.Exif()
 	if err != nil {
-		return nil, fmt.Errorf("extract exif from jpeg: %w", err)
+		slog.Debug("decoder: jpeg exif extraction failed, falling back to brute-force", "path", path, "error", err)
+		return exif.SearchFileAndExtractExif(path)
 	}
 	if len(rawExif) == 0 {
 		return nil, exif.ErrNoExif
@@ -143,21 +148,52 @@ func extractRawExifFromJPEG(path string) ([]byte, error) {
 }
 
 // extractRawExifFromPNG 使用 go-png-image-structure 解析 PNG iTXt chunk 中的 EXIF。
+// 解析失败时回退到暴力搜索。
 func extractRawExifFromPNG(path string) ([]byte, error) {
 	pngmp := pngstructure.NewPngMediaParser()
 	ec, err := pngmp.ParseFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("parse png: %w", err)
+		slog.Debug("decoder: png parser failed, falling back to brute-force", "path", path, "error", err)
+		return exif.SearchFileAndExtractExif(path)
 	}
 
 	cs, ok := ec.(*pngstructure.ChunkSlice)
 	if !ok {
-		return nil, fmt.Errorf("unexpected png type: %T", ec)
+		slog.Debug("decoder: unexpected png type, falling back to brute-force", "path", path, "type", fmt.Sprintf("%T", ec))
+		return exif.SearchFileAndExtractExif(path)
 	}
 
 	_, rawExif, err := cs.Exif()
 	if err != nil {
-		return nil, fmt.Errorf("extract exif from png: %w", err)
+		slog.Debug("decoder: png exif extraction failed, falling back to brute-force", "path", path, "error", err)
+		return exif.SearchFileAndExtractExif(path)
+	}
+	if len(rawExif) == 0 {
+		return nil, exif.ErrNoExif
+	}
+	return rawExif, nil
+}
+
+// extractRawExifFromHEIC 使用 go-heic-exif-extractor 解析 HEIC BMFF 容器中的 EXIF。
+// 解析失败时回退到暴力搜索（兼容损坏或非标准 HEIC 文件）。
+func extractRawExifFromHEIC(path string) ([]byte, error) {
+	hemp := heicexif.NewHeicExifMediaParser()
+	mc, err := hemp.ParseFile(path)
+	if err != nil {
+		slog.Debug("decoder: heic parser failed, falling back to brute-force", "path", path, "error", err)
+		return exif.SearchFileAndExtractExif(path)
+	}
+
+	hec, ok := mc.(heicexif.HeicExifContext)
+	if !ok {
+		slog.Debug("decoder: unexpected heic type, falling back to brute-force", "path", path, "type", fmt.Sprintf("%T", mc))
+		return exif.SearchFileAndExtractExif(path)
+	}
+
+	_, rawExif, err := hec.Exif()
+	if err != nil {
+		slog.Debug("decoder: heic exif extraction failed, falling back to brute-force", "path", path, "error", err)
+		return exif.SearchFileAndExtractExif(path)
 	}
 	if len(rawExif) == 0 {
 		return nil, exif.ErrNoExif
