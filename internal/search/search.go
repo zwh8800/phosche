@@ -852,6 +852,13 @@ func (s *SearchService) buildBM25SubQuery(req *types.SearchRequest, userEmail st
 // buildKNNSubQuery 构建基于 script_score 余弦相似度的 kNN 子查询。
 func (s *SearchService) buildKNNSubQuery(queryVector []float32, userEmail string, req *types.SearchRequest, rankWindowSize int) map[string]any {
 	filters := s.buildFilters(req, userEmail)
+	// Exclude docs without an embedding vector — cosineSimilarity throws
+	// "Dense vector value missing" on them, causing the entire shard to fail.
+	filters = append(filters, map[string]any{
+		"exists": map[string]any{
+			"field": "embedding",
+		},
+	})
 
 	return map[string]any{
 		"size": rankWindowSize,
