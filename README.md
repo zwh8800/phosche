@@ -35,8 +35,6 @@
 - **路径遍历防护** — 静态文件服务严格校验请求路径，防止目录穿越攻击
 - **PWA 支持** — 前端支持渐进式 Web 应用，可安装到桌面，自动检测更新并提示刷新
 - **Docker Compose 一键部署** — 内置编排文件，可一键启动 ES + phosche + 可选 Ollama
-- **向量嵌入与混合检索** — 支持 Ollama/OpenAI 嵌入模型，将照片描述向量化存储到 ES dense_vector 字段，搜索时通过应用层 RRF（Reciprocal Rank Fusion）融合 BM25 全文检索与 KNN 向量检索结果，提升语义搜索精度
-- **向量嵌入与混合检索** — 支持 Ollama/OpenAI 嵌入模型，将照片描述向量化存储到 ES，通过应用层 RRF（Reciprocal Rank Fusion）融合 BM25 全文检索与 KNN 向量检索，提升语义搜索精度
 
 ---
 
@@ -49,7 +47,6 @@
 | 结构化日志 | log/slog |
 | 搜索引擎 | Elasticsearch 8.x（官方 go-elasticsearch 客户端 + IK 中文分词） |
 | AI 分析 | Ollama（本地）/ OpenAI（云端），双协议统一接口 |
-| 向量嵌入 | Ollama/OpenAI 嵌入模型，支持 dense_vector 存储与 KNN 检索 |
 | 向量嵌入 | Ollama / OpenAI 嵌入模型，应用层 RRF 混合检索 |
 | 逆地理编码 | 高德地图 REST API（GPS 坐标 → 可读地址） |
 | 图片解码 | 标准库 + golang.org/x/image/webp + gen2brain/heic |
@@ -358,27 +355,6 @@ docker rm phosche
 | `query_cache.ttl_minutes` | `int` | `60` | 缓存过期时间（分钟） |
 | `max_retries` | `int` | `3` | 嵌入请求最大重试次数 |
 | `timeout_seconds` | `int` | `30` | 单次嵌入请求超时时间（秒） |
-| `hybrid.rrf_rank_constant` | `int` | `60` | RRF 排名衰减系数 |
-
-### `embedding` — 向量嵌入（可选）
-
-| 配置项 | 类型 | 默认值 | 说明 |
-|--------|------|--------|------|
-| `enabled` | `bool` | `false` | 是否启用向量嵌入 |
-| `provider` | `string` | `""` | 嵌入提供商，可选 `"ollama"` 或 `"openai"` |
-| `ollama.base_url` | `string` | `""` | Ollama 服务地址 |
-| `ollama.model` | `string` | `""` | 嵌入模型名称 |
-| `ollama.dimensions` | `int` | `0` | 向量维度 |
-| `openai.api_key` | `string` | `""` | OpenAI API 密钥 |
-| `openai.base_url` | `string` | `""` | OpenAI API 地址 |
-| `openai.model` | `string` | `""` | 嵌入模型名称 |
-| `openai.dimensions` | `int` | `0` | 向量维度（支持 Matryoshka 截断） |
-| `source_template` | `string` | `""` | 嵌入输入文本模板 |
-| `query_cache.size` | `int` | `0` | 查询嵌入 LRU 缓存大小 |
-| `query_cache.ttl_minutes` | `int` | `0` | 缓存过期时间（分钟） |
-| `required` | `bool` | `false` | 嵌入失败是否阻塞文档落库 |
-| `max_retries` | `int` | `3` | 最大重试次数 |
-| `timeout_seconds` | `int` | `60` | 单次请求超时时间（秒） |
 | `hybrid.rrf_rank_constant` | `int` | `60` | RRF 排名衰减系数 |
 
 ---
