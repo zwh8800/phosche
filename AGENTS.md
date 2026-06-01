@@ -108,9 +108,47 @@ unanalyzed → analyzing → failed（不可恢复错误）
 
 - Go 标准格式化（`go fmt`）— 无自定义 linter 配置
 - 所有 API 端点以 `/api/` 为前缀，`/health` 和 `/photos/*` 除外
-- 照片 ID 是文件路径的 SHA-256 哈希
-- 结构化日志：`log/slog`（JSON 格式）
+- 照片 ID 是文件路径的 SHA-256 哈希（`sha256hex` 函数在 indexer、pipeline、cache 三处重复实现）
+- 结构化日志：`log/slog`（JSON 格式），key-value pairs 风格
 - EXIF 提取：dsoprea/go-exif/v3（JPEG/PNG），go-heic-exif-extractor（HEIC 兜底）
 - 逆地理编码：高德 API，格式化地址存入 ES
 - 缓存命名：`{photoID}_thumb.jpg` / `{photoID}_full.jpg`
 - `cache/` 目录已 gitignore（`internal/cache/` 生成的缩略图）
+
+## 构建与 CI
+
+```bash
+# 本地构建（开发模式，不嵌入前端）
+make build               # go build -o phosche ./cmd/phosche/
+make build-frontend      # cd web && npm ci && npm run build
+
+# 生产构建（嵌入前端 SPA）
+go build .               # 使用根 main.go + embed.go，产出单二进制
+
+# Docker
+make docker-build        # 多阶段构建：node→go→alpine
+docker compose up -d     # ES + phosche
+```
+
+CI：推送 `v*` tag 触发 GitHub Actions → Docker Hub（`zwh8800/phosche`）。
+Tag 策略：`latest`（稳定）、`{major}`、`{major}.{minor}`、`{version}`。
+
+## 反模式（本项目禁止）
+
+- 不要使用 `as any` / `@ts-ignore`（前端）— 无类型抑制
+- 不要手动管理前端缓存 — React Query 通过 `queryKey` 自动处理
+- 不要硬编码照片 URL — 用 `path.replace(/^\/+/, '')` 去前导斜杠
+- 不要遗漏 `?thumb=1` — 列表页必须用缩略图
+- 不要修改 `api/client.ts` 的 10s 超时 — 这是调优值
+- 不要在 Go 源码中添加 `TODO`/`FIXME` — 当前代码库零 TODO
+- 不要添加 `nolint` 指令 — 当前代码库零 nolint
+
+## 注意事项
+
+- **双入口**：根 `main.go`（生产，嵌入 SPA）和 `cmd/phosche/main.go`（开发，`nil` distFS）都调用 `app.Run()`。`make run` 使用开发入口。
+- **日志重复初始化**：`cmd/phosche/main.go` 设置 `slog.SetDefault`，但 `app.Run()` 会覆盖它。
+- **`embedder/` vs `embedding/`**：两个功能重叠的包。`embedder/`（v1）被实际使用，`embedding/`（v2）设计更好但未被引用。可能是未完成的迁移。
+- **JWT 不验证签名**：`internal/api/jwt.go` 仅解码 payload 提取 email，依赖上游网关验证。
+- **`config.prd.yaml`**：存在于根目录但未在文档中记录，用途不明确。
+- **ES 集成测试需要 Docker**：`internal/integration/`、`internal/indexer/`、`internal/search/` 的部分测试使用 testcontainers-go。
+- **`InsecureSkipVerify`**：可配置跳过 TLS 验证，仅用于自签名证书场景。

@@ -46,6 +46,12 @@ cd web && npx playwright test  # E2E（需后端运行）
 - **图片加载失败：** `onError` 隐藏 `<img>`，显示 "无法加载图片" 占位文字。
 - **搜索 URL：** 用 `useSearchParams` 同步筛选条件到 URL，筛选变化 300ms 防抖。
 
+## 测试
+
+- 单元测试：vitest + msw（Mock Service Worker）模拟 HTTP 响应
+- E2E 测试：Playwright（`web/e2e/app.spec.ts`），需后端运行
+- msw 模式：`setupServer(http.get(...), http.post(...))` + `beforeAll/afterEach/afterAll`
+
 ## 反模式
 
 - 不要手动管理缓存。React Query 通过 `queryKey` 自动处理。
