@@ -16,16 +16,23 @@
 - **自动文件监控** — 使用 fsnotify 递归监控指定目录，新照片出现后自动触发处理流水线
 - **多模态 AI 分析** — 支持 Ollama 本地模型（llama3.2-vision）和 OpenAI API（GPT-4o），分析照片内容并提取描述、标签、场景类型、颜色、人数、文本等信息
 - **结构化响应** — LLM 返回 JSON 格式的结构化分析结果，包含 description、tags、objects、scene_type、colors、people_count、has_text、confidence 等字段
-- **Elasticsearch 全文搜索** — 基于 ES 8.x 构建索引，支持关键词搜索、日期范围过滤、标签/对象/场景类型/相机型号筛选
+- **逆地理编码** — 自动提取照片 EXIF 中的 GPS 坐标，通过高德地图 API 获取可读地址（省/市/区/街道），存入 ES 支持地点搜索
+- **Elasticsearch 全文搜索** — 基于 ES 8.x 构建索引，支持中文 IK 分词，可按关键词、日期范围、标签、对象、场景类型、相机型号、拍摄地点等多维筛选
 - **时间线浏览** — Web 界面按日期分组展示照片，支持无限滚动加载
-- **照片详情页** — 查看单张照片的 EXIF 元数据（相机型号、镜头、光圈、ISO、GPS 等）和 AI 分析结果
+- **照片详情页** — 查看单张照片的 EXIF 元数据（相机型号、镜头、光圈、ISO、GPS、拍摄地址等）和 AI 分析结果
 - **数据统计** — 实时统计照片总数及各处理状态的数量分布
+- **缩略图与缓存** — 自动生成 400px 缩略图和 HEIC→JPEG 全尺寸缓存，加速页面加载；支持 `?thumb=1`（缩略图）和 `?convert=1`（HEIC 转 JPEG）查询参数
+- **私有目录访问控制** — 可配置私有照片目录，仅授权用户（通过 JWT Cookie 中的 email）可查看，未授权请求返回 403
+- **目录排除** — 支持排除指定目录（如回收站、临时目录），避免扫描无关文件
+- **跳过初始扫描** — 可选跳过启动时的全量目录扫描，仅监控新增文件
+- **JWT 认证** — 从 `access_token` cookie 提取用户邮箱，用于私有目录访问控制
 - **断路器保护** — ES 不可用时自动打开断路器，内存有界队列缓冲写入请求，恢复后自动排水
 - **LLM 降级与重试** — LLM 不可用时将照片标记为 pending_analysis，每隔 5 分钟自动重试，最多重试 10 次
 - **错误隔离** — 损坏图片优雅跳过（仅记录日志），不导致服务崩溃
 - **优雅关闭** — SIGINT/SIGTERM 触发优雅关闭：停止接收新任务，等待当前处理完成，释放所有资源
 - **多格式图片解码** — 支持 JPEG、PNG、WebP、HEIC/HEIF 格式，自动提取 EXIF 元数据
 - **路径遍历防护** — 静态文件服务严格校验请求路径，防止目录穿越攻击
+- **PWA 支持** — 前端支持渐进式 Web 应用，可安装到桌面，自动检测更新并提示刷新
 - **Docker Compose 一键部署** — 内置编排文件，可一键启动 ES + phosche + 可选 Ollama
 
 ---
@@ -37,10 +44,12 @@
 | 后端语言 | Go 1.26 |
 | HTTP 路由 | chi/v5 |
 | 结构化日志 | log/slog |
-| 搜索引擎 | Elasticsearch 8.x（官方 go-elasticsearch 客户端） |
+| 搜索引擎 | Elasticsearch 8.x（官方 go-elasticsearch 客户端 + IK 中文分词） |
 | AI 分析 | Ollama（本地）/ OpenAI（云端），双协议统一接口 |
+| 逆地理编码 | 高德地图 REST API（GPS 坐标 → 可读地址） |
 | 图片解码 | 标准库 + golang.org/x/image/webp + gen2brain/heic |
 | EXIF 提取 | dsoprea/go-exif/v3 |
+| 图片缓存 | 自动缩略图生成 + HEIC→JPEG 转换缓存 |
 | 文件监控 | fsnotify |
 | 前端框架 | React 19 + TypeScript 6 |
 | 构建工具 | Vite 8 |
@@ -48,6 +57,7 @@
 | 状态管理 | TanStack React Query 5 |
 | HTTP 客户端 | axios |
 | 路由 | react-router-dom 7 |
+| PWA | vite-plugin-pwa |
 | 容器化 | Docker（多阶段构建）+ Docker Compose |
 | 测试 | Go 测试框架 + testcontainers-go + Playwright |
 
@@ -77,7 +87,7 @@ cp config.example.yaml config.yaml
 # 根据你的环境编辑 config.yaml
 ```
 
-最低配置需要修改 `watch.directories`（照片目录路径）、`server.photo_base_path`（图片文件根目录）和 `elasticsearch.addresses`。
+最低配置需要修改 `watch.directories`（照片目录路径，同时作为照片文件根目录）和 `elasticsearch.addresses`。
 
 ### 启动方式
 
@@ -107,7 +117,7 @@ Docker Compose 会依次启动 Elasticsearch（等待健康检查通过）和 ph
 make build-frontend
 
 # 启动服务
-go run ./cmd/phosche/ -config config.yaml
+go run . -config config.yaml
 ```
 
 服务默认监听 `0.0.0.0:8080`。开发模式下（`dev_mode: true`），前端由 Vite 独立运行，后端不提供 SPA 静态文件。
@@ -187,9 +197,13 @@ elasticsearch:
 
 server:
   dev_mode: false    # 关闭开发模式，使用内嵌前端
+  log_level: info    # 日志级别：debug/info/warn/error
 
 llm:
   provider: openai   # 或 ollama（见下方网络说明）
+
+env:
+  amap_key: ""       # 高德地图 API Key（用于逆地理编码，可选）
 ```
 
 **4. 启动容器：**
@@ -212,7 +226,7 @@ docker run -d \
 | `--name phosche` | 容器名称 |
 | `-p 8080:8080` | 端口映射（主机:容器） |
 | `-v ./config.yaml:/app/config.yaml:ro` | 挂载配置文件（只读） |
-| `-v /path/to/photos:/photos:ro` | 挂载照片目录（只读），路径需与 `server.photo_base_path` 和 `watch.directories` 配置一致 |
+| `-v /path/to/photos:/photos:ro` | 挂载照片目录（只读），路径需与 `watch.directories` 配置一致 |
 | `-e CONFIG_PATH=/app/config.yaml` | 指定配置文件路径 |
 | `phosche` | 镜像名称 |
 
@@ -271,10 +285,13 @@ docker rm phosche
 
 | 配置项 | 类型 | 默认值 | 说明 |
 |--------|------|--------|------|
-| `directories` | `[]string` | 必填 | 监控的照片目录路径列表 |
+| `directories` | `[]string` | 必填 | 监控的照片目录路径列表，同时用于文件监控和照片文件服务 |
 | `recursive` | `bool` | `true` | 是否递归监控子目录 |
 | `debounce_ms` | `int` | `500` | 文件事件的去抖间隔（毫秒），同一文件在间隔内的多次修改会被合并 |
 | `min_dir_depth` | `int` | `1` | 最小监控目录深度 |
+| `exclude_dirs` | `[]string` | `[]` | 排除的目录名列表，支持前缀匹配和目录名匹配（如 `"#recycle"` 匹配任意路径中的该目录） |
+| `private_dirs` | `map[string][]string` | `{}` | 私有目录配置，key 为目录前缀路径，value 为授权用户邮箱列表 |
+| `skip_initial_scan` | `bool` | `false` | 跳过启动时的全量目录扫描，仅监控新增文件 |
 
 ### `llm` — AI 分析
 
@@ -308,14 +325,29 @@ docker rm phosche
 |--------|------|--------|------|
 | `host` | `string` | `"0.0.0.0"` | 监听地址 |
 | `port` | `int` | `8080` | 监听端口 |
-| `photo_base_path` | `string` | 必填 | 照片文件在文件系统中的根目录，用于静态文件服务 |
 | `dev_mode` | `bool` | `true` | 开发模式开关，开启时不提供 SPA 静态文件 |
+| `log_level` | `string` | `"info"` | 日志级别，可选 `debug`、`info`、`warn`、`error` |
+| `cache_dir` | `string` | `""` | 照片缓存目录（缩略图 + HEIC 转 JPEG），空表示不缓存（实时生成） |
+
+### `env` — 外部服务
+
+| 配置项 | 类型 | 默认值 | 说明 |
+|--------|------|--------|------|
+| `amap_key` | `string` | `""` | 高德地图 API Key，用于逆地理编码（GPS 坐标转地址）。为空时禁用逆地理编码 |
 
 ---
 
 ## API 文档
 
 所有 API 端点以 `/api/` 为前缀（健康检查除外），返回 JSON 格式响应。
+
+### 认证
+
+API 使用基于 Cookie 的 JWT 认证。中间件从 `access_token` cookie 中解析 JWT payload 提取 `email` 字段，用于私有目录的访问控制。
+
+- 认证是可选的，未认证时 email 为空字符串，只能查看公开照片
+- 私有目录中的照片仅授权用户（配置在 `watch.private_dirs` 中的邮箱列表）可查看
+- JWT 仅提取 email，不验证签名（适合前置网关已验证的场景）
 
 ### 健康检查
 
@@ -392,15 +424,27 @@ GET /api/photos/{id}
     "gps_lat": 39.9042,
     "gps_lon": 116.4074
   },
+  "geo": {
+    "country": "中国",
+    "province": "北京市",
+    "city": "北京市",
+    "district": "东城区",
+    "township": "东华门街道",
+    "formatted_address": "北京市东城区东华门街道天安门广场"
+  },
   "description": "一张在公园里拍摄的照片，阳光明媚，草地上有几个人在野餐",
   "tags": ["公园", "野餐", "阳光", "草地"],
   "objects": ["人", "草地", "树木"],
   "scene_type": "outdoor",
-  "colors": ["绿色", "蓝色", "白色"],
+  "colors": [
+    {"name": "绿色", "hex": "#22C55E"},
+    {"name": "蓝色", "hex": "#3B82F6"},
+    {"name": "白色", "hex": "#F8FAFC"}
+  ],
   "people_count": 3,
   "has_text": false,
   "confidence": 0.95,
-  "photo_url": "/photos//photos/2024/01/IMG_0001.jpg"
+  "photo_url": "/photos/photos/2024/01/IMG_0001.jpg"
 }
 ```
 
@@ -456,11 +500,20 @@ POST /api/search
       "analyzed_at": 1704153600,
       "created_at": 1704067200,
       "exif": { ... },
+      "geo": {
+        "country": "中国",
+        "province": "海南省",
+        "city": "三亚市",
+        "formatted_address": "海南省三亚市亚龙湾"
+      },
       "description": "海滩日落景色，天空呈现橙色和紫色",
       "tags": ["海滩", "日落", "天空"],
       "objects": ["大海", "天空", "云"],
       "scene_type": "outdoor",
-      "colors": ["橙色", "紫色", "蓝色"],
+      "colors": [
+        {"name": "橙色", "hex": "#F97316"},
+        {"name": "紫色", "hex": "#A855F7"}
+      ],
       "people_count": 0,
       "has_text": false
     }
@@ -514,13 +567,24 @@ GET /api/filters
 
 ```
 GET /photos/{path}
+GET /photos/{path}?thumb=1
+GET /photos/{path}?convert=1
 ```
 
-提供照片文件的静态访问服务。`{path}` 是相对于 `server.photo_base_path` 的文件路径。
+提供照片文件的静态访问服务。`{path}` 是相对于 `watch.directories` 的文件路径。
 
 - 仅允许图片扩展名：`.jpg`、`.jpeg`、`.png`、`.webp`、`.heic`、`.heif`
 - 严格防止路径遍历攻击
 - 响应头包含 `Cache-Control: public, max-age=86400`
+
+**查询参数：**
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `thumb` | `string` | 设为 `1` 时返回 400px 宽的 JPEG 缩略图。优先从缓存读取，缓存缺失时实时生成 |
+| `convert` | `string` | 设为 `1` 时，HEIC/HEIF 格式转为 JPEG 返回（优先缓存），非 HEIC 格式直接返回原始文件 |
+
+> 缩略图和 HEIC 转换结果会写入 `server.cache_dir` 目录缓存，后续请求直接读取缓存文件。
 
 ---
 
@@ -545,10 +609,14 @@ phosche/
 │   │   ├── photo_detail.go    # 单张照片详情
 │   │   ├── search.go          # 全文搜索端点
 │   │   ├── filters.go         # 筛选选项端点
-│   │   └── stats.go           # 统计信息端点
+│   │   ├── stats.go           # 统计信息端点
+│   │   └── jwt.go             # JWT 认证中间件（从 cookie 提取 email）
 │   │
 │   ├── app/                   # 应用装配与生命周期
 │   │   └── run.go             # 依赖注入、组件启动、优雅关闭
+│   │
+│   ├── cache/                 # 照片缓存
+│   │   └── cache.go           # 缩略图 + HEIC 转 JPEG 缓存生成
 │   │
 │   ├── config/                # 配置管理
 │   │   ├── config.go          # YAML 加载、默认值、校验
@@ -560,6 +628,9 @@ phosche/
 │   │
 │   ├── errors/                # 统一错误类型
 │   │   └── errors.go          # AppError（NOT_FOUND、VALIDATION_ERROR 等）
+│   │
+│   ├── geocoder/              # 逆地理编码
+│   │   └── geocoder.go        # 高德地图 API 客户端（GPS → 地址）
 │   │
 │   ├── indexer/               # ES 索引服务
 │   │   ├── client.go          # ES 客户端封装（连接、TLS、健康检查）
@@ -597,10 +668,12 @@ phosche/
 │   │   ├── api/               # API 客户端（axios 封装）
 │   │   │   ├── client.ts      # 通用 HTTP 客户端
 │   │   │   └── photos.ts      # 照片相关 API 调用
+│   │   ├── __tests__/           # 前端单元测试（vitest + msw）
 │   │   ├── components/        # 全局组件
 │   │   │   ├── Layout.tsx     # 页面布局（导航栏）
 │   │   │   ├── ErrorBoundary.tsx  # 错误边界
-│   │   │   └── PhotoDetail.tsx    # 照片详情组件
+│   │   │   ├── PhotoDetail.tsx    # 照片详情组件
+│   │   │   └── ReloadPrompt.tsx     # PWA 更新提示
 │   │   ├── pages/             # 路由页面
 │   │   │   ├── Timeline.tsx   # 时间线浏览（无限滚动）
 │   │   │   ├── Search.tsx     # 多条件搜索页
@@ -634,6 +707,9 @@ phosche/
 # 启动 Elasticsearch（使用 Docker）
 docker run -d -p 9200:9200 -e "discovery.type=single-node" -e "xpack.security.enabled=false" docker.elastic.co/elasticsearch/elasticsearch:8.17.0
 
+# 构建前端
+make build-frontend
+
 # 启动服务（开发模式，需要 Vite 前端独立运行）
 make run
 
@@ -642,6 +718,11 @@ cd web && npm run dev
 ```
 
 开发模式下，前端的 Vite 开发服务器会代理 API 请求到后端。后端 `dev_mode: true` 时不提供 SPA 静态文件。
+
+```bash
+# 仅启动后端（不构建前端）
+go run ./cmd/phosche/ -config config.yaml
+```
 
 ### 构建
 
@@ -654,6 +735,9 @@ make build-frontend
 
 # 构建 Docker 镜像
 make docker-build
+
+# 清理构建产物
+make clean
 ```
 
 ### 测试
@@ -690,7 +774,7 @@ cd web && npx playwright test
 1. Checkout 代码
 2. 设置 QEMU + Buildx（多架构支持）
 3. 登录 Docker Hub
-4. 构建 `linux/amd64` 和 `linux/arm64` 多架构镜像
+4. 构建 `linux/amd64` 架构镜像
 5. 推送到 Docker Hub
 
 **Docker 镜像：** [`zwh8800/phosche`](https://hub.docker.com/r/zwh8800/phosche)
@@ -734,11 +818,11 @@ git push origin v1.0.0
 ### 数据处理流水线
 
 ```
-  ┌─────────────┐    ┌──────────┐    ┌──────────┐    ┌────────┐    ┌──────────────┐
-  │ 目录扫描 /   │    │          │    │          │    │        │    │              │
-  │ 文件监控     │───▶│ 图片解码 │───▶│ AI 分析  │───▶│ES 索引 │───▶│ Web 展示/搜索│
-  │ (fsnotify)  │    │          │    │ (LLM)    │    │        │    │              │
-  └─────────────┘    └──────────┘    └──────────┘    └────────┘    └──────────────┘
+  ┌─────────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌────────┐    ┌──────────────┐
+  │ 目录扫描 /   │    │          │    │          │    │ 逆地理    │    │        │    │              │
+  │ 文件监控     │───▶│ 图片解码 │───▶│ AI 分析  │───▶│ 编码     │───▶│ES 索引 │───▶│ Web 展示/搜索│
+  │ (fsnotify)  │    │          │    │ (LLM)    │    │(高德API) │    │        │    │              │
+  └─────────────┘    └──────────┘    └──────────┘    └──────────┘    └────────┘    └──────────────┘
 ```
 
 详细的处理流程：
@@ -746,9 +830,10 @@ git push origin v1.0.0
 1. **文件发现** — 启动时执行全量目录扫描，发现已有照片；之后通过 fsnotify 实时监听文件系统的 Create/Write 事件
 2. **去重与去抖** — DedupFilter 基于 `path + mtime + size` 三重校验去重；Debounce 机制合并短时间内的多次文件写入事件
 3. **图片解码** — 根据文件扩展名选择对应的解码器（JPEG/PNG/WebP/HEIC），同时提取 EXIF 元数据（拍摄时间、相机型号、光圈、ISO、GPS 等）
-4. **AI 分析** — 图片缩放到最大 2048 像素（保持宽高比），编码为 JPEG 后发送给 LLM。支持 Ollama（base64 图片）和 OpenAI（data URL）两种协议。LLM 返回 JSON 格式的结构化分析结果
-5. **ES 索引** — 将照片元数据、EXIF 信息和 AI 分析结果合并为 PhotoDocument，索引到 Elasticsearch。使用路径的 SHA-256 哈希作为文档 ID
-6. **Web 展示** — React SPA 提供时间线浏览和全文搜索界面，通过 REST API 与后端交互
+4. **AI 分析** — 图片缩放到最大 2048 像素（保持宽高比），编码为 JPEG 后发送给 LLM。支持 Ollama（base64 图片）和 OpenAI（data URL）两种协议。LLM 返回 JSON 格式的结构化分析结果。EXIF 和逆地理编码信息会附加到 LLM 提示词中作为上下文
+5. **ES 索引** — 将照片元数据、EXIF 信息、AI 分析结果和逆地理编码信息合并为 PhotoDocument，索引到 Elasticsearch。使用路径的 SHA-256 哈希作为文档 ID
+6. **缓存生成** — 分析完成后自动生成 400px 缩略图和 HEIC→JPEG 全尺寸缓存，存储到 `server.cache_dir` 目录
+7. **Web 展示** — React SPA 提供时间线浏览和全文搜索界面，通过 REST API 与后端交互
 
 ### 照片状态机
 
@@ -789,6 +874,8 @@ git push origin v1.0.0
 
 - **断路器模式** — IndexerService 监控 ES 写入失败次数（阈值 3 次），失败达到阈值时打开断路器，后续写入进入内存队列（容量 100），不再阻塞处理流水线。断路器每 5 秒检查 ES 健康状态，恢复后自动排水队列
 - **LLM 降级** — 检测到 LLM 连接错误时，照片进入 pending_analysis 队列，不阻塞流水线，后台定时重试
+- **缓存加速** — 照片分析完成后自动生成缩略图和 HEIC→JPEG 缓存文件，Web 请求时优先读取缓存，避免重复解码和转换
+- **逆地理编码降级** — 高德 API 不可用时仅记录警告日志，照片仍正常处理，GeoInfo 字段留空
 - **优雅关闭** — 收到 SIGINT/SIGTERM 后，停止接收新的文件事件，等待所有进行中的分析和索引任务完成（最多 5 分钟），最后关闭 HTTP 服务器
 
 ---
