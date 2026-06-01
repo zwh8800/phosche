@@ -19,7 +19,7 @@ func setupIndexerTest(t *testing.T) (*IndexerService, string, func()) {
 	ctx := context.Background()
 	indexName := fmt.Sprintf("test_indexer_%d", time.Now().UnixNano())
 
-	err := esClient.EnsureIndex(ctx, indexName)
+	err := esClient.EnsureIndex(ctx, indexName, 0)
 	require.NoError(t, err, "EnsureIndex should succeed")
 
 	svc := NewIndexerService(esClient, 100)
@@ -182,7 +182,7 @@ func TestIndexer_QueueOnFailure(t *testing.T) {
 	ctx := context.Background()
 	indexName := fmt.Sprintf("test_queue_%d", time.Now().UnixNano())
 
-	err := esClient.EnsureIndex(ctx, indexName)
+	err := esClient.EnsureIndex(ctx, indexName, 0)
 	require.NoError(t, err, "EnsureIndex should succeed")
 
 	svc := NewIndexerService(esClient, 100)
@@ -250,7 +250,7 @@ func TestIndexer_StopDrainsQueue(t *testing.T) {
 	ctx := context.Background()
 	indexName := fmt.Sprintf("test_stop_%d", time.Now().UnixNano())
 
-	err := esClient.EnsureIndex(ctx, indexName)
+	err := esClient.EnsureIndex(ctx, indexName, 0)
 	require.NoError(t, err)
 
 	svc := NewIndexerService(esClient, 10)
@@ -273,7 +273,7 @@ func TestIndexer_MultipleIndices(t *testing.T) {
 	idxA := indexName + "_a"
 	idxB := indexName + "_b"
 
-	err := svc.client.EnsureIndex(ctx, idxB)
+	err := svc.client.EnsureIndex(ctx, idxB, 0)
 	require.NoError(t, err)
 
 	docA := newTestDoc("/photos/a.jpg")

@@ -100,7 +100,7 @@ func TestEnsureIndex_Create(t *testing.T) {
 	ctx := context.Background()
 	indexName := "test_photos_create"
 
-	err := client.EnsureIndex(ctx, indexName)
+	err := client.EnsureIndex(ctx, indexName, 0)
 	require.NoError(t, err, "EnsureIndex should create the index")
 
 	exists, err := client.indexExists(ctx, indexName)
@@ -134,10 +134,10 @@ func TestEnsureIndex_Idempotent(t *testing.T) {
 	ctx := context.Background()
 	indexName := "test_photos_idempotent"
 
-	err := client.EnsureIndex(ctx, indexName)
+	err := client.EnsureIndex(ctx, indexName, 0)
 	require.NoError(t, err)
 
-	err = client.EnsureIndex(ctx, indexName)
+	err = client.EnsureIndex(ctx, indexName, 0)
 	require.NoError(t, err)
 
 	delReq := esapi.IndicesDeleteRequest{Index: []string{indexName}}
@@ -223,7 +223,7 @@ func TestEnsureIndex_VersionMismatch(t *testing.T) {
 	testClient, err := NewESClientWithLogger(esCfg, logger)
 	require.NoError(t, err)
 
-	err = testClient.EnsureIndex(ctx, indexName)
+	err = testClient.EnsureIndex(ctx, indexName, 0)
 	require.NoError(t, err, "EnsureIndex should succeed (warning only)")
 
 	logOutput := buf.String()
