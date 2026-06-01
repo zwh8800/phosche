@@ -17,6 +17,7 @@ import (
 	"github.com/zwh8800/phosche/internal/api"
 	"github.com/zwh8800/phosche/internal/cache"
 	"github.com/zwh8800/phosche/internal/config"
+	"github.com/zwh8800/phosche/internal/embedder"
 	"github.com/zwh8800/phosche/internal/geocoder"
 	"github.com/zwh8800/phosche/internal/indexer"
 	"github.com/zwh8800/phosche/internal/pipeline"
@@ -47,9 +48,20 @@ func Run(distFS fs.FS, configPath string) {
 		os.Exit(1)
 	}
 
+	// 提前计算 embedding 维度，用于创建 ES 索引映射
+	embeddingDims := 0
+	if cfg.Embedding.Enabled {
+		switch cfg.Embedding.Provider {
+		case "ollama":
+			embeddingDims = cfg.Embedding.Ollama.Dimensions
+		case "openai":
+			embeddingDims = cfg.Embedding.OpenAI.Dimensions
+		}
+	}
+
 	ctx, esCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer esCancel()
-	if err := esClient.EnsureIndex(ctx, cfg.Elasticsearch.IndexName); err != nil {
+	if err := esClient.EnsureIndex(ctx, cfg.Elasticsearch.IndexName, embeddingDims); err != nil {
 		slog.Error("failed to ensure ES index", "error", err)
 		os.Exit(1)
 	}
@@ -88,6 +100,60 @@ func Run(distFS fs.FS, configPath string) {
 		slog.Info("geocoding disabled: no amap_key configured")
 	}
 
+	// 创建 embedding 客户端（可选，用于混合检索）
+	var embService *embedder.EmbeddingService
+	var embCache *embedder.EmbeddingCache
+	var embeddingVersion string
+
+	if cfg.Embedding.Enabled {
+		embClient, err := embedder.NewEmbeddingClient(embedder.EmbeddingClientConfig{
+			Provider: cfg.Embedding.Provider,
+			Ollama: embedder.OllamaEmbeddingConfig{
+				BaseURL: cfg.Embedding.Ollama.BaseURL,
+				Model:   cfg.Embedding.Ollama.Model,
+			},
+			OpenAI: embedder.OpenAIEmbeddingConfig{
+				APIKey:  cfg.Embedding.OpenAI.APIKey,
+				BaseURL: cfg.Embedding.OpenAI.BaseURL,
+				Model:   cfg.Embedding.OpenAI.Model,
+			},
+			Dimensions: embeddingDims,
+		})
+		if err != nil {
+			slog.Error("failed to create embedding client", "error", err)
+			os.Exit(1)
+		}
+
+		embService = embedder.NewEmbeddingService(
+			embClient,
+			nil,
+			cfg.Embedding.MaxRetries,
+			time.Duration(cfg.Embedding.TimeoutSeconds)*time.Second,
+		)
+
+		if cfg.Embedding.QueryCache.Size > 0 {
+			embCache = embedder.NewEmbeddingCache(
+				cfg.Embedding.QueryCache.Size,
+				time.Duration(cfg.Embedding.QueryCache.TTLMinutes)*time.Minute,
+			)
+		}
+
+		var modelName string
+		switch cfg.Embedding.Provider {
+		case "ollama":
+			modelName = cfg.Embedding.Ollama.Model
+		case "openai":
+			modelName = cfg.Embedding.OpenAI.Model
+		}
+		embeddingVersion = fmt.Sprintf("%s@%d", modelName, embeddingDims)
+
+		slog.Info("embedding enabled",
+			"provider", cfg.Embedding.Provider,
+			"model", modelName,
+			"dimensions", embeddingDims,
+		)
+	}
+
 	cacheGen := cache.NewGenerator(cfg.Server.CacheDir)
 
 	// 创建文件监控器（基于 fsnotify，带去抖功能）和目录扫描器
@@ -97,7 +163,7 @@ func Run(distFS fs.FS, configPath string) {
 	dirScanner := &watcher.DirectoryScanner{}
 
 	// 组装处理流水线（文件监控 → 解码 → AI 分析 → ES 索引）
-	pl := pipeline.NewPipeline(pipeline.PipelineConfig{
+	pipeCfg := pipeline.PipelineConfig{
 		Watcher:           fsWatcher,
 		Scanner:           dirScanner,
 		Analyzer:          imgAnalyzer,
@@ -111,7 +177,13 @@ func Run(distFS fs.FS, configPath string) {
 		PrivateDirs:       cfg.Watch.PrivateDirs,
 		Concurrency:       cfg.LLM.Concurrency,
 		SkipInitialScan:   cfg.Watch.SkipInitialScan,
-	})
+		EmbeddingVersion:  embeddingVersion,
+		EmbedSourceTemplate: cfg.Embedding.SourceTemplate,
+	}
+	if embService != nil {
+		pipeCfg.Embedder = embService
+	}
+	pl := pipeline.NewPipeline(pipeCfg)
 
 	pipelineCtx, pipelineCancel := context.WithCancel(context.Background())
 	defer pipelineCancel()
@@ -123,7 +195,16 @@ func Run(distFS fs.FS, configPath string) {
 	}()
 
 	// 创建搜索服务（构建 ES 查询）
-	searchSvc := search.NewSearchService(esClient)
+	searchOpts := []search.SearchOption{}
+	if embService != nil {
+		searchOpts = append(searchOpts, search.WithEmbedder(embService, embCache, search.HybridConfig{
+			RRFWindowSize:    cfg.Embedding.Hybrid.RRFWindowSize,
+			RRFRankConstant:  cfg.Embedding.Hybrid.RRFRankConstant,
+			KNNK:             cfg.Embedding.Hybrid.KNNK,
+			KNNNumCandidates: cfg.Embedding.Hybrid.KNNNumCandidates,
+		}))
+	}
+	searchSvc := search.NewSearchService(esClient, searchOpts...)
 
 	apiSrv := api.NewServer(searchSvc, indexerSvc, cfg.Elasticsearch.IndexName)
 	router := api.NewRouter(apiSrv)
