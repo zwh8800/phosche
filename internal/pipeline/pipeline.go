@@ -25,6 +25,7 @@ import (
 
 	"github.com/zwh8800/phosche/internal/cache"
 	"github.com/zwh8800/phosche/internal/decoder"
+	"github.com/zwh8800/phosche/internal/embedder"
 	"github.com/zwh8800/phosche/internal/geocoder"
 	"github.com/zwh8800/phosche/internal/types"
 	"github.com/zwh8800/phosche/internal/watcher"
@@ -54,24 +55,33 @@ type Indexer interface {
 	Stop()
 }
 
+// Embedder 是文本向量化的抽象接口。
+// 实现者负责将文本转换为向量表示，用于语义搜索。
+type Embedder interface {
+	Embed(ctx context.Context, texts []string) ([][]float32, error)
+}
+
 // PipelineConfig 集中管理流水线所需的所有外部依赖和运行时参数。
 type PipelineConfig struct {
-	Watcher           watcher.Watcher  // 文件系统监控器（fsnotify 实现）
-	Scanner           watcher.Scanner  // 目录扫描器（启动时遍历已有文件）
-	Analyzer          Analyzer         // LLM 分析器
+	Watcher           watcher.Watcher    // 文件系统监控器（fsnotify 实现）
+	Scanner           watcher.Scanner    // 目录扫描器（启动时遍历已有文件）
+	Analyzer          Analyzer           // LLM 分析器
 	Geocoder          *geocoder.Geocoder // 逆地理编码器
-	Indexer           Indexer          // ES 索引服务
-	Cache             *cache.Generator // 照片缓存生成器（缩略图 + HEIC 转 JPEG）
-	IndexName         string           // ES 索引名称
-	Dirs              []string         // 监控的目录列表
-	Recursive         bool             // 是否递归监控子目录
-	ExcludeDirs       []string             // 排除的目录名列表
-	PrivateDirs       map[string][]string  // 私有目录及其授权用户邮箱列表，key 为目录前缀，value 为邮箱列表
-	SkipInitialScan   bool                 // 跳过启动时扫描已有文件
-	Concurrency       int              // 并发 worker 数（0 使用默认值 4）
-	QueueSize         int              // 输入通道容量（0 使用默认值 100）
-	RetryInterval     time.Duration    // 重试间隔（0 使用默认值 5min）
-	MaxPendingRetries int              // 最大重试次数（0 使用默认值 10）
+	Indexer           Indexer            // ES 索引服务
+	Cache             *cache.Generator   // 照片缓存生成器（缩略图 + HEIC 转 JPEG）
+	IndexName         string             // ES 索引名称
+	Dirs              []string           // 监控的目录列表
+	Recursive         bool               // 是否递归监控子目录
+	ExcludeDirs       []string               // 排除的目录名列表
+	PrivateDirs       map[string][]string    // 私有目录及其授权用户邮箱列表，key 为目录前缀，value 为邮箱列表
+	SkipInitialScan   bool                   // 跳过启动时扫描已有文件
+	Concurrency       int                // 并发 worker 数（0 使用默认值 4）
+	QueueSize         int                // 输入通道容量（0 使用默认值 100）
+	RetryInterval     time.Duration      // 重试间隔（0 使用默认值 5min）
+	MaxPendingRetries int                // 最大重试次数（0 使用默认值 10）
+	Embedder          Embedder           // nil when embedding disabled
+	EmbeddingVersion  string             // "{model}@{dimensions}"
+	EmbedSourceTemplate string           // template for building embedding text
 }
 
 // pendingItem 跟踪一张等待重试的照片及其重试次数。
@@ -339,6 +349,22 @@ func (p *Pipeline) processPath(ctx context.Context, path string) {
 	}
 	if r.geo != nil {
 		doc.GeoInfo = *r.geo
+	}
+
+	if p.cfg.Embedder != nil {
+		text, err := embedder.BuildEmbeddingText(*doc, p.cfg.EmbedSourceTemplate)
+		if err != nil {
+			slog.Warn("pipeline: build embedding text failed", "path", path, "error", err)
+		} else {
+			embeddings, err := p.cfg.Embedder.Embed(ctx, []string{text})
+			if err != nil {
+				slog.Warn("pipeline: embedding failed, indexing without vector", "path", path, "error", err)
+			} else if len(embeddings) > 0 {
+				doc.Embedding = embeddings[0]
+				doc.EmbeddingVersion = p.cfg.EmbeddingVersion
+				doc.EmbeddedAt = time.Now().Unix()
+			}
+		}
 	}
 
 	if err := p.cfg.Indexer.IndexPhoto(ctx, doc, p.cfg.IndexName); err != nil {
