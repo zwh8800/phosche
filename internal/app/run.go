@@ -198,10 +198,7 @@ func Run(distFS fs.FS, configPath string) {
 	searchOpts := []search.SearchOption{}
 	if embService != nil {
 		searchOpts = append(searchOpts, search.WithEmbedder(embService, embCache, search.HybridConfig{
-			RRFWindowSize:    cfg.Embedding.Hybrid.RRFWindowSize,
-			RRFRankConstant:  cfg.Embedding.Hybrid.RRFRankConstant,
-			KNNK:             cfg.Embedding.Hybrid.KNNK,
-			KNNNumCandidates: cfg.Embedding.Hybrid.KNNNumCandidates,
+			RRFRankConstant: cfg.Embedding.Hybrid.RRFRankConstant,
 		}))
 	}
 	searchSvc := search.NewSearchService(esClient, searchOpts...)

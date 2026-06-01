@@ -35,12 +35,9 @@ type EmbeddingCache interface {
 	Set(text string, embedding []float32)
 }
 
-// HybridConfig 是混合检索参数。
+// HybridConfig 是应用层 RRF 混合检索参数。
 type HybridConfig struct {
-	RRFWindowSize    int
-	RRFRankConstant  int
-	KNNK             int
-	KNNNumCandidates int
+	RRFRankConstant int
 }
 
 // SearchOption 是 SearchService 的函数式配置选项。

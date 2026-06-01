@@ -137,12 +137,9 @@ type QueryCacheConfig struct {
 	TTLMinutes int `yaml:"ttl_minutes"` // 缓存过期时间（分钟）
 }
 
-// HybridConfig 是混合检索参数配置。
+// HybridConfig 是应用层 RRF 混合检索参数配置。
 type HybridConfig struct {
-	RRFWindowSize   int `yaml:"rrf_window"`        // RRF rank_window_size
-	RRFRankConstant int `yaml:"rrf_rank_constant"` // RRF rank_constant
-	KNNK            int `yaml:"knn_k"`             // KNN k 参数
-	KNNNumCandidates int `yaml:"knn_num_candidates"` // KNN num_candidates 参数
+	RRFRankConstant int `yaml:"rrf_rank_constant"` // RRF rank constant（排名衰减系数，原论文推荐 60）
 }
 
 // LoadConfig 加载并解析 YAML 配置文件，应用默认值，校验必填项。
@@ -232,17 +229,8 @@ func applyDefaults(cfg *Config) {
 	if cfg.Embedding.TimeoutSeconds == 0 {
 		cfg.Embedding.TimeoutSeconds = 15
 	}
-	if cfg.Embedding.Hybrid.RRFWindowSize == 0 {
-		cfg.Embedding.Hybrid.RRFWindowSize = 100
-	}
 	if cfg.Embedding.Hybrid.RRFRankConstant == 0 {
 		cfg.Embedding.Hybrid.RRFRankConstant = 60
-	}
-	if cfg.Embedding.Hybrid.KNNK == 0 {
-		cfg.Embedding.Hybrid.KNNK = 50
-	}
-	if cfg.Embedding.Hybrid.KNNNumCandidates == 0 {
-		cfg.Embedding.Hybrid.KNNNumCandidates = 200
 	}
 }
 
@@ -275,9 +263,7 @@ func validate(cfg *Config) error {
 		default:
 			return fmt.Errorf("embedding.provider: must be one of [ollama, openai], got %q", cfg.Embedding.Provider)
 		}
-		if cfg.Embedding.Hybrid.RRFWindowSize < cfg.Embedding.Hybrid.KNNK {
-			return fmt.Errorf("embedding.hybrid.rrf_window (%d) must be >= embedding.hybrid.knn_k (%d)", cfg.Embedding.Hybrid.RRFWindowSize, cfg.Embedding.Hybrid.KNNK)
-		}
+
 	}
 
 	return nil

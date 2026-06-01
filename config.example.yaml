@@ -123,11 +123,5 @@ embedding:
   # 单次 embedding 请求超时（秒）
   timeout_seconds: 15
   hybrid:
-    # RRF 的 rank_window_size，从两路召回中取前 N 名参与融合排序，必须 >= knn_k
-    rrf_window: 100
-    # RRF 排名常数 k，控制排名差异的权重衰减速度，越大越平滑
+    # 应用层 RRF 排名常数 k，控制排名差异的权重衰减速度（原论文推荐值 60）
     rrf_rank_constant: 60
-    # KNN 检索器返回的最近邻数量
-    knn_k: 50
-    # HNSW 搜索时的候选集大小，越大越精确但越慢
-    knn_num_candidates: 200
