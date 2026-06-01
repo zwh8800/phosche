@@ -16,6 +16,8 @@ import (
 	"io"
 	"log/slog"
 	"math"
+	"sort"
+	"time"
 
 	"github.com/elastic/go-elasticsearch/v8/esapi"
 	"github.com/zwh8800/phosche/internal/indexer"
@@ -164,74 +166,6 @@ func (s *SearchService) buildFilters(req *types.SearchRequest, userEmail string)
 	return filter
 }
 
-func (s *SearchService) buildRRFQuery(req *types.SearchRequest, queryVector []float32, userEmail string) map[string]any {
-	page := req.Page
-	if page <= 0 {
-		page = 1
-	}
-	pageSize := req.PageSize
-	if pageSize <= 0 {
-		pageSize = 20
-	}
-	from := (page - 1) * pageSize
-
-	filters := s.buildFilters(req, userEmail)
-
-	standardRetriever := map[string]any{
-		"standard": map[string]any{
-			"query": map[string]any{
-				"bool": map[string]any{
-					"must": []any{
-						map[string]any{
-							"multi_match": map[string]any{
-								"query":  req.Query,
-								"fields": []string{"description", "tags", "objects", "text", "address", "formatted_address"},
-							},
-						},
-					},
-					"filter": filters,
-				},
-			},
-		},
-	}
-
-	knnRetriever := map[string]any{
-		"knn": map[string]any{
-			"field":          "embedding",
-			"query_vector":   queryVector,
-			"k":              s.hybridCfg.KNNK,
-			"num_candidates": s.hybridCfg.KNNNumCandidates,
-			"filter": map[string]any{
-				"bool": map[string]any{
-					"filter": filters,
-				},
-			},
-		},
-	}
-
-	rankWindowSize := s.hybridCfg.RRFWindowSize
-	if rankWindowSize < from+pageSize {
-		rankWindowSize = from + pageSize
-	}
-
-	return map[string]any{
-		"from": from,
-		"size": pageSize,
-		"retriever": map[string]any{
-			"rrf": map[string]any{
-				"retrievers":       []any{standardRetriever, knnRetriever},
-				"rank_constant":    s.hybridCfg.RRFRankConstant,
-				"rank_window_size": rankWindowSize,
-			},
-		},
-		"highlight": map[string]any{
-			"fields": map[string]any{
-				"description": map[string]any{},
-			},
-		},
-	}
-}
-
 // Search 执行全文搜索+条件过滤查询。
 //
 // 流程：
@@ -242,52 +176,37 @@ func (s *SearchService) buildRRFQuery(req *types.SearchRequest, queryVector []fl
 // userEmail 用于基于 email 的访问过滤，限制搜索结果仅包含用户有权访问的文档。
 // 调试日志会输出截断后的查询 JSON（最多 500 字符）和结果命中数。
 func (s *SearchService) Search(ctx context.Context, indexName string, req *types.SearchRequest, userEmail string) (*types.SearchResponse, error) {
-	var query map[string]any
+	slog.Debug("search request received",
+		"index", indexName,
+		"query", req.Query,
+		"page", req.Page,
+		"page_size", req.PageSize,
+		"date_from", req.DateFrom,
+		"date_to", req.DateTo,
+		"tags", req.Tags,
+		"objects", req.Objects,
+		"scene_type", req.SceneType,
+		"camera_model", req.CameraModel,
+		"status", req.Status,
+		"has_embedder", s.embedder != nil,
+	)
 
 	if req.Query != "" && s.embedder != nil {
 		queryVec, ok := s.getEmbedding(ctx, req.Query)
 		if ok {
-			query = s.buildRRFQuery(req, queryVec, userEmail)
-		} else {
-			query = s.buildQuery(req, userEmail)
+			slog.Debug("hybrid search enabled, using BM25 + kNN RRF",
+				"index", indexName,
+				"query", req.Query,
+				"vector_dim", len(queryVec),
+			)
+			return s.searchHybrid(ctx, indexName, req, queryVec, userEmail)
 		}
-	} else {
-		query = s.buildQuery(req, userEmail)
-	}
-	bodyBytes, err := json.Marshal(query)
-	if err != nil {
-		return nil, fmt.Errorf("marshal query: %w", err)
-	}
-
-	slog.Debug("ES search", "index", indexName, "query", truncateJSON(bodyBytes, 500), "page", req.Page, "page_size", req.PageSize)
-
-	searchReq := esapi.SearchRequest{
-		Index: []string{indexName},
-		Body:  bytes.NewReader(bodyBytes),
-	}
-
-	resp, err := searchReq.Do(ctx, s.client.Client())
-	if err != nil {
-		return nil, fmt.Errorf("search request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.IsError() {
-		b, _ := io.ReadAll(resp.Body)
-		errMsg := string(b)
-		slog.Error("ES search failed",
-			"status", resp.Status(),
-			"error", errMsg,
-			"query", truncateJSON(bodyBytes, 2000),
+		slog.Debug("embedding unavailable, falling back to BM25",
+			"index", indexName,
+			"query", req.Query,
 		)
-		return nil, fmt.Errorf("search returned %s: %s", resp.Status(), errMsg)
 	}
-
-	result, err := s.parseSearchResponse(resp.Body, req)
-	if err == nil {
-		slog.Debug("ES search result", "total", result.Total, "hits", len(result.Hits))
-	}
-	return result, err
+	return s.searchFallbackToBM25(ctx, indexName, req, userEmail)
 }
 
 // GetFilters 执行词项聚合（terms aggregation），获取前端筛选面板所需的可选项列表。
@@ -301,7 +220,7 @@ func (s *SearchService) Search(ctx context.Context, indexName string, req *types
 func (s *SearchService) GetFilters(ctx context.Context, indexName string, userEmail string) (*types.FiltersResponse, error) {
 	slog.Debug("ES get filters", "index", indexName)
 	query := map[string]any{
-		"size": 0,
+		"size":  0,
 		"query": buildEmailFilter(userEmail),
 		"aggs": map[string]any{
 			"tags": map[string]any{
@@ -352,6 +271,7 @@ func (s *SearchService) GetFilters(ctx context.Context, indexName string, userEm
 //  5. 日期范围过滤：date_time_original 的 gte/lte
 //  6. 词项过滤：tags.keyword、objects.keyword 的 terms 查询
 //  7. 精确匹配：scene_type、status、camera_model 的 term 查询
+//
 // 8. 组合：must + filter 子句包装为 bool 查询；无任何条件时使用 match_all
 // 9. Email 访问过滤：始终添加 email 过滤条件，限制可见范围
 func (s *SearchService) buildQuery(req *types.SearchRequest, userEmail string) map[string]any {
@@ -709,4 +629,376 @@ func truncateJSON(b []byte, maxLen int) string {
 		return string(b)
 	}
 	return string(b[:maxLen]) + "..."
+}
+
+// scoredDoc 是 RRF 融合后的文档，持有最终融合分数。
+type scoredDoc struct {
+	id     string
+	score  float64
+	source types.PhotoDocument
+}
+
+// msearchHit 是 _msearch 响应中的单个命中。
+type msearchHit struct {
+	ID     string              `json:"_id"`
+	Source types.PhotoDocument `json:"_source"`
+}
+
+// msearchResponse 是 _msearch 响应的 JSON 结构。
+type msearchResponse struct {
+	Responses []struct {
+		Hits struct {
+			Total struct {
+				Value int64 `json:"value"`
+			} `json:"total"`
+			Hits []msearchHit `json:"hits"`
+		} `json:"hits"`
+		Error *json.RawMessage `json:"error,omitempty"`
+	} `json:"responses"`
+}
+
+// searchHybrid 执行 _msearch（BM25 + kNN），RRF 融合结果后分页返回。
+func (s *SearchService) searchHybrid(ctx context.Context, indexName string, req *types.SearchRequest, queryVector []float32, userEmail string) (*types.SearchResponse, error) {
+	page := req.Page
+	if page <= 0 {
+		page = 1
+	}
+	pageSize := req.PageSize
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+	from := (page - 1) * pageSize
+
+	rankWindowSize := calculateRankWindowSize(from, pageSize)
+
+	msearchBody := s.buildHybridQuery(indexName, req, queryVector, userEmail, rankWindowSize)
+
+	slog.Debug("hybrid msearch request",
+		"index", indexName,
+		"query", req.Query,
+		"rank_window_size", rankWindowSize,
+		"rank_constant", s.hybridCfg.RRFRankConstant,
+		"from", from,
+		"page_size", pageSize,
+		"body_size", len(msearchBody),
+		"body", string(msearchBody),
+	)
+
+	start := time.Now()
+	bm25Hits, knnHits, bm25Total, knnTotal, err := s.executeHybridSearch(ctx, indexName, msearchBody)
+	if err != nil {
+		return nil, err
+	}
+	esDuration := time.Since(start)
+
+	slog.Debug("hybrid msearch completed",
+		"index", indexName,
+		"bm25_hits", len(bm25Hits),
+		"bm25_total", bm25Total,
+		"knn_hits", len(knnHits),
+		"knn_total", knnTotal,
+		"es_duration_ms", esDuration.Milliseconds(),
+	)
+
+	start = time.Now()
+	fused := s.reciprocalRankFusion(bm25Hits, knnHits, s.hybridCfg.RRFRankConstant)
+	fusionDuration := time.Since(start)
+	pageHits := paginateResults(fused, from, pageSize)
+
+	total := max(bm25Total, knnTotal)
+
+	slog.Debug("hybrid RRF fusion completed",
+		"index", indexName,
+		"query", req.Query,
+		"bm25_candidates", len(bm25Hits),
+		"knn_candidates", len(knnHits),
+		"fused_unique_docs", len(fused),
+		"page_results", len(pageHits),
+		"total", total,
+		"fusion_duration_us", fusionDuration.Microseconds(),
+	)
+
+	if len(fused) > 0 {
+		slog.Debug("hybrid RRF top results",
+			"index", indexName,
+			"query", req.Query,
+			"top_doc_id", fused[0].id,
+			"top_doc_score", fmt.Sprintf("%.6f", fused[0].score),
+		)
+		if len(fused) > 1 {
+			slog.Debug("hybrid RRF runner-up",
+				"index", indexName,
+				"query", req.Query,
+				"second_doc_id", fused[1].id,
+				"second_doc_score", fmt.Sprintf("%.6f", fused[1].score),
+			)
+		}
+	}
+
+	var totalPages int
+	if pageSize > 0 && total > 0 {
+		totalPages = int(math.Ceil(float64(total) / float64(pageSize)))
+	} else if total == 0 {
+		totalPages = 0
+	} else {
+		totalPages = 1
+	}
+
+	hits := make([]types.PhotoDocument, 0, len(pageHits))
+	for _, doc := range pageHits {
+		d := doc.source
+		d.Embedding = nil
+		hits = append(hits, d)
+	}
+
+	return &types.SearchResponse{
+		Hits:       hits,
+		Total:      total,
+		Page:       page,
+		PageSize:   pageSize,
+		TotalPages: totalPages,
+	}, nil
+}
+
+// searchFallbackToBM25 当 embedding 不可用时回退到纯 BM25 搜索。
+func (s *SearchService) searchFallbackToBM25(ctx context.Context, indexName string, req *types.SearchRequest, userEmail string) (*types.SearchResponse, error) {
+	query := s.buildQuery(req, userEmail)
+	bodyBytes, err := json.Marshal(query)
+	if err != nil {
+		return nil, fmt.Errorf("marshal query: %w", err)
+	}
+
+	slog.Debug("ES search", "index", indexName, "query", string(bodyBytes), "page", req.Page, "page_size", req.PageSize)
+
+	searchReq := esapi.SearchRequest{
+		Index: []string{indexName},
+		Body:  bytes.NewReader(bodyBytes),
+	}
+
+	resp, err := searchReq.Do(ctx, s.client.Client())
+	if err != nil {
+		return nil, fmt.Errorf("search request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.IsError() {
+		b, _ := io.ReadAll(resp.Body)
+		errMsg := string(b)
+		slog.Error("ES search failed",
+			"status", resp.Status(),
+			"error", errMsg,
+			"query", string(bodyBytes),
+		)
+		return nil, fmt.Errorf("search returned %s: %s", resp.Status(), errMsg)
+	}
+
+	result, err := s.parseSearchResponse(resp.Body, req)
+	if err == nil {
+		slog.Debug("ES search result", "total", result.Total, "hits", len(result.Hits))
+	}
+	return result, err
+}
+
+// buildHybridQuery 构建 _msearch NDJSON 请求体，包含 BM25 和 kNN 两个子查询。
+func (s *SearchService) buildHybridQuery(indexName string, req *types.SearchRequest, queryVector []float32, userEmail string, rankWindowSize int) []byte {
+	var buf bytes.Buffer
+
+	bm25Query := s.buildBM25SubQuery(req, userEmail, rankWindowSize)
+	knnQuery := s.buildKNNSubQuery(queryVector, userEmail, req, rankWindowSize)
+
+	headerBytes, _ := json.Marshal(map[string]any{"index": indexName})
+	bm25Bytes, _ := json.Marshal(bm25Query)
+	knnBytes, _ := json.Marshal(knnQuery)
+
+	buf.Write(headerBytes)
+	buf.WriteByte('\n')
+	buf.Write(bm25Bytes)
+	buf.WriteByte('\n')
+	buf.Write(headerBytes)
+	buf.WriteByte('\n')
+	buf.Write(knnBytes)
+	buf.WriteByte('\n')
+
+	return buf.Bytes()
+}
+
+// buildBM25SubQuery 构建 BM25 multi_match 子查询（不含 sort/from/size 外层分页）。
+func (s *SearchService) buildBM25SubQuery(req *types.SearchRequest, userEmail string, rankWindowSize int) map[string]any {
+	filters := s.buildFilters(req, userEmail)
+
+	return map[string]any{
+		"size": rankWindowSize,
+		"query": map[string]any{
+			"bool": map[string]any{
+				"must": []any{
+					map[string]any{
+						"multi_match": map[string]any{
+							"query":  req.Query,
+							"fields": []string{"description", "tags", "objects", "text", "address", "formatted_address"},
+						},
+					},
+				},
+				"filter": filters,
+			},
+		},
+		"highlight": map[string]any{
+			"fields": map[string]any{
+				"description": map[string]any{},
+			},
+		},
+		"_source": map[string]any{
+			"excludes": []string{"embedding", "embedding_version", "embedded_at"},
+		},
+	}
+}
+
+// buildKNNSubQuery 构建基于 script_score 余弦相似度的 kNN 子查询。
+func (s *SearchService) buildKNNSubQuery(queryVector []float32, userEmail string, req *types.SearchRequest, rankWindowSize int) map[string]any {
+	filters := s.buildFilters(req, userEmail)
+
+	return map[string]any{
+		"size": rankWindowSize,
+		"query": map[string]any{
+			"script_score": map[string]any{
+				"query": map[string]any{
+					"bool": map[string]any{
+						"filter": filters,
+					},
+				},
+				"script": map[string]any{
+					"source": "cosineSimilarity(params.query_vector, 'embedding') + 1.0",
+					"params": map[string]any{
+						"query_vector": queryVector,
+					},
+				},
+			},
+		},
+		"_source": map[string]any{
+			"excludes": []string{"embedding", "embedding_version", "embedded_at"},
+		},
+	}
+}
+
+// executeHybridSearch 发送 _msearch 请求并解析 BM25 和 kNN 两个子查询的结果。
+// 任一子查询失败时记录警告并以空结果继续，两者均失败时返回错误。
+func (s *SearchService) executeHybridSearch(ctx context.Context, indexName string, msearchBody []byte) (
+	bm25Hits []msearchHit, knnHits []msearchHit, bm25Total int64, knnTotal int64, err error,
+) {
+	resp, err := s.client.Client().Msearch(
+		bytes.NewReader(msearchBody),
+		s.client.Client().Msearch.WithContext(ctx),
+		s.client.Client().Msearch.WithIndex(indexName),
+	)
+	if err != nil {
+		return nil, nil, 0, 0, fmt.Errorf("msearch request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.IsError() {
+		b, _ := io.ReadAll(resp.Body)
+		slog.Error("hybrid msearch failed",
+			"index", indexName,
+			"status", resp.Status(),
+			"error", string(b),
+		)
+		return nil, nil, 0, 0, fmt.Errorf("msearch returned %s: %s", resp.Status(), string(b))
+	}
+
+	var msearchResp msearchResponse
+	if err := json.NewDecoder(resp.Body).Decode(&msearchResp); err != nil {
+		slog.Error("hybrid msearch response decode failed",
+			"index", indexName,
+			"error", err,
+		)
+		return nil, nil, 0, 0, fmt.Errorf("decode msearch response: %w", err)
+	}
+
+	if len(msearchResp.Responses) < 2 {
+		return nil, nil, 0, 0, fmt.Errorf("msearch returned %d responses, expected 2", len(msearchResp.Responses))
+	}
+
+	bm25Resp := msearchResp.Responses[0]
+	knnResp := msearchResp.Responses[1]
+
+	bm25Failed := bm25Resp.Error != nil
+	knnFailed := knnResp.Error != nil
+
+	if bm25Failed && knnFailed {
+		return nil, nil, 0, 0, fmt.Errorf("both sub-queries failed: bm25=%s, knn=%s",
+			string(*bm25Resp.Error), string(*knnResp.Error))
+	}
+
+	if bm25Failed {
+		slog.Warn("BM25 sub-query failed in hybrid search, continuing with kNN only",
+			"error", string(*bm25Resp.Error))
+		knnHits = knnResp.Hits.Hits
+		knnTotal = knnResp.Hits.Total.Value
+		return nil, knnHits, 0, knnTotal, nil
+	}
+
+	if knnFailed {
+		slog.Warn("kNN sub-query failed in hybrid search, continuing with BM25 only",
+			"error", string(*knnResp.Error))
+		bm25Hits = bm25Resp.Hits.Hits
+		bm25Total = bm25Resp.Hits.Total.Value
+		return bm25Hits, nil, bm25Total, 0, nil
+	}
+
+	bm25Hits = bm25Resp.Hits.Hits
+	bm25Total = bm25Resp.Hits.Total.Value
+	knnHits = knnResp.Hits.Hits
+	knnTotal = knnResp.Hits.Total.Value
+
+	return bm25Hits, knnHits, bm25Total, knnTotal, nil
+}
+
+// reciprocalRankFusion 实现 RRF 算法：score(d) = Σ 1/(k + rank(d))，rank 从 1 开始。
+func (s *SearchService) reciprocalRankFusion(bm25Hits, knnHits []msearchHit, rankConstant int) []scoredDoc {
+	scores := make(map[string]float64)
+	sources := make(map[string]types.PhotoDocument)
+
+	for i, hit := range bm25Hits {
+		scores[hit.ID] += 1.0 / float64(rankConstant+i+1)
+		sources[hit.ID] = hit.Source
+	}
+
+	for i, hit := range knnHits {
+		scores[hit.ID] += 1.0 / float64(rankConstant+i+1)
+		if _, exists := sources[hit.ID]; !exists {
+			sources[hit.ID] = hit.Source
+		}
+	}
+
+	result := make([]scoredDoc, 0, len(scores))
+	for id, score := range scores {
+		result = append(result, scoredDoc{id: id, score: score, source: sources[id]})
+	}
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].score == result[j].score {
+			return result[i].id < result[j].id
+		}
+		return result[i].score > result[j].score
+	})
+	return result
+}
+
+// paginateResults 对 RRF 融合后的有序文档切片执行分页。
+func paginateResults(docs []scoredDoc, from, pageSize int) []scoredDoc {
+	if from >= len(docs) {
+		return nil
+	}
+	end := min(from+pageSize, len(docs))
+	return docs[from:end]
+}
+
+// calculateRankWindowSize 计算 rank window size：from + pageSize，钳制到 [50, 1000]。
+func calculateRankWindowSize(from, pageSize int) int {
+	size := from + pageSize
+	if size < 50 {
+		return 50
+	}
+	if size > 1000 {
+		return 1000
+	}
+	return size
 }

@@ -356,6 +356,7 @@ func (p *Pipeline) processPath(ctx context.Context, path string) {
 		if err != nil {
 			slog.Warn("pipeline: build embedding text failed", "path", path, "error", err)
 		} else {
+			slog.Debug("pipeline: starting embedding", "path", path, "text", text)
 			embeddings, err := p.cfg.Embedder.Embed(ctx, []string{text})
 			if err != nil {
 				slog.Warn("pipeline: embedding failed, indexing without vector", "path", path, "error", err)

@@ -2,6 +2,7 @@ package embedder
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"strings"
 	"time"
@@ -37,7 +38,14 @@ func (s *EmbeddingService) Embed(ctx context.Context, texts []string) ([][]float
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 	defer cancel()
 
-	slog.Info("starting embedding", "text_count", len(texts), "timeout", s.timeout)
+	// When embedding a single text, log its content for debugging
+	var textsSummary string
+	if len(texts) == 1 {
+		textsSummary = texts[0]
+	} else {
+		textsSummary = fmt.Sprintf("[%d texts]", len(texts))
+	}
+	slog.Info("starting embedding", "text_count", len(texts), "timeout", s.timeout, "texts", textsSummary)
 	startTime := time.Now()
 
 	var lastErr error
