@@ -4,7 +4,8 @@
  * 功能特性：
  * - 关键词全文搜索 + 多条件筛选
  * - 搜索条件和 URL 查询参数双向同步（useSearchParams）
- * - 筛选条件变化后 300ms 防抖自动搜索
+ * - 筛选条件变化后 300ms 防抖自动搜索（日期、场景、相机、标签）
+ * - 搜索词需用户回车或点击搜索按钮才触发
  * - 无限滚动加载搜索结果
  * - 手动提交搜索（回车/点击按钮）
  * - 重置所有筛选条件
@@ -20,7 +21,7 @@
  *
  * 状态管理：
  * - URL 驱动：页面初始化时从 searchParams 恢复所有筛选条件
- * - 防抖搜索：任何筛选条件变化后等待 300ms 自动触发搜索
+ * - committedQuery：仅在用户显式搜索时更新，驱动搜索请求
  * - 懒加载：searchActive 控制查询是否启用，首次搜索后才激活
  */
 
@@ -248,12 +249,14 @@ const PhotoCard = memo(function PhotoCard({ photo }: { photo: PhotoDocument }) {
  * 核心功能：
  * - 全文关键词搜索 + 多条件筛选
  * - URL 同步：所有筛选条件通过 useSearchParams 同步到 URL
- * - 防抖自动搜索：筛选条件变化后 300ms 自动触发搜索
+ * - 搜索词仅在用户显式提交时触发搜索（回车/点击按钮）
+ * - 筛选条件（日期、场景、相机、标签）变化后自动搜索
  * - 无限滚动加载（IntersectionObserver）
  * - 筛选面板可折叠，显示活跃筛选数量
  *
  * 状态管理：
  * - useState: 管理各筛选条件（query, dateFrom, dateTo, sceneType, cameraModel, selectedTags）
+ * - committedQuery: 仅在用户显式搜索时更新，驱动 useInfiniteQuery
  * - useSearchParams: URL 参数双向同步
  * - useInfiniteQuery: 搜索结果分页加载
  * - useQuery: 获取可用筛选选项（标签、场景类型、相机型号）
@@ -268,6 +271,7 @@ export default function Search() {
 
   // 筛选条件状态，初始化时从 URL 参数读取
   const [query, setQuery] = useState(searchParams.get('query') || '');
+  const [committedQuery, setCommittedQuery] = useState(searchParams.get('query') || '');
   const [dateFrom, setDateFrom] = useState(searchParams.get('date_from') || '');
   const [dateTo, setDateTo] = useState(searchParams.get('date_to') || '');
   const [sceneType, setSceneType] = useState(searchParams.get('scene_type') || '');
@@ -282,8 +286,6 @@ export default function Search() {
   const [searchActive, setSearchActive] = useState(false);
   // 无限滚动哨兵元素引用
   const sentinelRef = useRef<HTMLDivElement>(null);
-  // 标记是否为首次挂载，首次挂载时根据 URL 参数决定是否自动搜索
-  const initialMount = useRef(true);
 
   /**
    * 获取可用筛选选项（标签、场景类型、相机型号）
@@ -310,10 +312,10 @@ export default function Search() {
     error,
     refetch,
   } = useInfiniteQuery({
-    queryKey: ['search', query, dateFrom, dateTo, sceneType, cameraModel, selectedTags],
+    queryKey: ['search', committedQuery, dateFrom, dateTo, sceneType, cameraModel, selectedTags],
     queryFn: ({ pageParam = 1 }) =>
       searchPhotos({
-        query: query || undefined,
+        query: committedQuery || undefined,
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
         tags: selectedTags.length > 0 ? selectedTags : undefined,
@@ -330,29 +332,9 @@ export default function Search() {
     enabled: searchActive,
   });
 
-  /**
-   * 防抖自动搜索 effect：
-   * - 首次挂载时：自动激活搜索（显示所有照片）
-   * - 后续变化：300ms 防抖后自动同步 URL 并触发搜索
-   * - 防抖避免用户快速输入时频繁请求
-   */
   useEffect(() => {
-    if (initialMount.current) {
-      initialMount.current = false;
-      setSearchActive(true);
-      refetch();
-      return;
-    }
-
-    // 300ms 防抖：延迟同步 URL 并触发搜索
-    const timer = setTimeout(() => {
-      setSearchParams(buildParams(), { replace: true });
-      if (!searchActive) setSearchActive(true);
-      refetch();
-    }, 300);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, dateFrom, dateTo, sceneType, cameraModel, selectedTags]);
+    setSearchActive(true);
+  }, []);
 
   /**
    * 无限滚动实现：
@@ -382,6 +364,7 @@ export default function Search() {
    */
   const handleSearch = (e?: FormEvent) => {
     e?.preventDefault();
+    setCommittedQuery(query);
     setSearchParams(buildParams(), { replace: true });
     setSearchActive(true);
     refetch();
@@ -423,6 +406,7 @@ export default function Search() {
     setCameraModel('');
     setSelectedTags([]);
     setQuery('');
+    setCommittedQuery('');
     setSearchParams({}, { replace: true });
     setSearchActive(false);
   };
