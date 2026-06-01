@@ -22,6 +22,37 @@ import (
 	"github.com/zwh8800/phosche/internal/types"
 )
 
+// Embedder 是文本向量化的抽象接口。
+type Embedder interface {
+	Embed(ctx context.Context, texts []string) ([][]float32, error)
+}
+
+// EmbeddingCache 是查询 embedding 缓存的接口。
+type EmbeddingCache interface {
+	Get(text string) ([]float32, bool)
+	Set(text string, embedding []float32)
+}
+
+// HybridConfig 是混合检索参数。
+type HybridConfig struct {
+	RRFWindowSize    int
+	RRFRankConstant  int
+	KNNK             int
+	KNNNumCandidates int
+}
+
+// SearchOption 是 SearchService 的函数式配置选项。
+type SearchOption func(*SearchService)
+
+// WithEmbedder 配置混合检索所需的 embedding 组件。
+func WithEmbedder(e Embedder, cache EmbeddingCache, cfg HybridConfig) SearchOption {
+	return func(s *SearchService) {
+		s.embedder = e
+		s.embeddingCache = cache
+		s.hybridCfg = cfg
+	}
+}
+
 // buildEmailFilter 构建基于 email 的访问过滤条件。
 // 匹配规则：文档无 email 字段 或 字段值为空 或（userEmail 非空时）字段值等于 userEmail。
 func buildEmailFilter(userEmail string) map[string]any {
@@ -44,12 +75,161 @@ type Searcher interface {
 
 // SearchService 提供基于 Elasticsearch 的全文搜索和条件过滤查询。
 type SearchService struct {
-	client *indexer.ESClient // ES 客户端封装，用于执行搜索请求
+	client         *indexer.ESClient
+	embedder       Embedder
+	embeddingCache EmbeddingCache
+	hybridCfg      HybridConfig
 }
 
 // NewSearchService 创建 SearchService 实例。
-func NewSearchService(client *indexer.ESClient) *SearchService {
-	return &SearchService{client: client}
+func NewSearchService(client *indexer.ESClient, opts ...SearchOption) *SearchService {
+	s := &SearchService{client: client}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
+}
+
+func (s *SearchService) getEmbedding(ctx context.Context, text string) ([]float32, bool) {
+	if s.embeddingCache != nil {
+		if cached, ok := s.embeddingCache.Get(text); ok {
+			return cached, true
+		}
+	}
+
+	embeddings, err := s.embedder.Embed(ctx, []string{text})
+	if err != nil {
+		slog.Warn("query embedding failed, falling back to BM25", "error", err)
+		return nil, false
+	}
+	if len(embeddings) == 0 {
+		return nil, false
+	}
+
+	if s.embeddingCache != nil {
+		s.embeddingCache.Set(text, embeddings[0])
+	}
+
+	return embeddings[0], true
+}
+
+func (s *SearchService) buildFilters(req *types.SearchRequest, userEmail string) []any {
+	var filter []any
+
+	filter = append(filter, buildEmailFilter(userEmail))
+
+	dateRange := map[string]any{}
+	if req.DateFrom != "" {
+		dateRange["gte"] = req.DateFrom
+	}
+	if req.DateTo != "" {
+		dateRange["lte"] = req.DateTo
+	}
+	if len(dateRange) > 0 {
+		filter = append(filter, map[string]any{
+			"range": map[string]any{"exif.date_time_original": dateRange},
+		})
+	}
+
+	if len(req.Tags) > 0 {
+		filter = append(filter, map[string]any{
+			"terms": map[string]any{"tags.keyword": req.Tags},
+		})
+	}
+
+	if len(req.Objects) > 0 {
+		filter = append(filter, map[string]any{
+			"terms": map[string]any{"objects.keyword": req.Objects},
+		})
+	}
+
+	if req.SceneType != "" {
+		filter = append(filter, map[string]any{
+			"term": map[string]any{"scene_type": req.SceneType},
+		})
+	}
+
+	if req.Status != "" {
+		filter = append(filter, map[string]any{
+			"term": map[string]any{"status": req.Status},
+		})
+	}
+
+	if req.CameraModel != "" {
+		filter = append(filter, map[string]any{
+			"term": map[string]any{"camera_model": req.CameraModel},
+		})
+	}
+
+	return filter
+}
+
+func (s *SearchService) buildRRFQuery(req *types.SearchRequest, queryVector []float32, userEmail string) map[string]any {
+	page := req.Page
+	if page <= 0 {
+		page = 1
+	}
+	pageSize := req.PageSize
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+	from := (page - 1) * pageSize
+
+	filters := s.buildFilters(req, userEmail)
+
+	standardRetriever := map[string]any{
+		"standard": map[string]any{
+			"query": map[string]any{
+				"bool": map[string]any{
+					"must": []any{
+						map[string]any{
+							"multi_match": map[string]any{
+								"query":  req.Query,
+								"fields": []string{"description", "tags", "objects", "text", "address", "formatted_address"},
+							},
+						},
+					},
+					"filter": filters,
+				},
+			},
+		},
+	}
+
+	knnRetriever := map[string]any{
+		"knn": map[string]any{
+			"field":          "embedding",
+			"query_vector":   queryVector,
+			"k":              s.hybridCfg.KNNK,
+			"num_candidates": s.hybridCfg.KNNNumCandidates,
+			"filter": map[string]any{
+				"bool": map[string]any{
+					"filter": filters,
+				},
+			},
+		},
+	}
+
+	rankWindowSize := s.hybridCfg.RRFWindowSize
+	if rankWindowSize < from+pageSize {
+		rankWindowSize = from + pageSize
+	}
+
+	return map[string]any{
+		"from": from,
+		"size": pageSize,
+		"retriever": map[string]any{
+			"rrf": map[string]any{
+				"retrievers":       []any{standardRetriever, knnRetriever},
+				"rank_constant":    s.hybridCfg.RRFRankConstant,
+				"rank_window_size": rankWindowSize,
+			},
+		},
+		"highlight": map[string]any{
+			"fields": map[string]any{
+				"description": map[string]any{},
+			},
+		},
+	}
 }
 
 // Search 执行全文搜索+条件过滤查询。
@@ -62,7 +242,18 @@ func NewSearchService(client *indexer.ESClient) *SearchService {
 // userEmail 用于基于 email 的访问过滤，限制搜索结果仅包含用户有权访问的文档。
 // 调试日志会输出截断后的查询 JSON（最多 500 字符）和结果命中数。
 func (s *SearchService) Search(ctx context.Context, indexName string, req *types.SearchRequest, userEmail string) (*types.SearchResponse, error) {
-	query := s.buildQuery(req, userEmail)
+	var query map[string]any
+
+	if req.Query != "" && s.embedder != nil {
+		queryVec, ok := s.getEmbedding(ctx, req.Query)
+		if ok {
+			query = s.buildRRFQuery(req, queryVec, userEmail)
+		} else {
+			query = s.buildQuery(req, userEmail)
+		}
+	} else {
+		query = s.buildQuery(req, userEmail)
+	}
 	bodyBytes, err := json.Marshal(query)
 	if err != nil {
 		return nil, fmt.Errorf("marshal query: %w", err)
@@ -83,7 +274,13 @@ func (s *SearchService) Search(ctx context.Context, indexName string, req *types
 
 	if resp.IsError() {
 		b, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("search returned %s: %s", resp.Status(), string(b))
+		errMsg := string(b)
+		slog.Error("ES search failed",
+			"status", resp.Status(),
+			"error", errMsg,
+			"query", truncateJSON(bodyBytes, 2000),
+		)
+		return nil, fmt.Errorf("search returned %s: %s", resp.Status(), errMsg)
 	}
 
 	result, err := s.parseSearchResponse(resp.Body, req)
@@ -357,7 +554,9 @@ func (s *SearchService) parseSearchResponse(body io.Reader, req *types.SearchReq
 
 	hits := make([]types.PhotoDocument, 0, len(result.Hits.Hits))
 	for _, hit := range result.Hits.Hits {
-		hits = append(hits, hit.Source)
+		doc := hit.Source
+		doc.Embedding = nil
+		hits = append(hits, doc)
 	}
 
 	return &types.SearchResponse{

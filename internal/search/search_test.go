@@ -117,7 +117,7 @@ func setupSearchTest(t *testing.T) (*SearchService, func()) {
 	esClient, err := indexer.NewESClient(cfg)
 	require.NoError(t, err)
 
-	err = esClient.EnsureIndex(ctx, testIndex)
+	err = esClient.EnsureIndex(ctx, testIndex, 0)
 	require.NoError(t, err)
 
 	bulkBody := buildBulkBody(testDocs)
