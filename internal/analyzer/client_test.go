@@ -219,7 +219,7 @@ func TestOpenAIClient_RequestFormat(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOpenAIClient("test-api-key", server.URL, "gpt-4o")
+	client := NewOpenAIClient("test-api-key", server.URL+"/v1", "gpt-4o")
 	result, err := client.AnalyzeImage(context.Background(), []byte("fake-image-data"), "describe this image")
 	if err != nil {
 		t.Fatalf("AnalyzeImage failed: %v", err)
@@ -253,7 +253,7 @@ func TestOpenAIClient_ResponseParsing(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOpenAIClient("test-api-key", server.URL, "gpt-4o")
+	client := NewOpenAIClient("test-api-key", server.URL+"/v1", "gpt-4o")
 	result, err := client.AnalyzeImage(context.Background(), []byte("fake-image-data"), "describe this image")
 	if err != nil {
 		t.Fatalf("AnalyzeImage failed: %v", err)
@@ -290,7 +290,7 @@ func TestLLMClient_InvalidJSON_OpenAI(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOpenAIClient("test-api-key", server.URL, "gpt-4o")
+	client := NewOpenAIClient("test-api-key", server.URL+"/v1", "gpt-4o")
 	_, err := client.AnalyzeImage(context.Background(), []byte("fake-image-data"), "describe this image")
 	if err == nil {
 		t.Error("expected error for invalid JSON, got nil")
@@ -318,7 +318,7 @@ func TestLLMClient_HTTPError_OpenAI(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOpenAIClient("test-api-key", server.URL, "gpt-4o")
+	client := NewOpenAIClient("test-api-key", server.URL+"/v1", "gpt-4o")
 	_, err := client.AnalyzeImage(context.Background(), []byte("fake-image-data"), "describe this image")
 	if err == nil {
 		t.Error("expected error for HTTP 500, got nil")
@@ -352,7 +352,7 @@ func TestNewLLMClient_Ollama(t *testing.T) {
 func TestNewLLMClient_OpenAI(t *testing.T) {
 	cfg := LLMClientConfig{
 		Provider: "openai",
-		OpenAI:   OpenAIClientConfig{APIKey: "sk-test", BaseURL: "https://api.openai.com", Model: "gpt-4o"},
+		OpenAI:   OpenAIClientConfig{APIKey: "sk-test", BaseURL: "https://api.openai.com/v1", Model: "gpt-4o"},
 	}
 	client, err := NewLLMClient(cfg)
 	if err != nil {
