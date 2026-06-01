@@ -15,7 +15,8 @@ type Config struct {
 	LLM           LLMConfig    `yaml:"llm"`
 	Elasticsearch ESConfig     `yaml:"elasticsearch"`
 	Server        ServerConfig `yaml:"server"`
-	Env           EnvConfig    `yaml:"env"`
+	Env           EnvConfig       `yaml:"env"`
+	Embedding     EmbeddingConfig `yaml:"embedding"`
 }
 
 // WatchConfig 是文件监控配置，控制照片目录的监控行为。
@@ -101,6 +102,49 @@ type EnvConfig struct {
 	AMAPKey string `yaml:"amap_key"`
 }
 
+// EmbeddingConfig 是文本向量化配置，控制 embedding 服务的选择和混合检索参数。
+type EmbeddingConfig struct {
+	Enabled        bool                  `yaml:"enabled"`         // 是否启用 embedding
+	Provider       string                `yaml:"provider"`        // embedding 提供商，可选 "ollama" 或 "openai"
+	Ollama         EmbeddingOllamaConfig `yaml:"ollama"`          // Ollama embedding 配置
+	OpenAI         EmbeddingOpenAIConfig `yaml:"openai"`          // OpenAI embedding 配置
+	SourceTemplate string                `yaml:"source_template"` // embedding 输入文本模板
+	QueryCache     QueryCacheConfig      `yaml:"query_cache"`     // 查询 embedding 缓存配置
+	Required       bool                  `yaml:"required"`        // embedding 失败是否阻塞文档落库
+	MaxRetries     int                   `yaml:"max_retries"`     // 最大重试次数
+	TimeoutSeconds int                   `yaml:"timeout_seconds"` // 单次请求超时时间（秒）
+	Hybrid         HybridConfig          `yaml:"hybrid"`          // 混合检索参数
+}
+
+// EmbeddingOllamaConfig 是 Ollama embedding 配置。
+type EmbeddingOllamaConfig struct {
+	BaseURL    string `yaml:"base_url"`   // Ollama 服务地址
+	Model      string `yaml:"model"`      // embedding 模型名称
+	Dimensions int    `yaml:"dimensions"` // 向量维度
+}
+
+// EmbeddingOpenAIConfig 是 OpenAI embedding 配置。
+type EmbeddingOpenAIConfig struct {
+	APIKey     string `yaml:"api_key"`    // OpenAI API 密钥
+	BaseURL    string `yaml:"base_url"`   // API 地址
+	Model      string `yaml:"model"`      // 模型名称
+	Dimensions int    `yaml:"dimensions"` // 向量维度（支持 Matryoshka 截断）
+}
+
+// QueryCacheConfig 是查询 embedding 缓存配置。
+type QueryCacheConfig struct {
+	Size       int `yaml:"size"`        // LRU 缓存大小
+	TTLMinutes int `yaml:"ttl_minutes"` // 缓存过期时间（分钟）
+}
+
+// HybridConfig 是混合检索参数配置。
+type HybridConfig struct {
+	RRFWindowSize   int `yaml:"rrf_window"`        // RRF rank_window_size
+	RRFRankConstant int `yaml:"rrf_rank_constant"` // RRF rank_constant
+	KNNK            int `yaml:"knn_k"`             // KNN k 参数
+	KNNNumCandidates int `yaml:"knn_num_candidates"` // KNN num_candidates 参数
+}
+
 // LoadConfig 加载并解析 YAML 配置文件，应用默认值，校验必填项。
 func LoadConfig(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
@@ -156,6 +200,50 @@ func applyDefaults(cfg *Config) {
 	if cfg.Server.LogLevel == "" {
 		cfg.Server.LogLevel = "info"
 	}
+
+	// Embedding defaults
+	if cfg.Embedding.Ollama.BaseURL == "" {
+		cfg.Embedding.Ollama.BaseURL = "http://localhost:11434"
+	}
+	if cfg.Embedding.Ollama.Model == "" {
+		cfg.Embedding.Ollama.Model = "bge-m3"
+	}
+	if cfg.Embedding.Ollama.Dimensions == 0 {
+		cfg.Embedding.Ollama.Dimensions = 1024
+	}
+	if cfg.Embedding.OpenAI.BaseURL == "" {
+		cfg.Embedding.OpenAI.BaseURL = "https://api.openai.com/v1"
+	}
+	if cfg.Embedding.OpenAI.Model == "" {
+		cfg.Embedding.OpenAI.Model = "text-embedding-3-small"
+	}
+	if cfg.Embedding.OpenAI.Dimensions == 0 {
+		cfg.Embedding.OpenAI.Dimensions = 1024
+	}
+	if cfg.Embedding.QueryCache.Size == 0 {
+		cfg.Embedding.QueryCache.Size = 512
+	}
+	if cfg.Embedding.QueryCache.TTLMinutes == 0 {
+		cfg.Embedding.QueryCache.TTLMinutes = 60
+	}
+	if cfg.Embedding.MaxRetries == 0 {
+		cfg.Embedding.MaxRetries = 2
+	}
+	if cfg.Embedding.TimeoutSeconds == 0 {
+		cfg.Embedding.TimeoutSeconds = 15
+	}
+	if cfg.Embedding.Hybrid.RRFWindowSize == 0 {
+		cfg.Embedding.Hybrid.RRFWindowSize = 100
+	}
+	if cfg.Embedding.Hybrid.RRFRankConstant == 0 {
+		cfg.Embedding.Hybrid.RRFRankConstant = 60
+	}
+	if cfg.Embedding.Hybrid.KNNK == 0 {
+		cfg.Embedding.Hybrid.KNNK = 50
+	}
+	if cfg.Embedding.Hybrid.KNNNumCandidates == 0 {
+		cfg.Embedding.Hybrid.KNNNumCandidates = 200
+	}
 }
 
 // validate 校验配置的必填项和枚举值合法性。
@@ -178,6 +266,18 @@ func validate(cfg *Config) error {
 	}
 	if cfg.Elasticsearch.IndexName == "" {
 		return fmt.Errorf("elasticsearch.index_name: must not be empty")
+	}
+
+	// Embedding validation (only when enabled)
+	if cfg.Embedding.Enabled {
+		switch cfg.Embedding.Provider {
+		case "ollama", "openai":
+		default:
+			return fmt.Errorf("embedding.provider: must be one of [ollama, openai], got %q", cfg.Embedding.Provider)
+		}
+		if cfg.Embedding.Hybrid.RRFWindowSize < cfg.Embedding.Hybrid.KNNK {
+			return fmt.Errorf("embedding.hybrid.rrf_window (%d) must be >= embedding.hybrid.knn_k (%d)", cfg.Embedding.Hybrid.RRFWindowSize, cfg.Embedding.Hybrid.KNNK)
+		}
 	}
 
 	return nil

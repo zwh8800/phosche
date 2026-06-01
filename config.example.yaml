@@ -1,43 +1,133 @@
+# =============================================================================
+# 文件监控配置
+# =============================================================================
 watch:
+  # 监控的照片目录路径列表（同时用于文件监控和照片文件服务）
   directories:
     - /path/to/photos
+  # 是否递归监控子目录
   recursive: true
+  # 文件事件的去抖间隔（毫秒），同一文件在间隔内的多次修改会被合并
   debounce_ms: 500
+  # 最小监控目录深度
   min_dir_depth: 1
+  # 排除的目录名列表，支持前缀匹配和目录名匹配
   exclude_dirs: []
+  # 私有目录配置，key 为目录前缀路径，value 为授权用户邮箱列表
   private_dirs: {}
   #   "/Volumes/photo/私人":
   #     - "user@example.com"
+  # 跳过启动时的全量目录扫描，仅监控新增文件
   skip_initial_scan: false
 
+# =============================================================================
+# LLM AI 分析配置
+# =============================================================================
 llm:
+  # LLM 提供商，可选 "ollama"（本地）或 "openai"（云端）
   provider: ollama
   ollama:
+    # Ollama 服务地址
     base_url: http://localhost:11434
+    # 视觉模型名称（需要支持图片输入的多模态模型）
     model: llama3.2-vision
   openai:
+    # OpenAI API 密钥
     api_key: ""
+    # API 地址（可替换为兼容的第三方接口）
     base_url: https://api.openai.com/v1
+    # 模型名称
     model: gpt-4o
+  # 分析失败时的最大重试次数
   max_retries: 3
+  # 同时进行的 AI 分析任务数
   concurrency: 2
+  # 单次 AI 分析请求的超时时间（秒）
   timeout_seconds: 60
+  # 输出语言，影响分析结果描述的语言（zh/en）
   output_language: zh
 
+# =============================================================================
+# Elasticsearch 配置
+# =============================================================================
 elasticsearch:
+  # ES 节点地址列表
   addresses:
     - http://localhost:9200
+  # ES 认证用户名（为空表示无认证）
   username: ""
+  # ES 认证密码
   password: ""
+  # 是否跳过 TLS 证书验证
   insecure_skip_verify: false
+  # ES 索引名称
   index_name: phosche
 
+# =============================================================================
+# HTTP 服务器配置
+# =============================================================================
 server:
+  # 监听地址
   host: "0.0.0.0"
+  # 监听端口
   port: 8080
+  # 开发模式开关，开启时不提供 SPA 静态文件
   dev_mode: true
+  # 日志级别：debug / info / warn / error
   log_level: info
+  # 照片缓存目录（缩略图 + HEIC 转 JPEG），空表示不缓存（实时生成）
   cache_dir: ""
 
+# =============================================================================
+# 外部服务配置
+# =============================================================================
 env:
+  # 高德地图 API Key，用于逆地理编码（GPS 坐标转地址）。为空时禁用
   amap_key: ""
+
+# =============================================================================
+# 文本向量化配置（用于混合检索：BM25 + 语义搜索）
+# =============================================================================
+embedding:
+  # 是否启用 embedding。false 时完全跳过向量化，只用 BM25 搜索
+  enabled: false
+  # 向量化后端，可选 "ollama" 或 "openai"
+  provider: ollama
+  ollama:
+    # Ollama 服务地址
+    base_url: http://localhost:11434
+    # embedding 模型名称（如 bge-m3、qwen3-embedding:4b）
+    model: bge-m3
+    # 向量维度，必须与模型实际输出一致
+    dimensions: 1024
+  openai:
+    # OpenAI API 密钥
+    api_key: ""
+    # API 地址
+    base_url: https://api.openai.com/v1
+    # 模型名称（如 text-embedding-3-small）
+    model: text-embedding-3-small
+    # 向量维度（OpenAI 支持 Matryoshka 截断，可设小于模型原始维度）
+    dimensions: 1024
+  # embedding 输入文本的 Go 模板。空字符串使用默认模板（description + 标签 + 物体 + 地点 + 地址 + 文字）
+  source_template: ""
+  query_cache:
+    # 查询 embedding 的 LRU 缓存条目数
+    size: 512
+    # 缓存过期时间（分钟）
+    ttl_minutes: 60
+  # embedding 失败时是否阻塞文档入库。false = 失败后文档照常入库（无向量），只被 BM25 召回
+  required: false
+  # 单次 embedding 请求的重试次数（5xx/网络错误才重试，4xx 不重试）
+  max_retries: 2
+  # 单次 embedding 请求超时（秒）
+  timeout_seconds: 15
+  hybrid:
+    # RRF 的 rank_window_size，从两路召回中取前 N 名参与融合排序，必须 >= knn_k
+    rrf_window: 100
+    # RRF 排名常数 k，控制排名差异的权重衰减速度，越大越平滑
+    rrf_rank_constant: 60
+    # KNN 检索器返回的最近邻数量
+    knn_k: 50
+    # HNSW 搜索时的候选集大小，越大越精确但越慢
+    knn_num_candidates: 200

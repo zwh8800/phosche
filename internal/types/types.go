@@ -149,6 +149,9 @@ type PhotoDocument struct {
 	Photo
 	AnalysisResult
 	GeoInfo
+	Embedding        []float32 `json:"embedding,omitempty"`
+	EmbeddingVersion string    `json:"embedding_version,omitempty"`
+	EmbeddedAt       int64     `json:"embedded_at,omitempty"`
 }
 
 // SearchRequest 是照片搜索请求参数，支持全文搜索、多条件过滤和分页。
