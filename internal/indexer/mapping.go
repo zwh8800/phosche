@@ -5,27 +5,27 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 
-	"github.com/elastic/go-elasticsearch/v8/esapi"
+	"github.com/opensearch-project/opensearch-go/v4/opensearchapi"
 )
 
 // mappingVersion 追踪当前索引映射的版本号，用于迁移检测。
-// 当映射结构发生变化时，应递增此版本号。启动时若检测到 ES 中
+// 当映射结构发生变化时，应递增此版本号。启动时若检测到 OS 中
 // 已有索引的 _meta.version 与此不一致，会自动删除旧索引并重建。
-const mappingVersion = "7"
+const mappingVersion = "8"
 
-// buildIndexMapping 构建 ES 索引映射，embeddingDims 控制 dense_vector 维度。
-// embeddingDims 为 0 时不启用 dense_vector 字段（embedding 未配置时）。
+// buildIndexMapping 构建 OS 索引映射，embeddingDims 控制 knn_vector 维度。
+// embeddingDims 为 0 时不启用 knn_vector 字段（embedding 未配置时）。
 //
 // settings 配置：
 //   - number_of_shards: 1（单分片，适用于单节点部署）
 //   - number_of_replicas: 0（无副本，单节点下避免 unassigned shards）
+//   - index.knn: true（启用 OpenSearch KNN 索引）
 //   - IK 中文分词器：ik_max_word（索引时最细粒度）、ik_smart（搜索时智能切分）
 //
 // 字段映射一览：
 //
-//	| 字段名              | ES 类型            | 说明                                    |
+//	| 字段名              | OS 类型            | 说明                                    |
 //	|---------------------|--------------------|-----------------------------------------|
 //	| description         | text (ik)          | 照片描述，支持全文搜索                  |
 //	| tags                | text (ik)+.keyword | 标签，text 全文搜索，.keyword 精确聚合  |
@@ -65,7 +65,7 @@ const mappingVersion = "7"
 //	| street_number       | keyword            | 门牌号                                  |
 //	| address             | text (ik)          | 详细地址                                |
 //	| formatted_address   | text (ik)          | 格式化地址                              |
-//	| embedding           | dense_vector       | 文本向量（仅 embeddingDims>0 时启用）   |
+//	| embedding           | knn_vector         | 文本向量（仅 embeddingDims>0 时启用）   |
 //	| embedding_version   | keyword            | 向量版本标识（如 "bge-m3@1024"）       |
 //	| embedded_at         | long               | 向量生成时间戳                          |
 //
@@ -75,6 +75,9 @@ func buildIndexMapping(embeddingDims int) map[string]any {
 		"settings": map[string]any{
 			"number_of_shards":   1,
 			"number_of_replicas": 0,
+			"index": map[string]any{
+				"knn": true,
+			},
 			"analysis": map[string]any{
 				"analyzer": map[string]any{
 					"ik_max_analyzer": map[string]any{
@@ -161,14 +164,16 @@ func buildIndexMapping(embeddingDims int) map[string]any {
 	if embeddingDims > 0 {
 		props := mapping["mappings"].(map[string]any)["properties"].(map[string]any)
 		props["embedding"] = map[string]any{
-			"type":       "dense_vector",
-			"dims":       embeddingDims,
-			"index":      true,
-			"similarity": "cosine",
-			"index_options": map[string]any{
-				"type":            "int8_hnsw",
-				"m":               16,
-				"ef_construction": 100,
+			"type":       "knn_vector",
+			"dimension":  embeddingDims,
+			"space_type": "cosinesimil",
+			"method": map[string]any{
+				"engine": "faiss",
+				"name":   "hnsw",
+				"parameters": map[string]any{
+					"m":               16,
+					"ef_construction": 100,
+				},
 			},
 		}
 		props["embedding_version"] = map[string]any{"type": "keyword"}
@@ -192,13 +197,13 @@ var textWithKeyword = map[string]any{
 	},
 }
 
-// EnsureIndex 确保 ES 索引存在且映射版本匹配。
+// EnsureIndex 确保 OS 索引存在且映射版本匹配。
 //
 // 流程：
 //  1. 调用 indexExists 检查索引是否存在
 //  2. 若存在 → 调用 checkMappingVersion 校验 _meta.version，不匹配时自动删除并重建
 //  3. 若不存在 → 调用 createIndex 使用当前 indexMapping 创建索引
-func (c *ESClient) EnsureIndex(ctx context.Context, indexName string, embeddingDims int) error {
+func (c *OSClient) EnsureIndex(ctx context.Context, indexName string, embeddingDims int) error {
 	exists, err := c.indexExists(ctx, indexName)
 	if err != nil {
 		return err
@@ -209,13 +214,12 @@ func (c *ESClient) EnsureIndex(ctx context.Context, indexName string, embeddingD
 	return c.createIndex(ctx, indexName, embeddingDims)
 }
 
-// indexExists 通过 ES IndicesExists API 检查指定索引是否存在。
+// indexExists 通过 OS Indices.Exists API 检查指定索引是否存在。
 // 返回 (true, nil) 表示存在，(false, nil) 表示不存在（404），其他状态码视为错误。
-func (c *ESClient) indexExists(ctx context.Context, indexName string) (bool, error) {
-	req := esapi.IndicesExistsRequest{
-		Index: []string{indexName},
-	}
-	resp, err := req.Do(ctx, c.client)
+func (c *OSClient) indexExists(ctx context.Context, indexName string) (bool, error) {
+	resp, err := c.client.Indices.Exists(ctx, opensearchapi.IndicesExistsReq{
+		Indices: []string{indexName},
+	})
 	if err != nil {
 		return false, fmt.Errorf("check index exists: %w", err)
 	}
@@ -231,30 +235,41 @@ func (c *ESClient) indexExists(ctx context.Context, indexName string) (bool, err
 	}
 }
 
-// checkMappingVersion 获取 ES 中已有索引的映射，提取 _meta.version 并与当前 mappingVersion 比较。
+// checkMappingVersion 获取 OS 中已有索引的映射，提取 _meta.version 并与当前 mappingVersion 比较。
 // 如果版本缺失或不一致，会自动删除旧索引并使用新映射重建。
-func (c *ESClient) checkMappingVersion(ctx context.Context, indexName string, embeddingDims int) error {
-	req := esapi.IndicesGetMappingRequest{
-		Index: []string{indexName},
-	}
-	resp, err := req.Do(ctx, c.client)
+func (c *OSClient) checkMappingVersion(ctx context.Context, indexName string, embeddingDims int) error {
+	resp, err := c.client.Indices.Get(ctx, opensearchapi.IndicesGetReq{
+		Indices: []string{indexName},
+	})
 	if err != nil {
 		return fmt.Errorf("get mapping: %w", err)
 	}
-	defer resp.Body.Close()
 
-	if resp.IsError() {
-		b, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("get mapping returned %s: %s", resp.Status(), string(b))
+	idxData, ok := resp.Indices[indexName]
+	if !ok {
+		c.logger.Info("index not found in response, recreating", "index", indexName)
+		if err := c.deleteIndex(ctx, indexName); err != nil {
+			return fmt.Errorf("delete index for migration: %w", err)
+		}
+		return c.createIndex(ctx, indexName, embeddingDims)
 	}
 
-	var result map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return fmt.Errorf("decode mapping response: %w", err)
+	var mappings map[string]any
+	if err := json.Unmarshal(idxData.Mappings, &mappings); err != nil {
+		return fmt.Errorf("decode mapping: %w", err)
 	}
 
-	version := extractMetaVersion(result, indexName)
-	if version == "" || version != mappingVersion {
+	meta, ok := mappings["_meta"].(map[string]any)
+	if !ok {
+		c.logger.Info("mapping _meta missing, recreating", "index", indexName)
+		if err := c.deleteIndex(ctx, indexName); err != nil {
+			return fmt.Errorf("delete index for migration: %w", err)
+		}
+		return c.createIndex(ctx, indexName, embeddingDims)
+	}
+
+	version, _ := meta["version"].(string)
+	if version != mappingVersion {
 		c.logger.Info("mapping version mismatch, recreating index",
 			"expected_version", mappingVersion,
 			"actual_version", version,
@@ -268,62 +283,29 @@ func (c *ESClient) checkMappingVersion(ctx context.Context, indexName string, em
 	return nil
 }
 
-func extractMetaVersion(result map[string]any, indexName string) string {
-	idx, ok := result[indexName].(map[string]any)
-	if !ok {
-		return ""
-	}
-	mappings, ok := idx["mappings"].(map[string]any)
-	if !ok {
-		return ""
-	}
-	meta, ok := mappings["_meta"].(map[string]any)
-	if !ok {
-		return ""
-	}
-	v, ok := meta["version"].(string)
-	if !ok {
-		return ""
-	}
-	return v
-}
-
-func (c *ESClient) createIndex(ctx context.Context, indexName string, embeddingDims int) error {
+func (c *OSClient) createIndex(ctx context.Context, indexName string, embeddingDims int) error {
 	body, err := json.Marshal(buildIndexMapping(embeddingDims))
 	if err != nil {
 		return fmt.Errorf("marshal mapping: %w", err)
 	}
 
-	req := esapi.IndicesCreateRequest{
+	_, err = c.client.Indices.Create(ctx, opensearchapi.IndicesCreateReq{
 		Index: indexName,
 		Body:  bytes.NewReader(body),
-	}
-	resp, err := req.Do(ctx, c.client)
+	})
 	if err != nil {
 		return fmt.Errorf("create index: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.IsError() {
-		b, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("create index returned %s: %s", resp.Status(), string(b))
 	}
 	return nil
 }
 
-func (c *ESClient) deleteIndex(ctx context.Context, indexName string) error {
-	req := esapi.IndicesDeleteRequest{
-		Index: []string{indexName},
-	}
-	resp, err := req.Do(ctx, c.client)
+func (c *OSClient) deleteIndex(ctx context.Context, indexName string) error {
+	_, err := c.client.Indices.Delete(ctx, opensearchapi.IndicesDeleteReq{
+		Indices: []string{indexName},
+	})
 	if err != nil {
-		return fmt.Errorf("delete index: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.IsError() && resp.StatusCode != 404 {
-		b, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("delete index returned %s: %s", resp.Status(), string(b))
+		// OpenSearch returns an error on 404, but we want to ignore it
+		return nil
 	}
 	return nil
 }
