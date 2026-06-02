@@ -37,7 +37,7 @@ llm:
   concurrency: 2
   timeout_seconds: 60
   output_language: zh
-elasticsearch:
+opensearch:
   addresses:
     - http://localhost:9200
   username: ""
@@ -73,11 +73,11 @@ server:
 	if cfg.LLM.Ollama.BaseURL != "http://localhost:11434" {
 		t.Errorf("LLM.Ollama.BaseURL = %q", cfg.LLM.Ollama.BaseURL)
 	}
-	if len(cfg.Elasticsearch.Addresses) != 1 || cfg.Elasticsearch.Addresses[0] != "http://localhost:9200" {
-		t.Errorf("unexpected ES.Addresses: %v", cfg.Elasticsearch.Addresses)
+	if len(cfg.OpenSearch.Addresses) != 1 || cfg.OpenSearch.Addresses[0] != "http://localhost:9200" {
+		t.Errorf("unexpected OS.Addresses: %v", cfg.OpenSearch.Addresses)
 	}
-	if cfg.Elasticsearch.IndexName != "phosche" {
-		t.Errorf("ES.IndexName = %q, want phosche", cfg.Elasticsearch.IndexName)
+	if cfg.OpenSearch.IndexName != "phosche" {
+		t.Errorf("OS.IndexName = %q, want phosche", cfg.OpenSearch.IndexName)
 	}
 	if cfg.Server.Host != "0.0.0.0" {
 		t.Errorf("Server.Host = %q", cfg.Server.Host)
@@ -102,7 +102,7 @@ watch:
   directories: []
 llm:
   provider: ollama
-elasticsearch:
+opensearch:
   addresses:
     - http://localhost:9200
   index_name: phosche
@@ -121,7 +121,7 @@ watch:
     - /photos
 llm:
   provider: ollama
-elasticsearch:
+opensearch:
   addresses:
     - http://localhost:9200
   index_name: ""
@@ -140,7 +140,7 @@ watch:
     - /photos
 llm:
   provider: invalid-provider
-elasticsearch:
+opensearch:
   addresses:
     - http://localhost:9200
   index_name: phosche
@@ -152,14 +152,14 @@ elasticsearch:
 		}
 	})
 
-	t.Run("missing elasticsearch addresses", func(t *testing.T) {
+	t.Run("missing opensearch addresses", func(t *testing.T) {
 		yaml := `
 watch:
   directories:
     - /photos
 llm:
   provider: openai
-elasticsearch:
+opensearch:
   addresses: []
   index_name: phosche
 `
@@ -178,7 +178,7 @@ watch:
     - /photos
 llm:
   provider: openai
-elasticsearch:
+opensearch:
   addresses:
     - http://localhost:9200
   index_name: phosche
@@ -236,7 +236,7 @@ llm:
     api_key: sk-test123
     base_url: https://api.openai.com/v1
     model: gpt-4o
-elasticsearch:
+opensearch:
   addresses:
     - http://localhost:9200
   index_name: phosche
