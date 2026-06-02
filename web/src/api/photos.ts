@@ -124,10 +124,10 @@ export async function fetchStats(): Promise<StatsResponse> {
 /**
  * 获取搜索筛选选项
  *
- * 调用 GET /api/filters 端点，返回所有可用的标签、场景类型和相机型号列表，
- * 用于前端搜索页面的下拉筛选项。
- *
- * @returns Promise<FiltersResponse> 筛选选项，包含 tags、scene_types、cameras
+  * 调用 GET /api/filters 端点，返回所有可用的标签、场景类型、地理信息和状态列表，
+  * 用于前端搜索页面的下拉筛选项。
+  *
+  * @returns Promise<FiltersResponse> 筛选选项，包含 tags、scene_types、countries、provinces、cities、districts、statuses
  */
 export async function fetchFilters(): Promise<FiltersResponse> {
   const { data } = await apiClient.get<FiltersResponse>('/filters');

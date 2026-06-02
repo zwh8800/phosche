@@ -4,7 +4,7 @@
  * 功能特性：
  * - 关键词全文搜索 + 多条件筛选
  * - 搜索条件和 URL 查询参数双向同步（useSearchParams）
- * - 筛选条件变化后 300ms 防抖自动搜索（日期、场景、相机、标签）
+ * - 筛选条件变化后 300ms 防抖自动搜索（日期、场景、地理、状态、标签）
  * - 搜索词需用户回车或点击搜索按钮才触发
  * - 无限滚动加载搜索结果
  * - 手动提交搜索（回车/点击按钮）
@@ -13,7 +13,11 @@
  * 筛选项：
  * - 拍摄日期范围（date_from / date_to）
  * - 场景类型（scene_type）：室外/室内/水下/航拍等
- * - 相机型号（camera_model）
+ * - 国家（country）
+ * - 省份（province）
+ * - 城市（city）
+ * - 区/县（district）
+ * - 状态（status）
  * - 标签（tags）：多选，逗号分隔
  *
  * 数据流：
@@ -250,20 +254,21 @@ const PhotoCard = memo(function PhotoCard({ photo }: { photo: PhotoDocument }) {
  * - 全文关键词搜索 + 多条件筛选
  * - URL 同步：所有筛选条件通过 useSearchParams 同步到 URL
  * - 搜索词仅在用户显式提交时触发搜索（回车/点击按钮）
- * - 筛选条件（日期、场景、相机、标签）变化后自动搜索
+ * - 筛选条件（日期、场景、地理、状态、标签）变化后自动搜索
  * - 无限滚动加载（IntersectionObserver）
  * - 筛选面板可折叠，显示活跃筛选数量
  *
  * 状态管理：
- * - useState: 管理各筛选条件（query, dateFrom, dateTo, sceneType, cameraModel, selectedTags）
+ * - useState: 管理各筛选条件（query, dateFrom, dateTo, sceneType, country, province, city, district, status, selectedTags）
  * - committedQuery: 仅在用户显式搜索时更新，驱动 useInfiniteQuery
  * - useSearchParams: URL 参数双向同步
  * - useInfiniteQuery: 搜索结果分页加载
- * - useQuery: 获取可用筛选选项（标签、场景类型、相机型号）
+ * - useQuery: 获取可用筛选选项（标签、场景类型、地理信息、状态）
  *
  * URL 参数映射：
  * query → keywords, date_from → dateFrom, date_to → dateTo,
- * scene_type → sceneType, camera_model → cameraModel, tags → selectedTags
+ * scene_type → sceneType, country → country, province → province,
+ * city → city, district → district, status → status, tags → selectedTags
  */
 export default function Search() {
   // URL 搜索参数管理，实现筛选条件的 URL 同步
@@ -275,11 +280,15 @@ export default function Search() {
   const [dateFrom, setDateFrom] = useState(searchParams.get('date_from') || '');
   const [dateTo, setDateTo] = useState(searchParams.get('date_to') || '');
   const [sceneType, setSceneType] = useState(searchParams.get('scene_type') || '');
-  const [cameraModel, setCameraModel] = useState(searchParams.get('camera_model') || '');
   const [selectedTags, setSelectedTags] = useState<string[]>(() => {
     const raw = searchParams.get('tags');
     return raw ? raw.split(',').filter(Boolean) : [];
   });
+  const [country, setCountry] = useState(searchParams.get('country') || '');
+  const [province, setProvince] = useState(searchParams.get('province') || '');
+  const [city, setCity] = useState(searchParams.get('city') || '');
+  const [district, setDistrict] = useState(searchParams.get('district') || '');
+  const [status, setStatus] = useState(searchParams.get('status') || '');
   // 筛选面板展开/折叠状态
   const [showFilters, setShowFilters] = useState(false);
   // 搜索激活标志，控制 useInfiniteQuery 是否执行
@@ -288,7 +297,7 @@ export default function Search() {
   const sentinelRef = useRef<HTMLDivElement>(null);
 
   /**
-   * 获取可用筛选选项（标签、场景类型、相机型号）
+   * 获取可用筛选选项（标签、场景类型、地理信息、状态）
    * 缓存 5 分钟，避免重复请求
    */
   const { data: filters } = useQuery<FiltersResponse>({
@@ -312,7 +321,7 @@ export default function Search() {
     error,
     refetch,
   } = useInfiniteQuery({
-    queryKey: ['search', committedQuery, dateFrom, dateTo, sceneType, cameraModel, selectedTags],
+    queryKey: ['search', committedQuery, dateFrom, dateTo, sceneType, country, province, city, district, status, selectedTags],
     queryFn: ({ pageParam = 1 }) =>
       searchPhotos({
         query: committedQuery || undefined,
@@ -320,7 +329,11 @@ export default function Search() {
         date_to: dateTo || undefined,
         tags: selectedTags.length > 0 ? selectedTags : undefined,
         scene_type: sceneType || undefined,
-        camera_model: cameraModel || undefined,
+        country: country || undefined,
+        province: province || undefined,
+        city: city || undefined,
+        district: district || undefined,
+        status: status || undefined,
         page: pageParam,
         page_size: PAGE_SIZE,
       }),
@@ -380,7 +393,11 @@ export default function Search() {
     if (dateFrom) p.set('date_from', dateFrom);
     if (dateTo) p.set('date_to', dateTo);
     if (sceneType) p.set('scene_type', sceneType);
-    if (cameraModel) p.set('camera_model', cameraModel);
+    if (country) p.set('country', country);
+    if (province) p.set('province', province);
+    if (city) p.set('city', city);
+    if (district) p.set('district', district);
+    if (status) p.set('status', status);
     if (selectedTags.length > 0) p.set('tags', selectedTags.join(','));
     return p;
   };
@@ -403,7 +420,11 @@ export default function Search() {
     setDateFrom('');
     setDateTo('');
     setSceneType('');
-    setCameraModel('');
+    setCountry('');
+    setProvince('');
+    setCity('');
+    setDistrict('');
+    setStatus('');
     setSelectedTags([]);
     setQuery('');
     setCommittedQuery('');
@@ -416,7 +437,11 @@ export default function Search() {
     (dateFrom ? 1 : 0) +
     (dateTo ? 1 : 0) +
     (sceneType ? 1 : 0) +
-    (cameraModel ? 1 : 0) +
+    (country ? 1 : 0) +
+    (province ? 1 : 0) +
+    (city ? 1 : 0) +
+    (district ? 1 : 0) +
+    (status ? 1 : 0) +
     selectedTags.length;
 
   // 合并所有分页的搜索结果为一个数组
@@ -529,25 +554,97 @@ export default function Search() {
             >
               <option value="">全部</option>
               {(filters?.scene_types || []).map((s) => (
-                <option key={s} value={s}>{s}</option>
+                <option key={s} value={s}>{SCENE_TYPE_LABELS[s] || s}</option>
               ))}
             </select>
           </div>
 
-          {/* 相机型号下拉筛选 */}
+          {/* 状态筛选 */}
           <div>
-            <label htmlFor="filter-camera" className="block text-xs font-medium text-gray-500 mb-2">
-               相机型号
+            <label htmlFor="filter-status" className="block text-xs font-medium text-gray-500 mb-2">
+              状态
             </label>
             <select
-              id="filter-camera"
-              value={cameraModel}
-              onChange={(e: ChangeEvent<HTMLSelectElement>) => setCameraModel(e.target.value)}
+              id="filter-status"
+              value={status}
+              onChange={(e: ChangeEvent<HTMLSelectElement>) => setStatus(e.target.value)}
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
             >
               <option value="">全部</option>
-              {(filters?.cameras || []).map((c) => (
+              {(filters?.statuses || []).map((s) => (
+                <option key={s} value={s}>{STATUS_LABELS[s] || s}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* 国家 */}
+          <div>
+            <label htmlFor="filter-country" className="block text-xs font-medium text-gray-500 mb-2">
+              国家
+            </label>
+            <select
+              id="filter-country"
+              value={country}
+              onChange={(e: ChangeEvent<HTMLSelectElement>) => setCountry(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
+            >
+              <option value="">全部</option>
+              {(filters?.countries || []).map((c) => (
                 <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* 省份 */}
+          <div>
+            <label htmlFor="filter-province" className="block text-xs font-medium text-gray-500 mb-2">
+              省份
+            </label>
+            <select
+              id="filter-province"
+              value={province}
+              onChange={(e: ChangeEvent<HTMLSelectElement>) => setProvince(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
+            >
+              <option value="">全部</option>
+              {(filters?.provinces || []).map((p) => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* 城市 */}
+          <div>
+            <label htmlFor="filter-city" className="block text-xs font-medium text-gray-500 mb-2">
+              城市
+            </label>
+            <select
+              id="filter-city"
+              value={city}
+              onChange={(e: ChangeEvent<HTMLSelectElement>) => setCity(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
+            >
+              <option value="">全部</option>
+              {(filters?.cities || []).map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* 区/县 */}
+          <div>
+            <label htmlFor="filter-district" className="block text-xs font-medium text-gray-500 mb-2">
+              区/县
+            </label>
+            <select
+              id="filter-district"
+              value={district}
+              onChange={(e: ChangeEvent<HTMLSelectElement>) => setDistrict(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
+            >
+              <option value="">全部</option>
+              {(filters?.districts || []).map((d) => (
+                <option key={d} value={d}>{d}</option>
               ))}
             </select>
           </div>

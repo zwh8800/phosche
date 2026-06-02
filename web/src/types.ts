@@ -199,8 +199,16 @@ export interface SearchRequest {
   objects?: string[];
   /** 按场景类型过滤：indoor / outdoor / unknown */
   scene_type?: string;
-  /** 按相机型号过滤 */
-  camera_model?: string;
+  /** 按国家过滤 */
+  country?: string;
+  /** 按省份过滤 */
+  province?: string;
+  /** 按城市过滤 */
+  city?: string;
+  /** 按区/县过滤 */
+  district?: string;
+  /** 按处理状态过滤 */
+  status?: string;
   /** 页码（从 1 开始） */
   page: number;
   /** 每页数量（最大 100） */
@@ -248,12 +256,20 @@ export interface StatsResponse {
  * 返回所有可用的筛选选项，用于前端搜索页面的下拉菜单。
  */
 export interface FiltersResponse {
-  /** 所有可用的标签列表 */
+  /** 所有可用标签列表（按热度排序的前 50 个） */
   tags: string[];
-  /** 所有可用的场景类型列表（indoor / outdoor / unknown） */
+  /** 场景类型列表 */
   scene_types: string[];
-  /** 所有可用的相机型号列表 */
-  cameras: string[];
+  /** 国家列表 */
+  countries: string[];
+  /** 省份列表 */
+  provinces: string[];
+  /** 城市列表 */
+  cities: string[];
+  /** 区/县列表 */
+  districts: string[];
+  /** 状态列表 */
+  statuses: string[];
 }
 
 /**
@@ -422,7 +438,11 @@ export interface PhotoDocument extends Photo, AnalysisResult {
  * @property tags - 标签过滤列表（多选，文档需匹配所有标签）
  * @property objects - 检测到的物体过滤列表
  * @property scene_type - 场景类型过滤（indoor/outdoor/unknown）
- * @property camera_model - 相机型号过滤
+ * @property country - 国家过滤
+ * @property province - 省份过滤
+ * @property city - 城市过滤
+ * @property district - 区/县过滤
+ * @property status - 处理状态过滤
  * @property page - 页码（从 1 开始，必填）
  * @property page_size - 每页数量（默认 20，最大 100，必填）
  */
@@ -439,8 +459,16 @@ export interface SearchRequest {
   objects?: string[];
   /** 场景类型过滤：'indoor'（室内）、'outdoor'（室外）、'unknown'（未知） */
   scene_type?: string;
-  /** 相机型号过滤（如 "iPhone 15 Pro"、"Canon EOS R5"） */
-  camera_model?: string;
+  /** 按国家过滤 */
+  country?: string;
+  /** 按省份过滤 */
+  province?: string;
+  /** 按城市过滤 */
+  city?: string;
+  /** 按区/县过滤 */
+  district?: string;
+  /** 按处理状态过滤 */
+  status?: string;
   /** 页码（从 1 开始，必填） */
   page: number;
   /** 每页数量（默认 20，最大 100，必填） */
@@ -495,20 +523,32 @@ export interface StatsResponse {
  * 筛选选项响应接口
  *
  * GET /api/filters 接口的响应数据结构。
- * 返回所有可用的标签、场景类型和相机型号列表，
+ * 返回所有可用的筛选选项列表，
  * 用于前端搜索页面的下拉筛选项，方便用户进行多条件组合筛选。
  *
- * @property tags - 所有可用标签列表（如 ["旅行", "风景", "人像", "美食", "建筑"]）
- * @property scene_types - 所有场景类型列表（如 ["indoor", "outdoor", "unknown"]）
- * @property cameras - 所有相机型号列表（如 ["iPhone 15 Pro", "Canon EOS R5", "Sony A7III"]）
+ * @property tags - 所有可用标签列表（按热度排序的前 50 个）
+ * @property scene_types - 场景类型列表
+ * @property countries - 国家列表
+ * @property provinces - 省份列表
+ * @property cities - 城市列表
+ * @property districts - 区/县列表
+ * @property statuses - 状态列表
  */
 export interface FiltersResponse {
-  /** 所有可用标签列表 */
+  /** 所有可用标签列表（按热度排序的前 50 个） */
   tags: string[];
-  /** 场景类型列表（indoor/outdoor/unknown） */
+  /** 场景类型列表 */
   scene_types: string[];
-  /** 相机型号列表 */
-  cameras: string[];
+  /** 国家列表 */
+  countries: string[];
+  /** 省份列表 */
+  provinces: string[];
+  /** 城市列表 */
+  cities: string[];
+  /** 区/县列表 */
+  districts: string[];
+  /** 状态列表 */
+  statuses: string[];
 }
 
 
