@@ -128,18 +128,49 @@ go run . -config config.yaml
 
 **1. 启动 OpenSearch（含 IK 中文分词插件）：**
 
-phosche 依赖 IK 分词插件进行中文全文搜索。如果需要本地启动 OpenSearch，使用项目提供的 `Dockerfile.opensearch` 构建包含 IK 插件的镜像：
+phosche 依赖 IK 分词插件进行中文全文搜索。任选以下任一方式启动 OpenSearch：
+
+**方式 A：使用项目提供的 Dockerfile 构建（推荐）**
+
+构建包含 IK 插件的自定义镜像，然后启动容器：
 
 ```bash
 docker build -t phosche-opensearch -f Dockerfile.opensearch .
 docker run -d \
   --name opensearch \
   -p 9200:9200 \
+  -p 9600:9600 \
   -e "discovery.type=single-node" \
   -e "DISABLE_SECURITY_PLUGIN=true" \
   -e "plugins.security.disabled=true" \
+  -e "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m" \
   -v osdata:/usr/share/opensearch/data \
   phosche-opensearch
+```
+
+**方式 B：基于官方镜像直接运行**
+
+先启动官方 OpenSearch 容器，再进入容器手动安装 IK 插件并重启：
+
+```bash
+# 启动官方 OpenSearch 容器
+docker run -d \
+  --name opensearch \
+  -p 9200:9200 \
+  -p 9600:9600 \
+  -e "discovery.type=single-node" \
+  -e "DISABLE_SECURITY_PLUGIN=true" \
+  -e "plugins.security.disabled=true" \
+  -e "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m" \
+  -v osdata:/usr/share/opensearch/data \
+  opensearchproject/opensearch:2.19.0
+
+# 在运行中的容器内安装 IK 插件
+docker exec opensearch /usr/share/opensearch/bin/opensearch-plugin install --batch \
+  https://get.infini.cloud/opensearch/analysis-ik/2.19.0
+
+# 重启容器使插件生效
+docker restart opensearch
 ```
 
 验证 OpenSearch 和 IK 插件是否正常：
