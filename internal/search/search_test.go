@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/opensearch-project/opensearch-go/v4/opensearchapi"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
@@ -80,21 +81,22 @@ func setupSearchTest(t *testing.T) (*SearchService, func()) {
 	defer cancel()
 
 	req := testcontainers.ContainerRequest{
-		Image:        "docker.elastic.co/elasticsearch/elasticsearch:8.17.0",
+		Image:        "opensearchproject/opensearch:2.19.0",
 		ExposedPorts: []string{"9200/tcp"},
 		Env: map[string]string{
-			"discovery.type":         "single-node",
-			"xpack.security.enabled": "false",
-			"ES_JAVA_OPTS":           "-Xms512m -Xmx512m",
+			"discovery.type":            "single-node",
+			"DISABLE_SECURITY_PLUGIN":   "true",
+			"plugins.security.disabled": "true",
+			"OPENSEARCH_JAVA_OPTS":      "-Xms512m -Xmx512m",
 		},
-		WaitingFor: wait.ForHTTP("/").WithPort("9200/tcp").WithStartupTimeout(2 * time.Minute),
+		WaitingFor: wait.ForHTTP("/").WithPort("9200/tcp").WithStartupTimeout(90 * time.Second),
 	}
 
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: req,
 		Started:          true,
 	})
-	require.NoError(t, err, "failed to start ES container")
+	require.NoError(t, err, "failed to start OpenSearch container")
 
 	cleanup := func() {
 		termCtx, termCancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -112,30 +114,26 @@ func setupSearchTest(t *testing.T) (*SearchService, func()) {
 
 	address := fmt.Sprintf("http://%s:%s", host, mappedPort.Port())
 
-	cfg := config.ESConfig{Addresses: []string{address}}
-	esClient, err := indexer.NewESClient(cfg)
+	cfg := config.OSConfig{Addresses: []string{address}}
+	osClient, err := indexer.NewOSClient(cfg)
 	require.NoError(t, err)
 
-	err = esClient.EnsureIndex(ctx, testIndex, 0)
+	err = osClient.EnsureIndex(ctx, testIndex, 0)
 	require.NoError(t, err)
 
-	bulkBody := buildBulkBody(testDocs)
-	bulkResp, err := esClient.Client().Bulk(bytes.NewReader(bulkBody),
-		esClient.Client().Bulk.WithContext(ctx),
-	)
-	require.NoError(t, err)
-	bulkResp.Body.Close()
-	if bulkResp.IsError() {
-		t.Fatalf("bulk index failed: %s", bulkResp.Status())
+	for _, doc := range testDocs {
+		body, err := json.Marshal(doc)
+		require.NoError(t, err)
+		_, err = osClient.Client().Index(ctx, opensearchapi.IndexReq{
+			Index:      testIndex,
+			DocumentID: doc.ID,
+			Body:       bytes.NewReader(body),
+			Params:     opensearchapi.IndexParams{Refresh: "true"},
+		})
+		require.NoError(t, err)
 	}
 
-	refreshResp, err := esClient.Client().Indices.Refresh(
-		esClient.Client().Indices.Refresh.WithIndex(testIndex),
-	)
-	require.NoError(t, err)
-	refreshResp.Body.Close()
-
-	return NewSearchService(esClient), cleanup
+	return NewSearchService(osClient), cleanup
 }
 
 func buildBulkBody(docs []testDoc) []byte {

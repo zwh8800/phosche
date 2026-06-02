@@ -90,21 +90,22 @@ func startESContainer(t *testing.T, ctx context.Context) (testcontainers.Contain
 	t.Helper()
 
 	req := testcontainers.ContainerRequest{
-		Image:        "docker.elastic.co/elasticsearch/elasticsearch:8.17.0",
+		Image:        "opensearchproject/opensearch:2.19.0",
 		ExposedPorts: []string{"9200/tcp"},
 		Env: map[string]string{
-			"discovery.type":         "single-node",
-			"xpack.security.enabled": "false",
-			"ES_JAVA_OPTS":           "-Xms512m -Xmx512m",
+			"discovery.type":            "single-node",
+			"DISABLE_SECURITY_PLUGIN":   "true",
+			"plugins.security.disabled": "true",
+			"OPENSEARCH_JAVA_OPTS":      "-Xms512m -Xmx512m",
 		},
-		WaitingFor: wait.ForHTTP("/").WithPort("9200/tcp").WithStartupTimeout(2 * time.Minute),
+		WaitingFor: wait.ForHTTP("/").WithPort("9200/tcp").WithStartupTimeout(90 * time.Second),
 	}
 
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: req,
 		Started:          true,
 	})
-	require.NoError(t, err, "failed to start ES container")
+	require.NoError(t, err, "failed to start OpenSearch container")
 
 	cleanup := func() {
 		termCtx, termCancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -142,15 +143,15 @@ func TestEndToEnd(t *testing.T) {
 	tempDir := t.TempDir()
 	photoPath := createTestJPEG(t, tempDir, "test_photo.jpg")
 
-	esCfg := config.ESConfig{Addresses: []string{address}}
-	esClient, err := indexer.NewESClient(esCfg)
+	osCfg := config.OSConfig{Addresses: []string{address}}
+	osClient, err := indexer.NewOSClient(osCfg)
 	require.NoError(t, err)
 
 	indexName := "test_photos_e2e"
-	err = esClient.EnsureIndex(ctx, indexName, 0)
+	err = osClient.EnsureIndex(ctx, indexName, 0)
 	require.NoError(t, err)
 
-	idxService := indexer.NewIndexerService(esClient, 10)
+	idxService := indexer.NewIndexerService(osClient, 10)
 
 	scn := &mockScanner{files: []string{photoPath}}
 	watcher := newMockWatcher()
@@ -181,7 +182,7 @@ func TestEndToEnd(t *testing.T) {
 	errCh := make(chan error, 1)
 	go func() { errCh <- p.Run(pipelineCtx) }()
 
-	searchSvc := search.NewSearchService(esClient)
+	searchSvc := search.NewSearchService(osClient)
 
 	require.Eventually(t, func() bool {
 		resp, err := searchSvc.Search(context.Background(), indexName, &types.SearchRequest{

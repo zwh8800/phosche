@@ -14,15 +14,15 @@ import (
 func setupIndexerTest(t *testing.T) (*IndexerService, string, func()) {
 	t.Helper()
 
-	esClient, esCleanup := setupTestES(t)
+	osClient, esCleanup := setupTestOS(t)
 
 	ctx := context.Background()
 	indexName := fmt.Sprintf("test_indexer_%d", time.Now().UnixNano())
 
-	err := esClient.EnsureIndex(ctx, indexName, 0)
+	err := osClient.EnsureIndex(ctx, indexName, 0)
 	require.NoError(t, err, "EnsureIndex should succeed")
 
-	svc := NewIndexerService(esClient, 100)
+	svc := NewIndexerService(osClient, 100)
 
 	cleanup := func() {
 		svc.Stop()
@@ -177,15 +177,15 @@ func TestIndexer_QueueOnFailure(t *testing.T) {
 		t.Skip("Docker not available")
 	}
 
-	esClient, esCleanup := setupTestES(t)
+	osClient, esCleanup := setupTestOS(t)
 
 	ctx := context.Background()
 	indexName := fmt.Sprintf("test_queue_%d", time.Now().UnixNano())
 
-	err := esClient.EnsureIndex(ctx, indexName, 0)
+	err := osClient.EnsureIndex(ctx, indexName, 0)
 	require.NoError(t, err, "EnsureIndex should succeed")
 
-	svc := NewIndexerService(esClient, 100)
+	svc := NewIndexerService(osClient, 100)
 
 	doc := newTestDoc("/photos/queued.jpg")
 	err = svc.IndexPhoto(ctx, doc, indexName)
@@ -244,16 +244,16 @@ func TestIndexer_StopDrainsQueue(t *testing.T) {
 		t.Skip("Docker not available")
 	}
 
-	esClient, esCleanup := setupTestES(t)
+	osClient, esCleanup := setupTestOS(t)
 	defer esCleanup()
 
 	ctx := context.Background()
 	indexName := fmt.Sprintf("test_stop_%d", time.Now().UnixNano())
 
-	err := esClient.EnsureIndex(ctx, indexName, 0)
+	err := osClient.EnsureIndex(ctx, indexName, 0)
 	require.NoError(t, err)
 
-	svc := NewIndexerService(esClient, 10)
+	svc := NewIndexerService(osClient, 10)
 
 	doc := newTestDoc("/photos/stop_drain.jpg")
 	for i := 0; i < 5; i++ {
