@@ -1,8 +1,12 @@
-FROM opensearchproject/opensearch:2.19.0
+FROM opensearchproject/opensearch:2.19.2
 
 # Install IK Chinese tokenizer plugin (INFINI Labs official build for OpenSearch)
+# NOTE: INFINI Labs did not publish IK for OpenSearch 2.19.0 (URL returns 404).
+# 2.19.2 is the first available 2.19.x release with matching IK plugin; verified via:
+#   curl -s -o /dev/null -w "%{http_code}" https://get.infini.cloud/opensearch/analysis-ik/2.19.0  # 404
+#   curl -s -o /dev/null -w "%{http_code}" https://get.infini.cloud/opensearch/analysis-ik/2.19.2  # 200
 RUN /usr/share/opensearch/bin/opensearch-plugin install --batch \
-    https://get.infini.cloud/opensearch/analysis-ik/2.19.0
+    https://get.infini.cloud/opensearch/analysis-ik/2.19.2
 
 # Disable security plugin for local development
 ENV DISABLE_SECURITY_PLUGIN=true

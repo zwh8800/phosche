@@ -160,10 +160,10 @@ docker run -d \
   -e "plugins.security.disabled=true" \
   -e "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m" \
   -v osdata:/usr/share/opensearch/data \
-  opensearchproject/opensearch:2.19.0 \
+  opensearchproject/opensearch:2.19.2 \
   bash -c '
     if [ ! -d /usr/share/opensearch/plugins/analysis-ik ]; then
-      opensearch-plugin install --batch https://get.infini.cloud/opensearch/analysis-ik/2.19.0
+      opensearch-plugin install --batch https://get.infini.cloud/opensearch/analysis-ik/2.19.2
     fi
     /usr/share/opensearch/opensearch-docker-entrypoint.sh opensearch
   '
@@ -177,7 +177,7 @@ docker run -d \
 | 默认 CMD | `opensearch`（ES 侧对应 `eswrapper`） |
 | 插件 CLI | `opensearch-plugin`（PATH 包含 `$OPENSEARCH_HOME/bin`） |
 | IK 安装目录 | `/usr/share/opensearch/plugins/analysis-ik` |
-| IK 安装源 | `https://get.infini.cloud/opensearch/analysis-ik/2.19.0`（INFINI Labs 官方） |
+| IK 安装源 | `https://get.infini.cloud/opensearch/analysis-ik/2.19.2`（INFINI Labs 官方；2.19.0 不可用，INFINI 未为该版本发布 IK） |
 
 > 注意：OpenSearch **不能**使用 Elasticsearch 的 IK 包（URL 前缀 `elasticsearch/` 与 `opensearch/` 区分），必须用 INFINI Labs 发布的 `opensearch` 版本，即上面命令中使用的 URL。
 
@@ -185,7 +185,7 @@ docker run -d \
 
 ```bash
 curl http://localhost:9200/_cat/plugins
-# 应输出: xxxxx analysis-ik 2.19.0
+# 应输出: xxxxx analysis-ik 2.19.2
 ```
 
 **2. 获取 phosche 镜像：**
@@ -725,7 +725,7 @@ phosche/
 
 ```bash
 # 启动 OpenSearch（使用 Docker）
-docker run -d -p 9200:9200 -e "discovery.type=single-node" -e "DISABLE_SECURITY_PLUGIN=true" -e "plugins.security.disabled=true" opensearchproject/opensearch:2.19.0
+docker run -d -p 9200:9200 -e "discovery.type=single-node" -e "DISABLE_SECURITY_PLUGIN=true" -e "plugins.security.disabled=true" opensearchproject/opensearch:2.19.2
 
 # 构建前端
 make build-frontend
