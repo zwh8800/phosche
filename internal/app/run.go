@@ -26,7 +26,7 @@ import (
 	"github.com/zwh8800/phosche/internal/watcher"
 )
 
-// Run 启动 phosche 服务。依次执行：加载配置 → 配置日志 → 初始化 ES 客户端并创建索引 → 创建索引服务 → 创建 LLM 客户端 + 图片分析器 → 创建文件监控器 + 目录扫描器 → 组装处理流水线 → 启动 HTTP 服务器 → 等待信号优雅关闭。
+// Run 启动 phosche 服务。依次执行：加载配置 → 配置日志 → 初始化 OpenSearch 客户端并创建索引 → 创建索引服务 → 创建 LLM 客户端 + 图片分析器 → 创建文件监控器 + 目录扫描器 → 组装处理流水线 → 启动 HTTP 服务器 → 等待信号优雅关闭。
 func Run(distFS fs.FS, configPath string) {
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
@@ -41,14 +41,14 @@ func Run(distFS fs.FS, configPath string) {
 
 	logStartupInfo(cfg)
 
-	// 初始化 ES 客户端并创建索引
-	esClient, err := indexer.NewESClient(cfg.Elasticsearch)
+	// 初始化 OpenSearch 客户端并创建索引
+	osClient, err := indexer.NewOSClient(cfg.OpenSearch)
 	if err != nil {
-		slog.Error("failed to create ES client", "error", err)
+		slog.Error("failed to create OpenSearch client", "error", err)
 		os.Exit(1)
 	}
 
-	// 提前计算 embedding 维度，用于创建 ES 索引映射
+	// 提前计算 embedding 维度，用于创建 OpenSearch 索引映射
 	embeddingDims := 0
 	if cfg.Embedding.Enabled {
 		switch cfg.Embedding.Provider {
@@ -59,15 +59,15 @@ func Run(distFS fs.FS, configPath string) {
 		}
 	}
 
-	ctx, esCancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer esCancel()
-	if err := esClient.EnsureIndex(ctx, cfg.Elasticsearch.IndexName, embeddingDims); err != nil {
-		slog.Error("failed to ensure ES index", "error", err)
+	ctx, osCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer osCancel()
+	if err := osClient.EnsureIndex(ctx, cfg.OpenSearch.IndexName, embeddingDims); err != nil {
+		slog.Error("failed to ensure OpenSearch index", "error", err)
 		os.Exit(1)
 	}
 
 	// 创建索引服务（带断路器功能，队列容量 100）
-	indexerSvc := indexer.NewIndexerService(esClient, 100)
+	indexerSvc := indexer.NewIndexerService(osClient, 100)
 
 	// 创建 LLM 客户端（通过工厂方法，支持 Ollama 和 OpenAI 两种后端）
 	llmClient, err := analyzer.NewLLMClient(analyzer.LLMClientConfig{
@@ -162,7 +162,7 @@ func Run(distFS fs.FS, configPath string) {
 	})
 	dirScanner := &watcher.DirectoryScanner{}
 
-	// 组装处理流水线（文件监控 → 解码 → AI 分析 → ES 索引）
+	// 组装处理流水线（文件监控 → 解码 → AI 分析 → OpenSearch 索引）
 	pipeCfg := pipeline.PipelineConfig{
 		Watcher:           fsWatcher,
 		Scanner:           dirScanner,
@@ -170,7 +170,7 @@ func Run(distFS fs.FS, configPath string) {
 		Geocoder:          geoCoder,
 		Indexer:           indexerSvc,
 		Cache:             cacheGen,
-		IndexName:         cfg.Elasticsearch.IndexName,
+		IndexName:         cfg.OpenSearch.IndexName,
 		Dirs:              cfg.Watch.Directories,
 		Recursive:         cfg.Watch.Recursive,
 		ExcludeDirs:       cfg.Watch.ExcludeDirs,
@@ -194,19 +194,16 @@ func Run(distFS fs.FS, configPath string) {
 		}
 	}()
 
-	// 创建搜索服务（构建 ES 查询）
+	// 创建搜索服务（构建 OpenSearch 查询，支持原生 RRF）
 	searchOpts := []search.SearchOption{}
 	if embService != nil {
 		searchOpts = append(searchOpts, search.WithEmbedder(embService, embCache, search.HybridConfig{
-			RRFWindowSize:    cfg.Embedding.Hybrid.RRFWindowSize,
-			RRFRankConstant:  cfg.Embedding.Hybrid.RRFRankConstant,
-			KNNK:             cfg.Embedding.Hybrid.KNNK,
-			KNNNumCandidates: cfg.Embedding.Hybrid.KNNNumCandidates,
+			RRFRankConstant: cfg.Embedding.Hybrid.RRFRankConstant,
 		}))
 	}
-	searchSvc := search.NewSearchService(esClient, searchOpts...)
+	searchSvc := search.NewSearchService(osClient, searchOpts...)
 
-	apiSrv := api.NewServer(searchSvc, indexerSvc, cfg.Elasticsearch.IndexName)
+	apiSrv := api.NewServer(searchSvc, indexerSvc, cfg.OpenSearch.IndexName)
 	router := api.NewRouter(apiSrv)
 
 	photoHandler := static.PhotoHandler(cfg.Watch.Directories, cacheGen)
@@ -252,10 +249,10 @@ func Run(distFS fs.FS, configPath string) {
 func logStartupInfo(cfg *config.Config) {
 	slog.Info("phosche starting",
 		"port", cfg.Server.Port,
-		"es_addresses", cfg.Elasticsearch.Addresses,
+		"opensearch_addresses", cfg.OpenSearch.Addresses,
 		"llm_provider", cfg.LLM.Provider,
 		"watch_dirs", cfg.Watch.Directories,
-		"index", cfg.Elasticsearch.IndexName,
+		"index", cfg.OpenSearch.IndexName,
 	)
 }
 
