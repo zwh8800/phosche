@@ -7,13 +7,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
-	"github.com/elastic/go-elasticsearch/v8/esapi"
-	"github.com/elastic/go-elasticsearch/v8/esutil"
+	"github.com/opensearch-project/opensearch-go/v4/opensearchapi"
+	"github.com/opensearch-project/opensearch-go/v4/opensearchutil"
 	apperrors "github.com/zwh8800/phosche/internal/errors"
 	"github.com/zwh8800/phosche/internal/types"
 )
@@ -48,7 +48,7 @@ type queueItem struct {
 //   使用有界 channel (容量由 queueSize 参数指定)，队列满时丢弃最旧的项并记录警告。
 //   这种"熔断 + 队列"模式确保 ES 短暂不可用时不会阻塞整个照片处理流水线。
 type IndexerService struct {
-	client              *ESClient          // ES 客户端封装
+	client              *OSClient          // OS 客户端封装
 	queue               chan queueItem     // 重试队列（有界 channel），存放 ES 不可用期间的待处理操作
 	done                chan struct{}      // 关闭信号通道，用于优雅停止后台 goroutine
 	mu                  sync.RWMutex       // 保护断路器状态和失败计数的读写锁
@@ -66,7 +66,7 @@ type IndexerService struct {
 //   queueSize - 内存重试队列容量，例如 100。队列满时新项会被丢弃
 //
 // 启动时会立即通过 go svc.runCircuitBreaker() 启动后台健康检查循环。
-func NewIndexerService(client *ESClient, queueSize int) *IndexerService {
+func NewIndexerService(client *OSClient, queueSize int) *IndexerService {
 	svc := &IndexerService{
 		client:              client,
 		queue:               make(chan queueItem, queueSize),
@@ -189,20 +189,16 @@ func (s *IndexerService) DeletePhoto(ctx context.Context, path string, indexName
 	docID := sha256hex(path)
 	s.logger.Debug("DeletePhoto", "path", path, "doc_id", docID, "index", indexName)
 
-	req := esapi.DeleteRequest{
+	_, err := s.client.Client().Document.Delete(ctx, opensearchapi.DocumentDeleteReq{
 		Index:      indexName,
 		DocumentID: docID,
-	}
-
-	resp, err := req.Do(ctx, s.client.Client())
+	})
 	if err != nil {
+		// opensearch-go returns error even on 404; treat not_found as success
+		if strings.Contains(err.Error(), "not_found") || strings.Contains(err.Error(), "404") {
+			return nil
+		}
 		return fmt.Errorf("delete document: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.IsError() && resp.StatusCode != 404 {
-		b, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("delete returned %s: %s", resp.Status(), string(b))
 	}
 
 	return nil
@@ -215,34 +211,26 @@ func (s *IndexerService) GetPhoto(ctx context.Context, path string, indexName st
 	docID := sha256hex(path)
 	s.logger.Debug("GetPhoto", "path", path, "doc_id", docID, "index", indexName)
 
-	req := esapi.GetRequest{
+	resp, err := s.client.Client().Document.Get(ctx, opensearchapi.DocumentGetReq{
 		Index:      indexName,
 		DocumentID: docID,
-	}
-
-	resp, err := req.Do(ctx, s.client.Client())
+	})
 	if err != nil {
+		if strings.Contains(err.Error(), "not_found") || strings.Contains(err.Error(), "404") {
+			return nil, apperrors.NewNotFoundError("photo not found: " + path)
+		}
 		return nil, fmt.Errorf("get document: %w", err)
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == 404 {
+	if !resp.Found {
 		return nil, apperrors.NewNotFoundError("photo not found: " + path)
 	}
 
-	if resp.IsError() {
-		b, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("get document returned %s: %s", resp.Status(), string(b))
-	}
-
-	var result struct {
-		Source types.PhotoDocument `json:"_source"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	var doc types.PhotoDocument
+	if err := json.Unmarshal(resp.Source, &doc); err != nil {
 		return nil, fmt.Errorf("decode document: %w", err)
 	}
 
-	return &result.Source, nil
+	return &doc, nil
 }
 
 // ListAnalyzed 查询所有 status=analyzed 的文档，返回 path → mtime 映射。
@@ -257,7 +245,7 @@ func (s *IndexerService) ListAnalyzed(ctx context.Context, indexName string) (ma
 		"query": map[string]any{
 			"term": map[string]any{"status": "analyzed"},
 		},
-		"size": 10000,
+		"size":    10000,
 		"_source": []string{"path", "mtime"},
 	}
 
@@ -266,39 +254,23 @@ func (s *IndexerService) ListAnalyzed(ctx context.Context, indexName string) (ma
 		return nil, fmt.Errorf("marshal query: %w", err)
 	}
 
-	req := esapi.SearchRequest{
-		Index: []string{indexName},
-		Body:  bytes.NewReader(bodyBytes),
-	}
-
-	resp, err := req.Do(ctx, s.client.Client())
+	resp, err := s.client.Client().Search(ctx, &opensearchapi.SearchReq{
+		Indices: []string{indexName},
+		Body:    bytes.NewReader(bodyBytes),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("list analyzed: %w", err)
 	}
-	defer resp.Body.Close()
 
-	if resp.IsError() {
-		b, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("list analyzed returned %s: %s", resp.Status(), string(b))
-	}
-
-	var searchResp struct {
-		Hits struct {
-			Hits []struct {
-				Source struct {
-					Path  string `json:"path"`
-					MTime int64  `json:"mtime"`
-				} `json:"_source"`
-			} `json:"hits"`
-		} `json:"hits"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&searchResp); err != nil {
-		return nil, fmt.Errorf("decode list analyzed: %w", err)
-	}
-
-	for _, hit := range searchResp.Hits.Hits {
-		result[hit.Source.Path] = hit.Source.MTime
+	for _, hit := range resp.Hits.Hits {
+		var src struct {
+			Path  string `json:"path"`
+			MTime int64  `json:"mtime"`
+		}
+		if err := json.Unmarshal(hit.Source, &src); err != nil {
+			continue
+		}
+		result[src.Path] = src.MTime
 	}
 
 	s.logger.Debug("ListAnalyzed", "count", len(result), "index", indexName)
@@ -319,49 +291,23 @@ func (s *IndexerService) indexDocDirect(ctx context.Context, doc *types.PhotoDoc
 		return fmt.Errorf("marshal document: %w", err)
 	}
 
-	req := esapi.IndexRequest{
+	resp, err := s.client.Client().Index(ctx, opensearchapi.IndexReq{
 		Index:      indexName,
 		DocumentID: docID,
 		Body:       bytes.NewReader(body),
-		Refresh:    "true",
-	}
-
-	resp, err := req.Do(ctx, s.client.Client())
+		Params:     opensearchapi.IndexParams{Refresh: "true"},
+	})
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
 
-	if resp.IsError() {
-		b, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("index returned status %s: %s", resp.Status(), string(b))
-	}
-
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("read index response: %w", err)
-	}
-
-	var ir indexResponse
-	if err := json.Unmarshal(bodyBytes, &ir); err == nil {
-		s.logger.Debug("indexed document",
-			"path", doc.Path,
-			"result", ir.Result,
-			"seq_no", ir.SeqNo,
-			"primary_term", ir.PrimaryTerm,
-		)
-	}
-
+	s.logger.Debug("indexed document",
+		"path", doc.Path,
+		"result", resp.Result,
+		"seq_no", resp.SeqNo,
+		"primary_term", resp.PrimaryTerm,
+	)
 	return nil
-}
-
-// indexResponse 对应 ES Index API 的响应体中的关键字段。
-// Result: created（新建）/ updated（覆盖已有文档）
-// SeqNo / PrimaryTerm: 用于乐观并发控制的版本信息
-type indexResponse struct {
-	Result      string `json:"result"`
-	SeqNo       int64  `json:"_seq_no"`
-	PrimaryTerm int64  `json:"_primary_term"`
 }
 
 // updateStatusDirect 使用 ES Update API 的 "doc" 模式仅更新 status 字段。
@@ -380,28 +326,20 @@ func (s *IndexerService) updateStatusDirect(ctx context.Context, path string, st
 		return fmt.Errorf("marshal update body: %w", err)
 	}
 
-	req := esapi.UpdateRequest{
+	_, err = s.client.Client().Update(ctx, opensearchapi.UpdateReq{
 		Index:      indexName,
 		DocumentID: docID,
 		Body:       bytes.NewReader(bodyBytes),
-		Refresh:    "true",
-	}
-
-	resp, err := req.Do(ctx, s.client.Client())
+		Params:     opensearchapi.UpdateParams{Refresh: "true"},
+	})
 	if err != nil {
 		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.IsError() {
-		b, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("update returned status %s: %s", resp.Status(), string(b))
 	}
 
 	return nil
 }
 
-// bulkIndexDirect 使用 esutil.BulkIndexer 执行批量索引。
+// bulkIndexDirect 使用 opensearchutil.BulkIndexer 执行批量索引。
 //
 // BulkIndexer 配置：
 //   - NumWorkers: 4 — 4 个并发 worker 发送批量请求
@@ -414,7 +352,7 @@ func (s *IndexerService) updateStatusDirect(ctx context.Context, path string, st
 //
 // OnFailure 回调在文档写入失败时被调用，使用 mutex 保护 failed 计数器的并发更新。
 func (s *IndexerService) bulkIndexDirect(ctx context.Context, docs []*types.PhotoDocument, indexName string) (int, error) {
-	bi, err := esutil.NewBulkIndexer(esutil.BulkIndexerConfig{
+	bi, err := opensearchutil.NewBulkIndexer(opensearchutil.BulkIndexerConfig{
 		Index:         indexName,
 		Client:        s.client.Client(),
 		NumWorkers:    4,
@@ -440,11 +378,11 @@ func (s *IndexerService) bulkIndexDirect(ctx context.Context, docs []*types.Phot
 			continue
 		}
 
-		err = bi.Add(ctx, esutil.BulkIndexerItem{
+		err = bi.Add(ctx, opensearchutil.BulkIndexerItem{
 			Action:     "index",
 			DocumentID: docID,
 			Body:       bytes.NewReader(body),
-			OnFailure: func(_ context.Context, _ esutil.BulkIndexerItem, _ esutil.BulkIndexerResponseItem, _ error) {
+			OnFailure: func(_ context.Context, _ opensearchutil.BulkIndexerItem, _ opensearchapi.BulkRespItem, _ error) {
 				mu.Lock()
 				failed++
 				mu.Unlock()
@@ -574,12 +512,8 @@ func (s *IndexerService) runCircuitBreaker() {
 // pingES 通过调用 ES Info API 检查 ES 是否可达且响应正常。
 // 返回 true 表示 ES 健康，false 表示连接失败或返回错误状态码。
 func (s *IndexerService) pingES() bool {
-	resp, err := s.client.Client().Info()
-	if err != nil {
-		return false
-	}
-	defer resp.Body.Close()
-	return !resp.IsError()
+	_, err := s.client.Client().Info(context.Background(), nil)
+	return err == nil
 }
 
 // drainQueue 排空重试队列中的所有待处理项。
