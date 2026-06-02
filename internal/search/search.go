@@ -155,9 +155,27 @@ func (s *SearchService) buildFilters(req *types.SearchRequest, userEmail string)
 		})
 	}
 
-	if req.CameraModel != "" {
+	if req.Country != "" {
 		filter = append(filter, map[string]any{
-			"term": map[string]any{"camera_model": req.CameraModel},
+			"term": map[string]any{"country.keyword": req.Country},
+		})
+	}
+
+	if req.Province != "" {
+		filter = append(filter, map[string]any{
+			"term": map[string]any{"province.keyword": req.Province},
+		})
+	}
+
+	if req.City != "" {
+		filter = append(filter, map[string]any{
+			"term": map[string]any{"city.keyword": req.City},
+		})
+	}
+
+	if req.District != "" {
+		filter = append(filter, map[string]any{
+			"term": map[string]any{"district.keyword": req.District},
 		})
 	}
 
@@ -242,6 +260,24 @@ func (s *SearchService) buildRRFQuery(req *types.SearchRequest, queryVector []fl
 // userEmail 用于基于 email 的访问过滤，限制搜索结果仅包含用户有权访问的文档。
 // 调试日志会输出截断后的查询 JSON（最多 500 字符）和结果命中数。
 func (s *SearchService) Search(ctx context.Context, indexName string, req *types.SearchRequest, userEmail string) (*types.SearchResponse, error) {
+	slog.Debug("search request received",
+		"index", indexName,
+		"query", req.Query,
+		"page", req.Page,
+		"page_size", req.PageSize,
+		"date_from", req.DateFrom,
+		"date_to", req.DateTo,
+		"tags", req.Tags,
+		"objects", req.Objects,
+		"scene_type", req.SceneType,
+		"country", req.Country,
+		"province", req.Province,
+		"city", req.City,
+		"district", req.District,
+		"status", req.Status,
+		"has_embedder", s.embedder != nil,
+	)
+
 	var query map[string]any
 
 	if req.Query != "" && s.embedder != nil {
@@ -292,10 +328,11 @@ func (s *SearchService) Search(ctx context.Context, indexName string, req *types
 
 // GetFilters 执行词项聚合（terms aggregation），获取前端筛选面板所需的可选项列表。
 //
-// 聚合字段：
-//   - tags.keyword: 最多 50 个标签（按文档计数降序）
-//   - scene_type: 最多 20 个场景类型
-//   - camera_model: 最多 20 个相机型号
+// GetFilters 返回筛选 UI 所需的聚合数据（标签、场景类型、国家、省、市、区、状态）。
+//   - tags: 最多 50 个热门标签
+//   - scene_types: 最多 20 个场景类型
+//   - countries/provinces/cities/districts: 最多 50 个地理选项
+//   - statuses: 最多 10 个状态选项
 //
 // 返回的 FiltersResponse 用于填充搜索页面的下拉筛选器。
 func (s *SearchService) GetFilters(ctx context.Context, indexName string, userEmail string) (*types.FiltersResponse, error) {
@@ -310,8 +347,20 @@ func (s *SearchService) GetFilters(ctx context.Context, indexName string, userEm
 			"scene_types": map[string]any{
 				"terms": map[string]any{"field": "scene_type", "size": 20},
 			},
-			"cameras": map[string]any{
-				"terms": map[string]any{"field": "camera_model", "size": 20},
+			"countries": map[string]any{
+				"terms": map[string]any{"field": "country.keyword", "size": 50},
+			},
+			"provinces": map[string]any{
+				"terms": map[string]any{"field": "province.keyword", "size": 50},
+			},
+			"cities": map[string]any{
+				"terms": map[string]any{"field": "city.keyword", "size": 50},
+			},
+			"districts": map[string]any{
+				"terms": map[string]any{"field": "district.keyword", "size": 50},
+			},
+			"statuses": map[string]any{
+				"terms": map[string]any{"field": "status", "size": 10},
 			},
 		},
 	}
@@ -351,7 +400,8 @@ func (s *SearchService) GetFilters(ctx context.Context, indexName string, userEm
 //  4. 全文搜索：multi_match 跨 description、tags、objects、text 四个字段
 //  5. 日期范围过滤：date_time_original 的 gte/lte
 //  6. 词项过滤：tags.keyword、objects.keyword 的 terms 查询
-//  7. 精确匹配：scene_type、status、camera_model 的 term 查询
+//  7. 精确匹配：scene_type、status、country/province/city/district 的 term 查询
+//
 // 8. 组合：must + filter 子句包装为 bool 查询；无任何条件时使用 match_all
 // 9. Email 访问过滤：始终添加 email 过滤条件，限制可见范围
 func (s *SearchService) buildQuery(req *types.SearchRequest, userEmail string) map[string]any {
@@ -461,11 +511,38 @@ func (s *SearchService) buildQuery(req *types.SearchRequest, userEmail string) m
 		})
 	}
 
-	// 相机型号过滤（term 精确匹配）
-	if req.CameraModel != "" {
+	// 国家过滤（term 精确匹配）
+	if req.Country != "" {
 		filter = append(filter, map[string]any{
 			"term": map[string]any{
-				"camera_model": req.CameraModel,
+				"country.keyword": req.Country,
+			},
+		})
+	}
+
+	// 省份过滤（term 精确匹配）
+	if req.Province != "" {
+		filter = append(filter, map[string]any{
+			"term": map[string]any{
+				"province.keyword": req.Province,
+			},
+		})
+	}
+
+	// 城市过滤（term 精确匹配）
+	if req.City != "" {
+		filter = append(filter, map[string]any{
+			"term": map[string]any{
+				"city.keyword": req.City,
+			},
+		})
+	}
+
+	// 区/县过滤（term 精确匹配）
+	if req.District != "" {
+		filter = append(filter, map[string]any{
+			"term": map[string]any{
+				"district.keyword": req.District,
 			},
 		})
 	}
@@ -500,7 +577,7 @@ type esSearchResult struct {
 }
 
 // esAggsResult 对应 ES 聚合查询（GetFilters）返回的 JSON 结构。
-// 包含 tags、scene_types、cameras 三个词项聚合的 buckets。
+// 包含 tags、scene_types、countries、provinces、cities、districts、statuses 的词项聚合 buckets。
 type esAggsResult struct {
 	Aggregations struct {
 		Tags struct {
@@ -509,9 +586,21 @@ type esAggsResult struct {
 		SceneTypes struct {
 			Buckets []aggBucket `json:"buckets"`
 		} `json:"scene_types"`
-		Cameras struct {
+		Countries struct {
 			Buckets []aggBucket `json:"buckets"`
-		} `json:"cameras"`
+		} `json:"countries"`
+		Provinces struct {
+			Buckets []aggBucket `json:"buckets"`
+		} `json:"provinces"`
+		Cities struct {
+			Buckets []aggBucket `json:"buckets"`
+		} `json:"cities"`
+		Districts struct {
+			Buckets []aggBucket `json:"buckets"`
+		} `json:"districts"`
+		Statuses struct {
+			Buckets []aggBucket `json:"buckets"`
+		} `json:"statuses"`
 	} `json:"aggregations"`
 }
 
@@ -672,7 +761,7 @@ func (s *SearchService) parseStatsResponse(body io.Reader) (*types.StatsResponse
 	}, nil
 }
 
-// parseFiltersResponse 解析 ES 聚合响应，提取 tags/scene_types/cameras 的 bucket key 列表。
+// parseFiltersResponse 解析 ES 聚合响应，提取 tags/scene_types/countries/provinces/cities/districts/statuses 的 bucket key 列表。
 // 返回的字符串切片按文档计数降序排列（ES terms aggregation 默认行为），
 // 前端可直接用于填充下拉筛选器的选项列表。
 func (s *SearchService) parseFiltersResponse(body io.Reader) (*types.FiltersResponse, error) {
@@ -691,15 +780,39 @@ func (s *SearchService) parseFiltersResponse(body io.Reader) (*types.FiltersResp
 		scenes = append(scenes, b.Key)
 	}
 
-	cameras := make([]string, 0, len(result.Aggregations.Cameras.Buckets))
-	for _, b := range result.Aggregations.Cameras.Buckets {
-		cameras = append(cameras, b.Key)
+	countries := make([]string, 0, len(result.Aggregations.Countries.Buckets))
+	for _, b := range result.Aggregations.Countries.Buckets {
+		countries = append(countries, b.Key)
+	}
+
+	provinces := make([]string, 0, len(result.Aggregations.Provinces.Buckets))
+	for _, b := range result.Aggregations.Provinces.Buckets {
+		provinces = append(provinces, b.Key)
+	}
+
+	cities := make([]string, 0, len(result.Aggregations.Cities.Buckets))
+	for _, b := range result.Aggregations.Cities.Buckets {
+		cities = append(cities, b.Key)
+	}
+
+	districts := make([]string, 0, len(result.Aggregations.Districts.Buckets))
+	for _, b := range result.Aggregations.Districts.Buckets {
+		districts = append(districts, b.Key)
+	}
+
+	statuses := make([]string, 0, len(result.Aggregations.Statuses.Buckets))
+	for _, b := range result.Aggregations.Statuses.Buckets {
+		statuses = append(statuses, b.Key)
 	}
 
 	return &types.FiltersResponse{
 		Tags:       tags,
 		SceneTypes: scenes,
-		Cameras:    cameras,
+		Countries:  countries,
+		Provinces:  provinces,
+		Cities:     cities,
+		Districts:  districts,
+		Statuses:   statuses,
 	}, nil
 }
 

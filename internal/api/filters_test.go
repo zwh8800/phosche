@@ -19,7 +19,11 @@ func TestFilters_Success(t *testing.T) {
 				return &types.FiltersResponse{
 					Tags:       []string{"landscape", "portrait", "cat"},
 					SceneTypes: []string{"outdoor", "indoor"},
-					Cameras:    []string{"iPhone 15", "Canon EOS R5"},
+					Countries:  []string{"China"},
+					Provinces:  []string{"Beijing"},
+					Cities:     []string{"Beijing"},
+					Districts:  []string{"Dongcheng"},
+					Statuses:   []string{"analyzed"},
 				}, nil
 			},
 		},
@@ -42,7 +46,11 @@ func TestFilters_Success(t *testing.T) {
 
 	assert.Equal(t, []string{"landscape", "portrait", "cat"}, body.Tags)
 	assert.Equal(t, []string{"outdoor", "indoor"}, body.SceneTypes)
-	assert.Equal(t, []string{"iPhone 15", "Canon EOS R5"}, body.Cameras)
+	assert.Equal(t, []string{"China"}, body.Countries)
+	assert.Equal(t, []string{"Beijing"}, body.Provinces)
+	assert.Equal(t, []string{"Beijing"}, body.Cities)
+	assert.Equal(t, []string{"Dongcheng"}, body.Districts)
+	assert.Equal(t, []string{"analyzed"}, body.Statuses)
 }
 
 func TestFilters_ServiceError(t *testing.T) {

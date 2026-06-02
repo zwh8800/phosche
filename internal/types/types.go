@@ -159,7 +159,7 @@ type PhotoDocument struct {
 //   - DateFrom/DateTo：按拍摄日期范围过滤（格式 YYYY-MM-DD）
 //   - Tags/Objects：按标签和物体列表过滤
 //   - SceneType：按场景类型过滤
-//   - CameraModel：按相机型号过滤
+//   - Country/Province/City/District：按地理位置过滤
 //   - Status：按处理状态过滤
 //   - Page/PageSize：分页参数（从 1 开始）
 type SearchRequest struct {
@@ -169,7 +169,10 @@ type SearchRequest struct {
 	Tags        []string `json:"tags,omitempty"`
 	Objects     []string `json:"objects,omitempty"`
 	SceneType   string   `json:"scene_type,omitempty"`
-	CameraModel string   `json:"camera_model,omitempty"`
+	Country     string   `json:"country,omitempty"`
+	Province    string   `json:"province,omitempty"`
+	City        string   `json:"city,omitempty"`
+	District    string   `json:"district,omitempty"`
 	Status      string   `json:"status,omitempty"`
 	Page        int      `json:"page"`
 	PageSize    int      `json:"page_size"`
@@ -202,9 +205,17 @@ type StatsResponse struct {
 // FiltersResponse 列出搜索筛选 UI 中可用的筛选选项。
 //   - Tags：所有可用的标签列表
 //   - SceneTypes：所有可用的场景类型
-//   - Cameras：所有可用的相机型号
+//   - Countries：所有可用的国家列表
+//   - Provinces：所有可用的省份列表
+//   - Cities：所有可用的城市列表
+//   - Districts：所有可用的区县列表
+//   - Statuses：所有可用的状态列表
 type FiltersResponse struct {
 	Tags       []string `json:"tags"`
 	SceneTypes []string `json:"scene_types"`
-	Cameras    []string `json:"cameras"`
+	Countries  []string `json:"countries"`
+	Provinces  []string `json:"provinces"`
+	Cities     []string `json:"cities"`
+	Districts  []string `json:"districts"`
+	Statuses   []string `json:"statuses"`
 }

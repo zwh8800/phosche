@@ -27,7 +27,6 @@ type testDoc struct {
 	Tags              []string `json:"tags"`
 	Objects           []string `json:"objects"`
 	SceneType         string   `json:"scene_type"`
-	CameraModel       string   `json:"camera_model"`
 	DateTimeOriginal  string   `json:"date_time_original"`
 	Status            string   `json:"status"`
 }
@@ -36,31 +35,31 @@ var testDocs = []testDoc{
 	{
 		ID: "1", Description: "A beautiful mountain landscape at sunrise",
 		Tags: []string{"nature", "mountain"}, Objects: []string{"mountain", "tree"},
-		SceneType: "outdoor", CameraModel: "Canon EOS R5",
+		SceneType: "outdoor",
 		DateTimeOriginal: "2024-06-15T10:00:00Z", Status: "analyzed",
 	},
 	{
 		ID: "2", Description: "Beautiful sunset over the ocean",
 		Tags: []string{"nature", "sunset"}, Objects: []string{"ocean", "sun"},
-		SceneType: "outdoor", CameraModel: "Sony A7IV",
+		SceneType: "outdoor",
 		DateTimeOriginal: "2024-06-20T18:00:00Z", Status: "analyzed",
 	},
 	{
 		ID: "3", Description: "Indoor portrait with studio lighting",
 		Tags: []string{"portrait", "indoor"}, Objects: []string{"person"},
-		SceneType: "indoor", CameraModel: "Canon EOS R5",
+		SceneType: "indoor",
 		DateTimeOriginal: "2024-07-01T14:00:00Z", Status: "analyzed",
 	},
 	{
 		ID: "4", Description: "Mountain hiking trail in autumn",
 		Tags: []string{"nature", "mountain", "hiking"}, Objects: []string{"mountain", "trail"},
-		SceneType: "outdoor", CameraModel: "Fujifilm X-T5",
+		SceneType: "outdoor",
 		DateTimeOriginal: "2024-05-01T08:00:00Z", Status: "analyzed",
 	},
 	{
 		ID: "5", Description: "City skyline at night",
 		Tags: []string{"city", "night"}, Objects: []string{"building", "sky"},
-		SceneType: "outdoor", CameraModel: "Sony A7IV",
+		SceneType: "outdoor",
 		DateTimeOriginal: "2024-08-15T22:00:00Z", Status: "analyzed",
 	},
 }
@@ -268,13 +267,13 @@ func TestGetFilters(t *testing.T) {
 		assert.True(t, s == "outdoor" || s == "indoor", "unexpected scene type: %s", s)
 	}
 
-	assert.NotEmpty(t, filters.Cameras, "should have aggregated cameras")
-	camSet := make(map[string]bool)
-	for _, c := range filters.Cameras {
-		camSet[c] = true
+	assert.NotEmpty(t, filters.Statuses, "should have aggregated statuses")
+	statusSet := make(map[string]bool)
+	for _, s := range filters.Statuses {
+		statusSet[s] = true
 	}
-	assert.True(t, camSet["Canon EOS R5"] || camSet["Sony A7IV"] || camSet["Fujifilm X-T5"],
-		"should have camera models, got: %v", filters.Cameras)
+	assert.True(t, statusSet["analyzed"],
+		"should have analyzed status, got: %v", filters.Statuses)
 }
 
 func TestSearch_DefaultsHandling(t *testing.T) {
@@ -319,19 +318,15 @@ func TestSearch_TagsFilter(t *testing.T) {
 	assert.Contains(t, ids, "4")
 }
 
-func TestSearch_CameraModelFilter(t *testing.T) {
+func TestSearch_StatusFilter(t *testing.T) {
 	svc, cleanup := setupSearchTest(t)
 	defer cleanup()
 
 	resp, err := svc.Search(context.Background(), testIndex, &types.SearchRequest{
-		CameraModel: "Sony A7IV",
-		Page:        1,
-		PageSize:    10,
+		Status:   "analyzed",
+		Page:     1,
+		PageSize: 10,
 	}, "")
 	require.NoError(t, err)
-	assert.Equal(t, int64(2), resp.Total, "2 docs with Sony A7IV")
-
-	ids := collectIDs(resp.Hits)
-	assert.Contains(t, ids, "2")
-	assert.Contains(t, ids, "5")
+	assert.NotZero(t, resp.Total, "should find docs with analyzed status")
 }

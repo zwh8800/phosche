@@ -186,7 +186,11 @@ func TestQA_Filters(t *testing.T) {
 		filtersResp: &types.FiltersResponse{
 			Tags:       []string{"sunset", "portrait", "nature"},
 			SceneTypes: []string{"indoor", "outdoor"},
-			Cameras:    []string{"Canon EOS R5", "iPhone 15"},
+			Countries:  []string{"China"},
+			Provinces:  []string{"Beijing"},
+			Cities:     []string{"Beijing"},
+			Districts:  []string{"Dongcheng"},
+			Statuses:   []string{"analyzed"},
 		},
 	}
 	srv := &Server{searchService: mock, IndexName: "test-index"}
@@ -206,8 +210,8 @@ func TestQA_Filters(t *testing.T) {
 
 	assert.Len(t, body.Tags, 3, "should have 3 tags")
 	assert.Len(t, body.SceneTypes, 2, "should have 2 scene types")
-	assert.Len(t, body.Cameras, 2, "should have 2 cameras")
-	t.Logf("✅ Filters PASSED (tags=%d, scenes=%d, cameras=%d)", len(body.Tags), len(body.SceneTypes), len(body.Cameras))
+	assert.Len(t, body.Countries, 1, "should have 1 country")
+	t.Logf("✅ Filters PASSED (tags=%d, scenes=%d, countries=%d)", len(body.Tags), len(body.SceneTypes), len(body.Countries))
 }
 
 // ============================================================
