@@ -131,7 +131,7 @@ func TestSearch_InvalidJSON(t *testing.T) {
 
 func TestSearch_ServiceError(t *testing.T) {
 	mock := &mockSearcher{
-		err: fmt.Errorf("elasticsearch unavailable"),
+		err: fmt.Errorf("opensearch unavailable"),
 	}
 	srv := &Server{searchService: mock, IndexName: "test-index"}
 	router := NewRouter(srv)
