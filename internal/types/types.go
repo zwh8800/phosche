@@ -63,7 +63,7 @@ type FileEvent struct {
 }
 
 // EXIFInfo 存储从照片中提取的 EXIF 元数据。
-// es 标签表示该字段在 Elasticsearch 中的映射类型：
+// es 标签表示该字段在 OpenSearch 中的映射类型：
 //   - date：日期类型
 //   - keyword：关键词类型（精确匹配）
 //   - integer：整型
@@ -143,7 +143,7 @@ type GeoInfo struct {
 	FormattedAddress string `json:"formatted_address,omitempty" es:"text"`
 }
 
-// PhotoDocument 将 Photo（照片元数据）与 AnalysisResult（AI 分析结果）、GeoInfo（逆地理编码信息）组合为扁平化文档，用于 Elasticsearch 索引。
+// PhotoDocument 将 Photo（照片元数据）与 AnalysisResult（AI 分析结果）、GeoInfo（逆地理编码信息）组合为扁平化文档，用于 OpenSearch 索引。
 // 通过内嵌结构体，所有字段在 ES 中处于同一层级。
 type PhotoDocument struct {
 	Photo

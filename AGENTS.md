@@ -1,6 +1,6 @@
 # AGENTS.md — Phosche
 
-个人照片搜索服务：监控目录 → 多模态 AI 分析（Ollama/OpenAI）→ Elasticsearch 索引 → React SPA 展示。
+个人照片搜索服务：监控目录 → 多模态 AI 分析（Ollama/OpenAI）→ OpenSearch 索引 → React SPA 展示。
 
 ## 交互规范
 

@@ -38,7 +38,7 @@ type queueItem struct {
 	indexName string               // 目标 ES 索引名称
 }
 
-// IndexerService 提供对 Elasticsearch 的 CRUD 操作，并内置断路器保护和有界重试队列。
+// IndexerService 提供对 OpenSearch 的 CRUD 操作，并内置断路器保护和有界重试队列。
 //
 // 断路器机制：
 //   连续写入失败 ≥ maxFailures(3) → 断路器打开 → 后续写入进入重试队列
@@ -119,7 +119,7 @@ func (s *IndexerService) IndexPhoto(ctx context.Context, doc *types.PhotoDocumen
 }
 
 // UpdateStatus 仅更新照片文档的 status 字段，使用 ES Update API 的 "doc" 部分更新。
-// 其他字段不受影响，这是 Elasticsearch 的 partial update 机制。
+// 其他字段不受影响，这是 OpenSearch 的 partial update 机制。
 //
 // 断路器逻辑与 IndexPhoto 相同：断路器打开时入队，关闭时直接更新，失败时入队并记录失败。
 // 同样永远不向调用方返回错误。
