@@ -148,12 +148,11 @@ docker run -d \
   phosche-opensearch
 ```
 
-**方式 B：基于官方镜像直接运行**
+**方式 B：基于官方镜像直接运行（一行命令）**
 
-先启动官方 OpenSearch 容器，再进入容器手动安装 IK 插件并重启：
+使用 `bash -c` 接管默认 entrypoint，在启动主服务前一次性安装 IK 插件（已安装过的会跳过），无需二次重启：
 
 ```bash
-# 启动官方 OpenSearch 容器
 docker run -d \
   --name opensearch \
   -p 9200:9200 \
@@ -163,15 +162,26 @@ docker run -d \
   -e "plugins.security.disabled=true" \
   -e "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m" \
   -v osdata:/usr/share/opensearch/data \
-  opensearchproject/opensearch:2.19.0
-
-# 在运行中的容器内安装 IK 插件
-docker exec opensearch /usr/share/opensearch/bin/opensearch-plugin install --batch \
-  https://get.infini.cloud/opensearch/analysis-ik/2.19.0
-
-# 重启容器使插件生效
-docker restart opensearch
+  opensearchproject/opensearch:2.19.0 \
+  bash -c '
+    if [ ! -d /usr/share/opensearch/plugins/analysis-ik ]; then
+      opensearch-plugin install --batch https://get.infini.cloud/opensearch/analysis-ik/2.19.0
+    fi
+    /usr/share/opensearch/opensearch-docker-entrypoint.sh opensearch
+  '
 ```
+
+关键路径说明（与 ES 版等价）：
+
+| 项 | 值 |
+|---|---|
+| Entry point 脚本 | `/usr/share/opensearch/opensearch-docker-entrypoint.sh` |
+| 默认 CMD | `opensearch`（ES 侧对应 `eswrapper`） |
+| 插件 CLI | `opensearch-plugin`（PATH 包含 `$OPENSEARCH_HOME/bin`） |
+| IK 安装目录 | `/usr/share/opensearch/plugins/analysis-ik` |
+| IK 安装源 | `https://get.infini.cloud/opensearch/analysis-ik/2.19.0`（INFINI Labs 官方） |
+
+> 注意：OpenSearch **不能**使用 Elasticsearch 的 IK 包（URL 前缀 `elasticsearch/` 与 `opensearch/` 区分），必须用 INFINI Labs 发布的 `opensearch` 版本，即上面命令中使用的 URL。
 
 验证 OpenSearch 和 IK 插件是否正常：
 
