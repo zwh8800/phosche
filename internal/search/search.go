@@ -1,8 +1,8 @@
-// Package search 提供基于 Elasticsearch 的照片搜索服务，支持全文检索、
-// 多维过滤和聚合统计。
+// Package search 提供基于 OpenSearch 的照片搜索服务，支持全文检索、多维过滤和聚合统计。
 //
 // 核心功能：
 //   - 全文搜索：multi_match 跨 description/tags/objects/text 字段
+//   - 混合检索：BM25 + kNN 通过 OpenSearch search pipeline 实现服务端 RRF
 //   - 多维过滤：日期范围、标签、物体、场景类型、相机型号、处理状态
 //   - 排序策略：有查询词时按 _score（相关性），无查询词时按拍摄时间倒序
 //   - 聚合统计：文档总数、按状态分组计数、筛选选项聚合（tags/scene/camera）
@@ -16,11 +16,16 @@ import (
 	"io"
 	"log/slog"
 	"math"
+	"net/http"
+	"time"
 
-	"github.com/elastic/go-elasticsearch/v8/esapi"
+	"github.com/opensearch-project/opensearch-go/v4/opensearchapi"
 	"github.com/zwh8800/phosche/internal/indexer"
 	"github.com/zwh8800/phosche/internal/types"
 )
+
+// pipelineName is the OpenSearch search pipeline for native RRF hybrid search.
+const pipelineName = "phosche-rrf-pipeline"
 
 // Embedder 是文本向量化的抽象接口。
 type Embedder interface {
@@ -73,21 +78,77 @@ type Searcher interface {
 	GetStats(ctx context.Context, indexName string, userEmail string) (*types.StatsResponse, error)
 }
 
-// SearchService 提供基于 Elasticsearch 的全文搜索和条件过滤查询。
+// SearchService 提供基于 OpenSearch 的全文搜索和条件过滤查询。
 type SearchService struct {
-	client         *indexer.ESClient
+	client         *indexer.OSClient
 	embedder       Embedder
 	embeddingCache EmbeddingCache
 	hybridCfg      HybridConfig
 }
 
 // NewSearchService 创建 SearchService 实例。
-func NewSearchService(client *indexer.ESClient, opts ...SearchOption) *SearchService {
+// 当配置了 embedder 时，自动创建 OpenSearch search pipeline 用于服务端 RRF。
+func NewSearchService(client *indexer.OSClient, opts ...SearchOption) *SearchService {
 	s := &SearchService{client: client}
 	for _, opt := range opts {
 		opt(s)
 	}
+	if s.embedder != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := s.EnsureSearchPipeline(ctx); err != nil {
+			slog.Error("failed to ensure search pipeline", "error", err)
+		}
+	}
 	return s
+}
+
+// EnsureSearchPipeline creates the RRF search pipeline if it doesn't exist.
+// Called during startup when embedder is configured. Must be called after OpenSearch is available.
+func (s *SearchService) EnsureSearchPipeline(ctx context.Context) error {
+	if s.embedder == nil {
+		return nil
+	}
+
+	body := map[string]any{
+		"description": "phosche hybrid search with BM25 + kNN RRF",
+		"phase_results_processors": []any{
+			map[string]any{
+				"score-ranker-processor": map[string]any{
+					"combination": map[string]any{
+						"technique":     "rrf",
+						"rank_constant": s.hybridCfg.RRFRankConstant,
+					},
+				},
+			},
+		},
+	}
+
+	bodyBytes, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("marshal pipeline body: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, "/_search/pipeline/"+pipelineName, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return fmt.Errorf("create pipeline request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.client.Client().Client.Perform(req)
+	if err != nil {
+		return fmt.Errorf("create pipeline: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// 200 = created, 409 = already exists (idempotent), other = error
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusConflict {
+		b, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("pipeline creation returned %s: %s", resp.Status, string(b))
+	}
+
+	slog.Info("search pipeline ensured", "name", pipelineName, "rank_constant", s.hybridCfg.RRFRankConstant)
+	return nil
 }
 
 func (s *SearchService) getEmbedding(ctx context.Context, text string) ([]float32, bool) {
@@ -113,152 +174,13 @@ func (s *SearchService) getEmbedding(ctx context.Context, text string) ([]float3
 	return embeddings[0], true
 }
 
-func (s *SearchService) buildFilters(req *types.SearchRequest, userEmail string) []any {
-	var filter []any
-
-	filter = append(filter, buildEmailFilter(userEmail))
-
-	dateRange := map[string]any{}
-	if req.DateFrom != "" {
-		dateRange["gte"] = req.DateFrom
-	}
-	if req.DateTo != "" {
-		dateRange["lte"] = req.DateTo
-	}
-	if len(dateRange) > 0 {
-		filter = append(filter, map[string]any{
-			"range": map[string]any{"exif.date_time_original": dateRange},
-		})
-	}
-
-	if len(req.Tags) > 0 {
-		filter = append(filter, map[string]any{
-			"terms": map[string]any{"tags.keyword": req.Tags},
-		})
-	}
-
-	if len(req.Objects) > 0 {
-		filter = append(filter, map[string]any{
-			"terms": map[string]any{"objects.keyword": req.Objects},
-		})
-	}
-
-	if req.SceneType != "" {
-		filter = append(filter, map[string]any{
-			"term": map[string]any{"scene_type": req.SceneType},
-		})
-	}
-
-	if req.Status != "" {
-		filter = append(filter, map[string]any{
-			"term": map[string]any{"status": req.Status},
-		})
-	}
-
-	if req.Country != "" {
-		filter = append(filter, map[string]any{
-			"term": map[string]any{"country.keyword": req.Country},
-		})
-	}
-
-	if req.Province != "" {
-		filter = append(filter, map[string]any{
-			"term": map[string]any{"province.keyword": req.Province},
-		})
-	}
-
-	if req.City != "" {
-		filter = append(filter, map[string]any{
-			"term": map[string]any{"city.keyword": req.City},
-		})
-	}
-
-	if req.District != "" {
-		filter = append(filter, map[string]any{
-			"term": map[string]any{"district.keyword": req.District},
-		})
-	}
-
-	return filter
-}
-
-func (s *SearchService) buildRRFQuery(req *types.SearchRequest, queryVector []float32, userEmail string) map[string]any {
-	page := req.Page
-	if page <= 0 {
-		page = 1
-	}
-	pageSize := req.PageSize
-	if pageSize <= 0 {
-		pageSize = 20
-	}
-	from := (page - 1) * pageSize
-
-	filters := s.buildFilters(req, userEmail)
-
-	standardRetriever := map[string]any{
-		"standard": map[string]any{
-			"query": map[string]any{
-				"bool": map[string]any{
-					"must": []any{
-						map[string]any{
-							"multi_match": map[string]any{
-								"query":  req.Query,
-								"fields": []string{"description", "tags", "objects", "text", "address", "formatted_address"},
-							},
-						},
-					},
-					"filter": filters,
-				},
-			},
-		},
-	}
-
-	knnRetriever := map[string]any{
-		"knn": map[string]any{
-			"field":          "embedding",
-			"query_vector":   queryVector,
-			"k":              s.hybridCfg.KNNK,
-			"num_candidates": s.hybridCfg.KNNNumCandidates,
-			"filter": map[string]any{
-				"bool": map[string]any{
-					"filter": filters,
-				},
-			},
-		},
-	}
-
-	rankWindowSize := s.hybridCfg.RRFWindowSize
-	if rankWindowSize < from+pageSize {
-		rankWindowSize = from + pageSize
-	}
-
-	return map[string]any{
-		"from": from,
-		"size": pageSize,
-		"retriever": map[string]any{
-			"rrf": map[string]any{
-				"retrievers":       []any{standardRetriever, knnRetriever},
-				"rank_constant":    s.hybridCfg.RRFRankConstant,
-				"rank_window_size": rankWindowSize,
-			},
-		},
-		"highlight": map[string]any{
-			"fields": map[string]any{
-				"description": map[string]any{},
-			},
-		},
-	}
-}
-
 // Search 执行全文搜索+条件过滤查询。
 //
 // 流程：
-//  1. 调用 buildQuery 构建 ES 查询 DSL
-//  2. 序列化为 JSON，通过 esapi.SearchRequest 发送
-//  3. 调用 parseSearchResponse 解析 ES 响应
+//  1. 有查询词且 embedder 可用时，调用 searchHybrid（BM25 + kNN 混合检索，服务端 RRF）
+//  2. 否则调用 searchBM25（纯 BM25 全文检索或过滤）
 //
 // userEmail 用于基于 email 的访问过滤，限制搜索结果仅包含用户有权访问的文档。
-// 调试日志会输出截断后的查询 JSON（最多 500 字符）和结果命中数。
 func (s *SearchService) Search(ctx context.Context, indexName string, req *types.SearchRequest, userEmail string) (*types.SearchResponse, error) {
 	slog.Debug("search request received",
 		"index", indexName,
@@ -278,52 +200,115 @@ func (s *SearchService) Search(ctx context.Context, indexName string, req *types
 		"has_embedder", s.embedder != nil,
 	)
 
-	var query map[string]any
-
 	if req.Query != "" && s.embedder != nil {
 		queryVec, ok := s.getEmbedding(ctx, req.Query)
 		if ok {
-			query = s.buildRRFQuery(req, queryVec, userEmail)
-		} else {
-			query = s.buildQuery(req, userEmail)
+			return s.searchHybrid(ctx, indexName, req, queryVec, userEmail)
 		}
-	} else {
-		query = s.buildQuery(req, userEmail)
 	}
+	return s.searchBM25(ctx, indexName, req, userEmail)
+}
+
+// searchHybrid 执行 BM25 + kNN 混合检索，通过 OpenSearch search pipeline 实现服务端 RRF。
+func (s *SearchService) searchHybrid(ctx context.Context, indexName string, req *types.SearchRequest, queryVec []float32, userEmail string) (*types.SearchResponse, error) {
+	page := req.Page
+	if page <= 0 {
+		page = 1
+	}
+	pageSize := req.PageSize
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+	from := (page - 1) * pageSize
+
+	filters := s.buildFilters(req, userEmail)
+
+	// BM25 sub-query
+	bm25Query := map[string]any{
+		"bool": map[string]any{
+			"must": []any{
+				map[string]any{
+					"multi_match": map[string]any{
+						"query":  req.Query,
+						"fields": []string{"description", "tags", "objects", "text", "address", "formatted_address"},
+					},
+				},
+			},
+			"filter": filters,
+		},
+	}
+
+	// KNN sub-query (OpenSearch knn query clause)
+	k := s.hybridCfg.KNNK
+	if k <= 0 {
+		k = pageSize * 2
+	}
+	knnQuery := map[string]any{
+		"knn": map[string]any{
+			"embedding": map[string]any{
+				"vector": queryVec,
+				"k":      k,
+			},
+		},
+	}
+
+	// Hybrid query combining BM25 and kNN sub-queries
+	// RRF score fusion is applied server-side by the search pipeline
+	query := map[string]any{
+		"from": from,
+		"size": pageSize,
+		"query": map[string]any{
+			"hybrid": map[string]any{
+				"queries": []any{bm25Query, knnQuery},
+			},
+		},
+		"highlight": map[string]any{
+			"fields": map[string]any{
+				"description": map[string]any{},
+			},
+		},
+	}
+
+	bodyBytes, err := json.Marshal(query)
+	if err != nil {
+		return nil, fmt.Errorf("marshal hybrid query: %w", err)
+	}
+
+	slog.Debug("hybrid search", "index", indexName, "query_len", len(bodyBytes))
+
+	resp, err := s.client.Client().Search(ctx, &opensearchapi.SearchReq{
+		Indices: []string{indexName},
+		Body:    bytes.NewReader(bodyBytes),
+		Params: opensearchapi.SearchParams{
+			SearchPipeline: pipelineName,
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("hybrid search: %w", err)
+	}
+
+	return s.buildSearchResponse(resp, req)
+}
+
+// searchBM25 执行纯 BM25 全文搜索或过滤查询。
+func (s *SearchService) searchBM25(ctx context.Context, indexName string, req *types.SearchRequest, userEmail string) (*types.SearchResponse, error) {
+	query := s.buildQuery(req, userEmail)
 	bodyBytes, err := json.Marshal(query)
 	if err != nil {
 		return nil, fmt.Errorf("marshal query: %w", err)
 	}
 
-	slog.Debug("ES search", "index", indexName, "query", truncateJSON(bodyBytes, 500), "page", req.Page, "page_size", req.PageSize)
+	slog.Debug("BM25 search", "index", indexName, "query", truncateJSON(bodyBytes, 500), "page", req.Page, "page_size", req.PageSize)
 
-	searchReq := esapi.SearchRequest{
-		Index: []string{indexName},
-		Body:  bytes.NewReader(bodyBytes),
-	}
-
-	resp, err := searchReq.Do(ctx, s.client.Client())
+	resp, err := s.client.Client().Search(ctx, &opensearchapi.SearchReq{
+		Indices: []string{indexName},
+		Body:    bytes.NewReader(bodyBytes),
+	})
 	if err != nil {
-		return nil, fmt.Errorf("search request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.IsError() {
-		b, _ := io.ReadAll(resp.Body)
-		errMsg := string(b)
-		slog.Error("ES search failed",
-			"status", resp.Status(),
-			"error", errMsg,
-			"query", truncateJSON(bodyBytes, 2000),
-		)
-		return nil, fmt.Errorf("search returned %s: %s", resp.Status(), errMsg)
+		return nil, fmt.Errorf("BM25 search: %w", err)
 	}
 
-	result, err := s.parseSearchResponse(resp.Body, req)
-	if err == nil {
-		slog.Debug("ES search result", "total", result.Total, "hits", len(result.Hits))
-	}
-	return result, err
+	return s.buildSearchResponse(resp, req)
 }
 
 // GetFilters 执行词项聚合（terms aggregation），获取前端筛选面板所需的可选项列表。
@@ -336,9 +321,9 @@ func (s *SearchService) Search(ctx context.Context, indexName string, req *types
 //
 // 返回的 FiltersResponse 用于填充搜索页面的下拉筛选器。
 func (s *SearchService) GetFilters(ctx context.Context, indexName string, userEmail string) (*types.FiltersResponse, error) {
-	slog.Debug("ES get filters", "index", indexName)
+	slog.Debug("get filters", "index", indexName)
 	query := map[string]any{
-		"size": 0,
+		"size":  0,
 		"query": buildEmailFilter(userEmail),
 		"aggs": map[string]any{
 			"tags": map[string]any{
@@ -370,34 +355,29 @@ func (s *SearchService) GetFilters(ctx context.Context, indexName string, userEm
 		return nil, fmt.Errorf("marshal filters query: %w", err)
 	}
 
-	searchReq := esapi.SearchRequest{
-		Index: []string{indexName},
-		Body:  bytes.NewReader(bodyBytes),
-	}
-
-	resp, err := searchReq.Do(ctx, s.client.Client())
+	resp, err := s.client.Client().Search(ctx, &opensearchapi.SearchReq{
+		Indices: []string{indexName},
+		Body:    bytes.NewReader(bodyBytes),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("filters request: %w", err)
 	}
-	defer resp.Body.Close()
 
-	if resp.IsError() {
-		b, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("filters returned %s: %s", resp.Status(), string(b))
+	if len(resp.Aggregations) == 0 {
+		return &types.FiltersResponse{}, nil
 	}
-
-	return s.parseFiltersResponse(resp.Body)
+	return s.parseFiltersResponse(resp.Aggregations)
 }
 
-// buildQuery 是核心查询构造器，将 SearchRequest 转换为 ES 查询 DSL。
+// buildQuery 是核心查询构造器，将 SearchRequest 转换为 OpenSearch 查询 DSL。
 //
 // 构建规则（按顺序）：
 //  1. 分页默认值：page=1, pageSize=20
 //  2. 排序策略：
 //     - 有搜索词时：_score（相关性）优先，其次 date_time_original desc，最后 mtime desc
 //     - 无搜索词时：date_time_original desc（缺失值排最后），mtime desc
-//  3. 高亮：description 字段启用 ES 高亮
-//  4. 全文搜索：multi_match 跨 description、tags、objects、text 四个字段
+//  3. 高亮：description 字段的 BM25 检索时启用
+//  4. 全文搜索：multi_match 跨 description、tags、objects、text 字段
 //  5. 日期范围过滤：date_time_original 的 gte/lte
 //  6. 词项过滤：tags.keyword、objects.keyword 的 terms 查询
 //  7. 精确匹配：scene_type、status、country/province/city/district 的 term 查询
@@ -563,45 +543,78 @@ func (s *SearchService) buildQuery(req *types.SearchRequest, userEmail string) m
 	return query
 }
 
-// esSearchResult 是 ES 搜索响应的 JSON 结构，包含命中总数和文档 _source。
-type esSearchResult struct {
-	Hits struct {
-		Total struct {
-			Value    int64  `json:"value"`
-			Relation string `json:"relation"`
-		} `json:"total"`
-		Hits []struct {
-			Source types.PhotoDocument `json:"_source"`
-		} `json:"hits"`
-	} `json:"hits"`
+func (s *SearchService) buildFilters(req *types.SearchRequest, userEmail string) []any {
+	var filter []any
+
+	filter = append(filter, buildEmailFilter(userEmail))
+
+	dateRange := map[string]any{}
+	if req.DateFrom != "" {
+		dateRange["gte"] = req.DateFrom
+	}
+	if req.DateTo != "" {
+		dateRange["lte"] = req.DateTo
+	}
+	if len(dateRange) > 0 {
+		filter = append(filter, map[string]any{
+			"range": map[string]any{"exif.date_time_original": dateRange},
+		})
+	}
+
+	if len(req.Tags) > 0 {
+		filter = append(filter, map[string]any{
+			"terms": map[string]any{"tags.keyword": req.Tags},
+		})
+	}
+
+	if len(req.Objects) > 0 {
+		filter = append(filter, map[string]any{
+			"terms": map[string]any{"objects.keyword": req.Objects},
+		})
+	}
+
+	if req.SceneType != "" {
+		filter = append(filter, map[string]any{
+			"term": map[string]any{"scene_type": req.SceneType},
+		})
+	}
+
+	if req.Status != "" {
+		filter = append(filter, map[string]any{
+			"term": map[string]any{"status": req.Status},
+		})
+	}
+
+	if req.Country != "" {
+		filter = append(filter, map[string]any{
+			"term": map[string]any{"country.keyword": req.Country},
+		})
+	}
+
+	if req.Province != "" {
+		filter = append(filter, map[string]any{
+			"term": map[string]any{"province.keyword": req.Province},
+		})
+	}
+
+	if req.City != "" {
+		filter = append(filter, map[string]any{
+			"term": map[string]any{"city.keyword": req.City},
+		})
+	}
+
+	if req.District != "" {
+		filter = append(filter, map[string]any{
+			"term": map[string]any{"district.keyword": req.District},
+		})
+	}
+
+	return filter
 }
 
-// esAggsResult 对应 ES 聚合查询（GetFilters）返回的 JSON 结构。
-// 包含 tags、scene_types、countries、provinces、cities、districts、statuses 的词项聚合 buckets。
-type esAggsResult struct {
-	Aggregations struct {
-		Tags struct {
-			Buckets []aggBucket `json:"buckets"`
-		} `json:"tags"`
-		SceneTypes struct {
-			Buckets []aggBucket `json:"buckets"`
-		} `json:"scene_types"`
-		Countries struct {
-			Buckets []aggBucket `json:"buckets"`
-		} `json:"countries"`
-		Provinces struct {
-			Buckets []aggBucket `json:"buckets"`
-		} `json:"provinces"`
-		Cities struct {
-			Buckets []aggBucket `json:"buckets"`
-		} `json:"cities"`
-		Districts struct {
-			Buckets []aggBucket `json:"buckets"`
-		} `json:"districts"`
-		Statuses struct {
-			Buckets []aggBucket `json:"buckets"`
-		} `json:"statuses"`
-	} `json:"aggregations"`
+// aggResult 是聚合结果的通用结构，包含 buckets 列表。
+type aggResult struct {
+	Buckets []aggBucket `json:"buckets"`
 }
 
 // aggBucket 表示词项聚合（terms aggregation）中的一个桶，Key 为聚合值。
@@ -609,19 +622,15 @@ type aggBucket struct {
 	Key string `json:"key"`
 }
 
-// parseSearchResponse 从 ES 响应体解码搜索结果，填充分页元数据。
-//
-// 总页数计算：ceil(total / pageSize)，特殊处理 total=0 时总页数为 0。
-// 使用 SearchRequest 中的 page/pageSize（已由 buildQuery 应用默认值），
-// 确保响应中的分页信息与请求一致。
-// parseSearchResponse 解析 ES 搜索响应并构建分页结果。
-func (s *SearchService) parseSearchResponse(body io.Reader, req *types.SearchRequest) (*types.SearchResponse, error) {
-	var result esSearchResult
-	if err := json.NewDecoder(body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("decode search response: %w", err)
-	}
+// aggBucketWithCount 表示带文档计数的词项聚合桶（Key + DocCount）。
+type aggBucketWithCount struct {
+	Key      string `json:"key"`
+	DocCount int64  `json:"doc_count"`
+}
 
-	total := result.Hits.Total.Value
+// buildSearchResponse converts typed OpenSearch SearchResp to types.SearchResponse.
+func (s *SearchService) buildSearchResponse(resp *opensearchapi.SearchResp, req *types.SearchRequest) (*types.SearchResponse, error) {
+	total := int64(resp.Hits.Total.Value)
 
 	page := req.Page
 	if page <= 0 {
@@ -641,9 +650,13 @@ func (s *SearchService) parseSearchResponse(body io.Reader, req *types.SearchReq
 		totalPages = 1
 	}
 
-	hits := make([]types.PhotoDocument, 0, len(result.Hits.Hits))
-	for _, hit := range result.Hits.Hits {
-		doc := hit.Source
+	hits := make([]types.PhotoDocument, 0, len(resp.Hits.Hits))
+	for _, hit := range resp.Hits.Hits {
+		var doc types.PhotoDocument
+		if err := json.Unmarshal(hit.Source, &doc); err != nil {
+			slog.Warn("unmarshal search hit failed", "doc_id", hit.ID, "error", err)
+			continue
+		}
 		doc.Embedding = nil
 		hits = append(hits, doc)
 	}
@@ -657,14 +670,14 @@ func (s *SearchService) parseSearchResponse(body io.Reader, req *types.SearchReq
 	}, nil
 }
 
-// GetStats 返回照片汇总统计信息。
+// GetStats 返回照片库的聚合统计信息。
 //
 // 聚合内容：
 //   - by_status: terms aggregation on status 字段，按处理状态分组计数
 //   - recent: filter aggregation，统计最近 1 小时内创建的文档数
 //   - track_total_hits: true，精确统计文档总数（非近似值）
 func (s *SearchService) GetStats(ctx context.Context, indexName string, userEmail string) (*types.StatsResponse, error) {
-	slog.Debug("ES get stats", "index", indexName)
+	slog.Debug("get stats", "index", indexName)
 	query := map[string]any{
 		"size":             0,
 		"track_total_hits": true,
@@ -688,58 +701,36 @@ func (s *SearchService) GetStats(ctx context.Context, indexName string, userEmai
 		return nil, fmt.Errorf("marshal stats query: %w", err)
 	}
 
-	searchReq := esapi.SearchRequest{
-		Index: []string{indexName},
-		Body:  bytes.NewReader(bodyBytes),
-	}
-
-	resp, err := searchReq.Do(ctx, s.client.Client())
+	resp, err := s.client.Client().Search(ctx, &opensearchapi.SearchReq{
+		Indices: []string{indexName},
+		Body:    bytes.NewReader(bodyBytes),
+	})
 	if err != nil {
 		return nil, fmt.Errorf("stats request: %w", err)
 	}
-	defer resp.Body.Close()
 
-	if resp.IsError() {
-		b, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("stats returned %s: %s", resp.Status(), string(b))
-	}
-
-	return s.parseStatsResponse(resp.Body)
+	return s.parseStatsResponse(resp)
 }
 
-// esStatsResult 是 ES 统计查询（GetStats）响应的 JSON 结构。
-type esStatsResult struct {
-	Hits struct {
-		Total struct {
-			Value int64 `json:"value"`
-		} `json:"total"`
-	} `json:"hits"`
-	Aggregations struct {
+// parseStatsResponse 解析 OpenSearch 统计响应，构建按状态分组的计数映射。
+//
+// 处理逻辑：
+//   - 初始化所有 5 种状态为 0（确保未出现的状态也返回 0 而非缺失）
+//   - 遍历 by_status buckets 填充实际计数
+//   - 提取 recent filter 的 doc_count 作为最近新增数
+func (s *SearchService) parseStatsResponse(resp *opensearchapi.SearchResp) (*types.StatsResponse, error) {
+	total := int64(resp.Hits.Total.Value)
+
+	var aggs struct {
 		ByStatus struct {
 			Buckets []aggBucketWithCount `json:"buckets"`
 		} `json:"by_status"`
 		Recent struct {
 			DocCount int64 `json:"doc_count"`
 		} `json:"recent"`
-	} `json:"aggregations"`
-}
-
-// aggBucketWithCount 表示带文档计数的词项聚合桶（Key + DocCount）。
-type aggBucketWithCount struct {
-	Key      string `json:"key"`
-	DocCount int64  `json:"doc_count"`
-}
-
-// parseStatsResponse 解析 ES 统计响应，构建按状态分组的计数映射。
-//
-// 处理逻辑：
-//   - 初始化所有 5 种状态为 0（确保未出现的状态也返回 0 而非缺失）
-//   - 遍历 by_status buckets 填充实际计数
-//   - 提取 recent filter 的 doc_count 作为最近新增数
-func (s *SearchService) parseStatsResponse(body io.Reader) (*types.StatsResponse, error) {
-	var result esStatsResult
-	if err := json.NewDecoder(body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("decode stats response: %w", err)
+	}
+	if err := json.Unmarshal(resp.Aggregations, &aggs); err != nil {
+		return nil, fmt.Errorf("decode stats aggs: %w", err)
 	}
 
 	byStatus := map[types.JobStatus]int64{
@@ -750,58 +741,66 @@ func (s *SearchService) parseStatsResponse(body io.Reader) (*types.StatsResponse
 		types.StatusPendingAnalysis: 0,
 	}
 
-	for _, b := range result.Aggregations.ByStatus.Buckets {
+	for _, b := range aggs.ByStatus.Buckets {
 		byStatus[types.JobStatus(b.Key)] = b.DocCount
 	}
 
 	return &types.StatsResponse{
-		Total:       result.Hits.Total.Value,
+		Total:       total,
 		ByStatus:    byStatus,
-		RecentCount: result.Aggregations.Recent.DocCount,
+		RecentCount: aggs.Recent.DocCount,
 	}, nil
 }
 
-// parseFiltersResponse 解析 ES 聚合响应，提取 tags/scene_types/countries/provinces/cities/districts/statuses 的 bucket key 列表。
-// 返回的字符串切片按文档计数降序排列（ES terms aggregation 默认行为），
+// parseFiltersResponse 解析 OpenSearch 聚合响应，提取 tags/scene_types/countries/provinces/cities/districts/statuses 的 bucket key 列表。
+// 返回的字符串切片按文档计数降序排列（OpenSearch terms aggregation 默认行为），
 // 前端可直接用于填充下拉筛选器的选项列表。
-func (s *SearchService) parseFiltersResponse(body io.Reader) (*types.FiltersResponse, error) {
-	var result esAggsResult
-	if err := json.NewDecoder(body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("decode filters response: %w", err)
+func (s *SearchService) parseFiltersResponse(aggsRaw json.RawMessage) (*types.FiltersResponse, error) {
+	var result struct {
+		Tags        aggResult `json:"tags"`
+		SceneTypes  aggResult `json:"scene_types"`
+		Countries   aggResult `json:"countries"`
+		Provinces   aggResult `json:"provinces"`
+		Cities      aggResult `json:"cities"`
+		Districts   aggResult `json:"districts"`
+		Statuses    aggResult `json:"statuses"`
+	}
+	if err := json.Unmarshal(aggsRaw, &result); err != nil {
+		return nil, fmt.Errorf("decode filters aggs: %w", err)
 	}
 
-	tags := make([]string, 0, len(result.Aggregations.Tags.Buckets))
-	for _, b := range result.Aggregations.Tags.Buckets {
+	tags := make([]string, 0, len(result.Tags.Buckets))
+	for _, b := range result.Tags.Buckets {
 		tags = append(tags, b.Key)
 	}
 
-	scenes := make([]string, 0, len(result.Aggregations.SceneTypes.Buckets))
-	for _, b := range result.Aggregations.SceneTypes.Buckets {
+	scenes := make([]string, 0, len(result.SceneTypes.Buckets))
+	for _, b := range result.SceneTypes.Buckets {
 		scenes = append(scenes, b.Key)
 	}
 
-	countries := make([]string, 0, len(result.Aggregations.Countries.Buckets))
-	for _, b := range result.Aggregations.Countries.Buckets {
+	countries := make([]string, 0, len(result.Countries.Buckets))
+	for _, b := range result.Countries.Buckets {
 		countries = append(countries, b.Key)
 	}
 
-	provinces := make([]string, 0, len(result.Aggregations.Provinces.Buckets))
-	for _, b := range result.Aggregations.Provinces.Buckets {
+	provinces := make([]string, 0, len(result.Provinces.Buckets))
+	for _, b := range result.Provinces.Buckets {
 		provinces = append(provinces, b.Key)
 	}
 
-	cities := make([]string, 0, len(result.Aggregations.Cities.Buckets))
-	for _, b := range result.Aggregations.Cities.Buckets {
+	cities := make([]string, 0, len(result.Cities.Buckets))
+	for _, b := range result.Cities.Buckets {
 		cities = append(cities, b.Key)
 	}
 
-	districts := make([]string, 0, len(result.Aggregations.Districts.Buckets))
-	for _, b := range result.Aggregations.Districts.Buckets {
+	districts := make([]string, 0, len(result.Districts.Buckets))
+	for _, b := range result.Districts.Buckets {
 		districts = append(districts, b.Key)
 	}
 
-	statuses := make([]string, 0, len(result.Aggregations.Statuses.Buckets))
-	for _, b := range result.Aggregations.Statuses.Buckets {
+	statuses := make([]string, 0, len(result.Statuses.Buckets))
+	for _, b := range result.Statuses.Buckets {
 		statuses = append(statuses, b.Key)
 	}
 
