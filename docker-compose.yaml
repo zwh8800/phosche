@@ -1,18 +1,21 @@
 services:
-  elasticsearch:
+  opensearch:
     build:
       context: .
-      dockerfile: Dockerfile.es
+      dockerfile: Dockerfile.opensearch
+    container_name: opensearch
     environment:
       - discovery.type=single-node
-      - xpack.security.enabled=false
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - DISABLE_SECURITY_PLUGIN=true
+      - plugins.security.disabled=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
     ports:
       - "9200:9200"
+      - "9600:9600"
     volumes:
-      - esdata:/usr/share/elasticsearch/data
+      - osdata:/usr/share/opensearch/data
     healthcheck:
-      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q 'green\\|yellow'"]
+      test: ["CMD-SHELL", "curl -sk https://localhost:9200 || curl -s http://localhost:9200"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -22,7 +25,7 @@ services:
     ports:
       - "8080:8080"
     depends_on:
-      elasticsearch:
+      opensearch:
         condition: service_healthy
     volumes:
       - ./config.yaml:/app/config.yaml:ro
@@ -41,5 +44,5 @@ services:
       - ollama
 
 volumes:
-  esdata:
+  osdata:
   ollama_data:

@@ -1,0 +1,9 @@
+FROM opensearchproject/opensearch:2.19.0
+
+# Install IK Chinese tokenizer plugin (INFINI Labs official build for OpenSearch)
+RUN /usr/share/opensearch/bin/opensearch-plugin install --batch \
+    https://get.infini.cloud/opensearch/analysis-ik/2.19.0
+
+# Disable security plugin for local development
+ENV DISABLE_SECURITY_PLUGIN=true
+ENV plugins.security.disabled=true
