@@ -4,7 +4,7 @@
 
 ![Go](https://img.shields.io/badge/Go-1.26+-00ADD8?logo=go)
 ![License](https://img.shields.io/badge/License-MIT-blue)
-![Elasticsearch](https://img.shields.io/badge/Elasticsearch-8.x-005571?logo=elasticsearch)
+![OpenSearch](https://img.shields.io/badge/OpenSearch-2.x-005571?logo=opensearch)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)
 ![Docker](https://img.shields.io/badge/Docker-zwh8800%2Fphosche-2496ED?logo=docker)
 [![CI/CD](https://github.com/zwh8800/phosche/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/zwh8800/phosche/actions/workflows/docker-publish.yml)
@@ -16,8 +16,8 @@
 - **自动文件监控** — 使用 fsnotify 递归监控指定目录，新照片出现后自动触发处理流水线
 - **多模态 AI 分析** — 支持 Ollama 本地模型（llama3.2-vision）和 OpenAI API（GPT-4o），分析照片内容并提取描述、标签、场景类型、颜色、人数、文本等信息
 - **结构化响应** — LLM 返回 JSON 格式的结构化分析结果，包含 description、tags、objects、scene_type、colors、people_count、has_text、confidence 等字段
-- **逆地理编码** — 自动提取照片 EXIF 中的 GPS 坐标，通过高德地图 API 获取可读地址（省/市/区/街道），存入 ES 支持地点搜索
-- **Elasticsearch 全文搜索** — 基于 ES 8.x 构建索引，支持中文 IK 分词，可按关键词、日期范围、标签、对象、场景类型、相机型号、拍摄地点等多维筛选
+- **逆地理编码** — 自动提取照片 EXIF 中的 GPS 坐标，通过高德地图 API 获取可读地址（省/市/区/街道），存入 OpenSearch 支持地点搜索
+- **OpenSearch 全文搜索** — 基于 OpenSearch 2.x 构建索引，支持中文 IK 分词，可按关键词、日期范围、标签、对象、场景类型、相机型号、拍摄地点等多维筛选
 - **时间线浏览** — Web 界面按日期分组展示照片，支持无限滚动加载
 - **照片详情页** — 查看单张照片的 EXIF 元数据（相机型号、镜头、光圈、ISO、GPS、拍摄地址等）和 AI 分析结果
 - **数据统计** — 实时统计照片总数及各处理状态的数量分布
@@ -26,14 +26,14 @@
 - **目录排除** — 支持排除指定目录（如回收站、临时目录），避免扫描无关文件
 - **跳过初始扫描** — 可选跳过启动时的全量目录扫描，仅监控新增文件
 - **JWT 认证** — 从 `access_token` cookie 提取用户邮箱，用于私有目录访问控制
-- **断路器保护** — ES 不可用时自动打开断路器，内存有界队列缓冲写入请求，恢复后自动排水
+- **断路器保护** — OpenSearch 不可用时自动打开断路器，内存有界队列缓冲写入请求，恢复后自动排水
 - **LLM 降级与重试** — LLM 不可用时将照片标记为 pending_analysis，每隔 5 分钟自动重试，最多重试 10 次
 - **错误隔离** — 损坏图片优雅跳过（仅记录日志），不导致服务崩溃
 - **优雅关闭** — SIGINT/SIGTERM 触发优雅关闭：停止接收新任务，等待当前处理完成，释放所有资源
 - **多格式图片解码** — 支持 JPEG、PNG、WebP、HEIC/HEIF 格式，自动提取 EXIF 元数据
 - **路径遍历防护** — 静态文件服务严格校验请求路径，防止目录穿越攻击
 - **PWA 支持** — 前端支持渐进式 Web 应用，可安装到桌面，自动检测更新并提示刷新
-- **Docker Compose 一键部署** — 内置编排文件，可一键启动 ES + phosche + 可选 Ollama
+- **Docker Compose 一键部署** — 内置编排文件，可一键启动 OpenSearch + phosche + 可选 Ollama
 
 ---
 
@@ -44,7 +44,7 @@
 | 后端语言 | Go 1.26 |
 | HTTP 路由 | chi/v5 |
 | 结构化日志 | log/slog |
-| 搜索引擎 | Elasticsearch 8.x（官方 go-elasticsearch 客户端 + IK 中文分词） |
+| 搜索引擎 | OpenSearch 2.x（opensearch-go 客户端 + IK 中文分词） |
 | AI 分析 | Ollama（本地）/ OpenAI（云端），双协议统一接口 |
 | 逆地理编码 | 高德地图 REST API（GPS 坐标 → 可读地址） |
 | 图片解码 | 标准库 + golang.org/x/image/webp + gen2brain/heic |
@@ -70,7 +70,7 @@
 - Go 1.26 或更高版本（手动启动时需要）
 - Node.js 18 或更高版本（构建前端时需要）
 - Docker 和 Docker Compose（推荐，一键启动方式）
-- Elasticsearch 8.x（手动启动时需要）
+- OpenSearch 2.x（手动启动时需要）
 - Ollama（可选，使用本地 AI 分析时需要）
 
 ### 获取代码
@@ -87,7 +87,7 @@ cp config.example.yaml config.yaml
 # 根据你的环境编辑 config.yaml
 ```
 
-最低配置需要修改 `watch.directories`（照片目录路径，同时作为照片文件根目录）和 `elasticsearch.addresses`。
+最低配置需要修改 `watch.directories`（照片目录路径，同时作为照片文件根目录）和 `opensearch.addresses`。
 
 ### 启动方式
 
@@ -97,19 +97,19 @@ cp config.example.yaml config.yaml
 # 修改 config.yaml 中的配置，确保路径与容器内挂载一致
 vim config.yaml
 
-# 启动 Elasticsearch 和 phosche
+# 启动 OpenSearch 和 phosche
 docker compose up -d
 
 # 如果使用本地 Ollama，加上 ollama profile
 docker compose --profile ollama up -d
 ```
 
-Docker Compose 会依次启动 Elasticsearch（等待健康检查通过）和 phosche 服务。图片目录通过 volume 挂载到容器中。
+Docker Compose 会依次启动 OpenSearch（等待健康检查通过）和 phosche 服务。图片目录通过 volume 挂载到容器中。
 
 #### 方式二：手动启动
 
-1. 确保 Elasticsearch 已启动并可访问
-2. 配置 config.yaml，确保 `elasticsearch.addresses` 指向正确的 ES 地址
+1. 确保 OpenSearch 已启动并可访问
+2. 配置 config.yaml，确保 `opensearch.addresses` 指向正确的 OpenSearch 地址
 3. 构建前端并启动服务：
 
 ```bash
@@ -124,48 +124,29 @@ go run . -config config.yaml
 
 #### 方式三：单独使用 Docker 启动
 
-适用于 Elasticsearch 已单独部署（或使用云服务）的场景，通过 `docker run` 启动 phosche 容器。
+适用于 OpenSearch 已单独部署（或使用云服务）的场景，通过 `docker run` 启动 phosche 容器。
 
-**1. 启动 Elasticsearch（含 IK 中文分词插件）：**
+**1. 启动 OpenSearch（含 IK 中文分词插件）：**
 
-phosche 依赖 IK 分词插件进行中文全文搜索。如果需要本地启动 ES，使用以下命令：
-
-```bash
-docker run -d \
-  --name elasticsearch \
-  -p 9200:9200 \
-  -e "discovery.type=single-node" \
-  -e "xpack.security.enabled=false" \
-  -e "ES_JAVA_OPTS=-Xms512m -Xmx512m" \
-  -v esdata:/usr/share/elasticsearch/data \
-  docker.elastic.co/elasticsearch/elasticsearch:8.17.0 \
-  bash -c '
-    if [ ! -d /usr/share/elasticsearch/plugins/analysis-ik ]; then
-      elasticsearch-plugin install -b https://get.infini.cloud/elasticsearch/analysis-ik/8.17.0
-    fi
-    /usr/local/bin/docker-entrypoint.sh eswrapper
-  '
-```
-
-或者使用项目提供的 `Dockerfile.es` 构建包含 IK 插件的镜像：
+phosche 依赖 IK 分词插件进行中文全文搜索。如果需要本地启动 OpenSearch，使用项目提供的 `Dockerfile.opensearch` 构建包含 IK 插件的镜像：
 
 ```bash
-docker build -t phosche-es -f Dockerfile.es .
+docker build -t phosche-opensearch -f Dockerfile.opensearch .
 docker run -d \
-  --name elasticsearch \
+  --name opensearch \
   -p 9200:9200 \
   -e "discovery.type=single-node" \
-  -e "xpack.security.enabled=false" \
-  -e "ES_JAVA_OPTS=-Xms512m -Xmx512m" \
-  -v esdata:/usr/share/elasticsearch/data \
-  phosche-es
+  -e "DISABLE_SECURITY_PLUGIN=true" \
+  -e "plugins.security.disabled=true" \
+  -v osdata:/usr/share/opensearch/data \
+  phosche-opensearch
 ```
 
-验证 ES 和 IK 插件是否正常：
+验证 OpenSearch 和 IK 插件是否正常：
 
 ```bash
 curl http://localhost:9200/_cat/plugins
-# 应输出: xxxxx analysis-ik 8.17.0
+# 应输出: xxxxx analysis-ik 2.19.0
 ```
 
 **2. 获取 phosche 镜像：**
@@ -185,12 +166,12 @@ cp config.example.yaml config.yaml
 vim config.yaml
 ```
 
-关键配置项（与 Docker Compose 方式不同，这里的 ES 地址指向外部服务）：
+关键配置项（与 Docker Compose 方式不同，这里的 OpenSearch 地址指向外部服务）：
 
 ```yaml
-elasticsearch:
+opensearch:
   addresses:
-    - https://your-es-cloud.example.com:9200   # 外部 ES 地址
+    - https://your-opensearch-cloud.example.com:9200   # 外部 OpenSearch 地址
   username: "your-username"                     # 如启用了认证
   password: "your-password"
   insecure_skip_verify: false
@@ -309,15 +290,15 @@ docker rm phosche
 | `timeout_seconds` | `int` | `60` | 单次 AI 分析请求的超时时间（秒） |
 | `output_language` | `string` | `"zh"` | 输出语言，影响分析结果描述的语言 |
 
-### `elasticsearch` — 搜索引擎
+### `opensearch` — 搜索引擎
 
 | 配置项 | 类型 | 默认值 | 说明 |
 |--------|------|--------|------|
-| `addresses` | `[]string` | 必填 | Elasticsearch 节点地址列表 |
-| `username` | `string` | `""` | ES 认证用户名 |
-| `password` | `string` | `""` | ES 认证密码 |
+| `addresses` | `[]string` | 必填 | OpenSearch 节点地址列表 |
+| `username` | `string` | `""` | OpenSearch 认证用户名 |
+| `password` | `string` | `""` | OpenSearch 认证密码 |
 | `insecure_skip_verify` | `bool` | `false` | 是否跳过 TLS 证书验证 |
-| `index_name` | `string` | `"phosche"` | ES 索引名称 |
+| `index_name` | `string` | `"phosche"` | OpenSearch 索引名称 |
 
 ### `server` — HTTP 服务
 
@@ -387,7 +368,7 @@ GET /api/photos?page=1&page_size=50&date_from=2024-01-01&date_to=2024-12-31&stat
 POST /api/photos/cleanup
 ```
 
-扫描 ES 索引中所有照片文档，删除文件系统中已不存在的记录。
+扫描 OpenSearch 索引中所有照片文档，删除文件系统中已不存在的记录。
 
 **响应示例：**
 ```json
@@ -632,9 +613,9 @@ phosche/
 │   ├── geocoder/              # 逆地理编码
 │   │   └── geocoder.go        # 高德地图 API 客户端（GPS → 地址）
 │   │
-│   ├── indexer/               # ES 索引服务
-│   │   ├── client.go          # ES 客户端封装（连接、TLS、健康检查）
-│   │   ├── mapping.go         # ES 索引映射
+│   ├── indexer/               # OpenSearch 索引服务
+│   │   ├── client.go          # OpenSearch 客户端封装（连接、TLS、健康检查）
+│   │   ├── mapping.go         # OpenSearch 索引映射
 │   │   ├── indexer.go         # 索引服务（CRUD、断路器、重试队列）
 │   │   └── indexer_test.go    # 索引服务测试
 │   │
@@ -646,7 +627,7 @@ phosche/
 │   │   └── pipeline_test.go   # 流水线测试
 │   │
 │   ├── search/                # 搜索查询构建
-│   │   ├── search.go          # ES 查询构建器（全文搜索、过滤器、聚合统计）
+│   │   ├── search.go          # OpenSearch 查询构建器（全文搜索、过滤器、聚合统计）
 │   │   └── search_test.go     # 搜索测试
 │   │
 │   ├── static/                # 静态文件服务
@@ -688,7 +669,7 @@ phosche/
 │   └── package.json           # 前端依赖
 │
 ├── config.example.yaml        # 配置文件示例
-├── docker-compose.yaml        # Docker Compose 编排（ES + phosche + Ollama）
+├── docker-compose.yaml        # Docker Compose 编排（OpenSearch + phosche + Ollama）
 ├── Dockerfile                 # 多阶段构建（Go 编译 → 前端构建 → 运行镜像）
 ├── Makefile                   # 构建命令集合
 ├── .env.example               # 环境变量示例
@@ -704,8 +685,8 @@ phosche/
 ### 本地开发
 
 ```bash
-# 启动 Elasticsearch（使用 Docker）
-docker run -d -p 9200:9200 -e "discovery.type=single-node" -e "xpack.security.enabled=false" docker.elastic.co/elasticsearch/elasticsearch:8.17.0
+# 启动 OpenSearch（使用 Docker）
+docker run -d -p 9200:9200 -e "discovery.type=single-node" -e "DISABLE_SECURITY_PLUGIN=true" -e "plugins.security.disabled=true" opensearchproject/opensearch:2.19.0
 
 # 构建前端
 make build-frontend
@@ -756,7 +737,7 @@ cd web && npm test
 cd web && npx playwright test
 ```
 
-集成测试使用 testcontainers-go，会自动启动 ES 容器进行端到端验证。
+集成测试使用 testcontainers-go，会自动启动 OpenSearch 容器进行端到端验证。
 
 ### 代码规范
 
@@ -820,8 +801,8 @@ git push origin v1.0.0
 ```
   ┌─────────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌────────┐    ┌──────────────┐
   │ 目录扫描 /   │    │          │    │          │    │ 逆地理    │    │        │    │              │
-  │ 文件监控     │───▶│ 图片解码 │───▶│ AI 分析  │───▶│ 编码     │───▶│ES 索引 │───▶│ Web 展示/搜索│
-  │ (fsnotify)  │    │          │    │ (LLM)    │    │(高德API) │    │        │    │              │
+  │ 文件监控     │───▶│ 图片解码 │───▶│ AI 分析  │───▶│ 编码     │───▶│OpenSearch│───▶│ Web 展示/搜索│
+  │ (fsnotify)  │    │          │    │ (LLM)    │    │(高德API) │    │  索引   │    │              │
   └─────────────┘    └──────────┘    └──────────┘    └──────────┘    └────────┘    └──────────────┘
 ```
 
@@ -831,7 +812,7 @@ git push origin v1.0.0
 2. **去重与去抖** — DedupFilter 基于 `path + mtime + size` 三重校验去重；Debounce 机制合并短时间内的多次文件写入事件
 3. **图片解码** — 根据文件扩展名选择对应的解码器（JPEG/PNG/WebP/HEIC），同时提取 EXIF 元数据（拍摄时间、相机型号、光圈、ISO、GPS 等）
 4. **AI 分析** — 图片缩放到最大 2048 像素（保持宽高比），编码为 JPEG 后发送给 LLM。支持 Ollama（base64 图片）和 OpenAI（data URL）两种协议。LLM 返回 JSON 格式的结构化分析结果。EXIF 和逆地理编码信息会附加到 LLM 提示词中作为上下文
-5. **ES 索引** — 将照片元数据、EXIF 信息、AI 分析结果和逆地理编码信息合并为 PhotoDocument，索引到 Elasticsearch。使用路径的 SHA-256 哈希作为文档 ID
+5. **OpenSearch 索引** — 将照片元数据、EXIF 信息、AI 分析结果和逆地理编码信息合并为 PhotoDocument，索引到 OpenSearch。使用路径的 SHA-256 哈希作为文档 ID
 6. **缓存生成** — 分析完成后自动生成 400px 缩略图和 HEIC→JPEG 全尺寸缓存，存储到 `server.cache_dir` 目录
 7. **Web 展示** — React SPA 提供时间线浏览和全文搜索界面，通过 REST API 与后端交互
 
@@ -866,13 +847,13 @@ git push origin v1.0.0
 
 - **unanalyzed** — 初始状态，照片刚被发现尚未处理
 - **analyzing** — 正在执行 AI 分析
-- **analyzed** — 分析成功，结果已索引到 ES
+- **analyzed** — 分析成功，结果已索引到 OpenSearch
 - **pending_analysis** — LLM 连接失败（网络错误或服务不可用），进入重试队列，每 5 分钟自动重试，最多 10 次
 - **failed** — 处理失败（图片损坏、格式不支持、LLM 返回错误等不可恢复的错误）
 
 ### 高可用机制
 
-- **断路器模式** — IndexerService 监控 ES 写入失败次数（阈值 3 次），失败达到阈值时打开断路器，后续写入进入内存队列（容量 100），不再阻塞处理流水线。断路器每 5 秒检查 ES 健康状态，恢复后自动排水队列
+- **断路器模式** — IndexerService 监控 OpenSearch 写入失败次数（阈值 3 次），失败达到阈值时打开断路器，后续写入进入内存队列（容量 100），不再阻塞处理流水线。断路器每 5 秒检查 OpenSearch 健康状态，恢复后自动排水队列
 - **LLM 降级** — 检测到 LLM 连接错误时，照片进入 pending_analysis 队列，不阻塞流水线，后台定时重试
 - **缓存加速** — 照片分析完成后自动生成缩略图和 HEIC→JPEG 缓存文件，Web 请求时优先读取缓存，避免重复解码和转换
 - **逆地理编码降级** — 高德 API 不可用时仅记录警告日志，照片仍正常处理，GeoInfo 字段留空
