@@ -216,11 +216,21 @@ func (c *OSClient) EnsureIndex(ctx context.Context, indexName string, embeddingD
 
 // indexExists 通过 OS Indices.Exists API 检查指定索引是否存在。
 // 返回 (true, nil) 表示存在，(false, nil) 表示不存在（404），其他状态码视为错误。
+//
+// 注意：opensearch-go v4 的 typed client 把所有 HTTP >299 响应（包括 404）都封装成
+// error 返回（见 opensearchapi.Client.do: resp.IsError() 分支）。因此当 err != nil 时
+// 必须同时检查 resp.StatusCode — 404 是 "索引不存在" 的正常回答，不是错误。
 func (c *OSClient) indexExists(ctx context.Context, indexName string) (bool, error) {
 	resp, err := c.client.Indices.Exists(ctx, opensearchapi.IndicesExistsReq{
 		Indices: []string{indexName},
 	})
 	if err != nil {
+		if resp != nil {
+			defer resp.Body.Close()
+			if resp.StatusCode == 404 {
+				return false, nil
+			}
+		}
 		return false, fmt.Errorf("check index exists: %w", err)
 	}
 	defer resp.Body.Close()
@@ -242,6 +252,14 @@ func (c *OSClient) checkMappingVersion(ctx context.Context, indexName string, em
 		Indices: []string{indexName},
 	})
 	if err != nil {
+		// opensearch-go typed client 把 404 也当作 error 返回。
+		// 通常不会在 indexExists→Get 之间发生（索引刚被确认存在），
+		// 但并发环境/极端情况可能出现 race，这里按"不存在"处理并重建。
+		if resp != nil && resp.Inspect().Response != nil && resp.Inspect().Response.StatusCode == 404 {
+			c.logger.Info("index vanished between Exists and Get, recreating", "index", indexName)
+			_ = c.deleteIndex(ctx, indexName)
+			return c.createIndex(ctx, indexName, embeddingDims)
+		}
 		return fmt.Errorf("get mapping: %w", err)
 	}
 
