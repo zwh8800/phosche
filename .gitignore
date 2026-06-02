@@ -19,6 +19,7 @@ pipeline.test
 # Node
 node_modules/
 dist/
+dev-dist/
 
 # Playwright
 playwright-report/
@@ -34,6 +35,7 @@ config.prd.yaml
 
 # Development tools
 opencode.json
+.omo/
 
 # IDE
 .idea/

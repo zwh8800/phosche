@@ -29,7 +29,13 @@ import NotFound from './pages/NotFound';
  * 创建 React Query 客户端实例
  * 用于管理所有 API 请求的缓存、重试和状态同步
  */
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 /**
  * 创建浏览器路由配置
