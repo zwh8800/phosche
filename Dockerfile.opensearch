@@ -1,13 +1,15 @@
-FROM opensearchproject/opensearch:2.19.2
+FROM opensearchproject/opensearch:2.19.5
 
 # Install IK Chinese tokenizer plugin (INFINI Labs official build for OpenSearch)
 # NOTE: INFINI Labs did not publish IK for OpenSearch 2.19.0 (URL returns 404).
-# 2.19.2 is the first available 2.19.x release with matching IK plugin; verified via:
-#   curl -s -o /dev/null -w "%{http_code}" https://get.infini.cloud/opensearch/analysis-ik/2.19.0  # 404
-#   curl -s -o /dev/null -w "%{http_code}" https://get.infini.cloud/opensearch/analysis-ik/2.19.2  # 200
+# Available 2.19.x versions with IK: 2.19.1–2.19.5; 2.19.5 is the latest stable.
+# Verify: curl -s -o /dev/null -w "%{http_code}" https://get.infini.cloud/opensearch/analysis-ik/2.19.5
 RUN /usr/share/opensearch/bin/opensearch-plugin install --batch \
-    https://get.infini.cloud/opensearch/analysis-ik/2.19.2
+    https://get.infini.cloud/opensearch/analysis-ik/2.19.5
 
 # Disable security plugin for local development
+# NOTE: use ONLY the DISABLE_SECURITY_PLUGIN env var. OpenSearch treats
+# `plugins.security.disabled=true` as the same underlying setting, and setting
+# both triggers Settings validation: "setting [plugins.security.disabled] already set"
+# which makes the entrypoint print help and loop-crash on startup.
 ENV DISABLE_SECURITY_PLUGIN=true
-ENV plugins.security.disabled=true

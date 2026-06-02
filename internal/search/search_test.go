@@ -81,12 +81,11 @@ func setupSearchTest(t *testing.T) (*SearchService, func()) {
 	defer cancel()
 
 	req := testcontainers.ContainerRequest{
-		Image:        "opensearchproject/opensearch:2.19.0",
+		Image:        "opensearchproject/opensearch:2.19.5",
 		ExposedPorts: []string{"9200/tcp"},
 		Env: map[string]string{
 			"discovery.type":            "single-node",
 			"DISABLE_SECURITY_PLUGIN":   "true",
-			"plugins.security.disabled": "true",
 			"OPENSEARCH_JAVA_OPTS":      "-Xms512m -Xmx512m",
 		},
 		WaitingFor: wait.ForHTTP("/").WithPort("9200/tcp").WithStartupTimeout(90 * time.Second),
