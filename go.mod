@@ -13,6 +13,7 @@ require (
 	github.com/go-chi/chi/v5 v5.3.0
 	github.com/go-chi/cors v1.2.2
 	github.com/hashicorp/golang-lru/v2 v2.0.7
+	github.com/opensearch-project/opensearch-go/v4 v4.6.0
 	github.com/sashabaranov/go-openai v1.41.2
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.42.0
