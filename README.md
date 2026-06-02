@@ -139,7 +139,6 @@ docker build -t phosche-opensearch -f Dockerfile.opensearch .
 docker run -d \
   --name opensearch \
   -p 9200:9200 \
-  -p 9600:9600 \
   -e "discovery.type=single-node" \
   -e "DISABLE_SECURITY_PLUGIN=true" \
   -e "plugins.security.disabled=true" \
@@ -156,7 +155,6 @@ docker run -d \
 docker run -d \
   --name opensearch \
   -p 9200:9200 \
-  -p 9600:9600 \
   -e "discovery.type=single-node" \
   -e "DISABLE_SECURITY_PLUGIN=true" \
   -e "plugins.security.disabled=true" \

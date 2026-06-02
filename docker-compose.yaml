@@ -11,7 +11,6 @@ services:
       - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
     ports:
       - "9200:9200"
-      - "9600:9600"
     volumes:
       - osdata:/usr/share/opensearch/data
     healthcheck:
