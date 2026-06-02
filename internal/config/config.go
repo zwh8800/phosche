@@ -13,7 +13,7 @@ import (
 type Config struct {
 	Watch         WatchConfig  `yaml:"watch"`
 	LLM           LLMConfig    `yaml:"llm"`
-	Elasticsearch ESConfig     `yaml:"elasticsearch"`
+	OpenSearch    OSConfig      `yaml:"opensearch"`
 	Server        ServerConfig `yaml:"server"`
 	Env           EnvConfig       `yaml:"env"`
 	Embedding     EmbeddingConfig `yaml:"embedding"`
@@ -79,13 +79,13 @@ type OpenAIConfig struct {
 	Model   string `yaml:"model"`    // 模型名称，如 gpt-4o
 }
 
-// ESConfig 是 Elasticsearch 连接配置。
-type ESConfig struct {
-	Addresses          []string `yaml:"addresses"`             // ES 节点地址列表
-	Username           string   `yaml:"username"`              // ES 认证用户名
-	Password           string   `yaml:"password"`              // ES 认证密码
+// OSConfig 是 OpenSearch 连接配置。
+type OSConfig struct {
+	Addresses          []string `yaml:"addresses"`             // OpenSearch 节点地址列表
+	Username           string   `yaml:"username"`              // OpenSearch 认证用户名
+	Password           string   `yaml:"password"`              // OpenSearch 认证密码
 	InsecureSkipVerify bool     `yaml:"insecure_skip_verify"`  // 跳过 TLS 验证
-	IndexName          string   `yaml:"index_name"`            // ES 索引名称
+	IndexName          string   `yaml:"index_name"`            // OpenSearch 索引名称
 }
 
 // ServerConfig 是 HTTP 服务器配置。
@@ -139,10 +139,7 @@ type QueryCacheConfig struct {
 
 // HybridConfig 是混合检索参数配置。
 type HybridConfig struct {
-	RRFWindowSize   int `yaml:"rrf_window"`        // RRF rank_window_size
-	RRFRankConstant int `yaml:"rrf_rank_constant"` // RRF rank_constant
-	KNNK            int `yaml:"knn_k"`             // KNN k 参数
-	KNNNumCandidates int `yaml:"knn_num_candidates"` // KNN num_candidates 参数
+	RRFRankConstant int `yaml:"rrf_rank_constant"` // RRF rank_constant，控制排名差异的权重衰减速度
 }
 
 // LoadConfig 加载并解析 YAML 配置文件，应用默认值，校验必填项。
@@ -232,17 +229,8 @@ func applyDefaults(cfg *Config) {
 	if cfg.Embedding.TimeoutSeconds == 0 {
 		cfg.Embedding.TimeoutSeconds = 15
 	}
-	if cfg.Embedding.Hybrid.RRFWindowSize == 0 {
-		cfg.Embedding.Hybrid.RRFWindowSize = 100
-	}
 	if cfg.Embedding.Hybrid.RRFRankConstant == 0 {
 		cfg.Embedding.Hybrid.RRFRankConstant = 60
-	}
-	if cfg.Embedding.Hybrid.KNNK == 0 {
-		cfg.Embedding.Hybrid.KNNK = 50
-	}
-	if cfg.Embedding.Hybrid.KNNNumCandidates == 0 {
-		cfg.Embedding.Hybrid.KNNNumCandidates = 200
 	}
 }
 
@@ -260,12 +248,12 @@ func validate(cfg *Config) error {
 		return fmt.Errorf("llm.provider: must be one of [ollama, openai], got %q", cfg.LLM.Provider)
 	}
 
-	// elasticsearch.addresses 和 index_name 为必填项
-	if len(cfg.Elasticsearch.Addresses) == 0 {
-		return fmt.Errorf("elasticsearch.addresses: must not be empty")
+	// opensearch.addresses 和 index_name 为必填项
+	if len(cfg.OpenSearch.Addresses) == 0 {
+		return fmt.Errorf("opensearch.addresses: must not be empty")
 	}
-	if cfg.Elasticsearch.IndexName == "" {
-		return fmt.Errorf("elasticsearch.index_name: must not be empty")
+	if cfg.OpenSearch.IndexName == "" {
+		return fmt.Errorf("opensearch.index_name: must not be empty")
 	}
 
 	// Embedding validation (only when enabled)
@@ -275,9 +263,7 @@ func validate(cfg *Config) error {
 		default:
 			return fmt.Errorf("embedding.provider: must be one of [ollama, openai], got %q", cfg.Embedding.Provider)
 		}
-		if cfg.Embedding.Hybrid.RRFWindowSize < cfg.Embedding.Hybrid.KNNK {
-			return fmt.Errorf("embedding.hybrid.rrf_window (%d) must be >= embedding.hybrid.knn_k (%d)", cfg.Embedding.Hybrid.RRFWindowSize, cfg.Embedding.Hybrid.KNNK)
-		}
+
 	}
 
 	return nil
