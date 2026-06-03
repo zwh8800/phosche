@@ -518,7 +518,7 @@ export default function Search() {
 
       {/* 筛选面板：日期范围、场景类型、相机型号、标签多选 */}
       {showFilters && (
-        <div className="p-5 bg-white border border-gray-200 rounded-xl space-y-5">
+        <div className="p-4 bg-white border border-gray-200 rounded-xl space-y-4">
           {/* 日期范围筛选：起始日期 → 结束日期 */}
           <div>
             <label className="block text-xs font-medium text-gray-500 mb-2">
@@ -541,112 +541,115 @@ export default function Search() {
             </div>
           </div>
 
-          {/* 场景类型下拉筛选 */}
-          <div>
-            <label htmlFor="filter-scene" className="block text-xs font-medium text-gray-500 mb-2">
-               场景类型
-            </label>
-            <select
-              id="filter-scene"
-              value={sceneType}
-              onChange={(e: ChangeEvent<HTMLSelectElement>) => setSceneType(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
-            >
-              <option value="">全部</option>
-              {(filters?.scene_types || []).map((s) => (
-                <option key={s} value={s}>{SCENE_TYPE_LABELS[s] || s}</option>
-              ))}
-            </select>
-          </div>
+          {/* 下拉筛选项：2 列网格布局 */}
+          <div className="grid grid-cols-2 gap-4">
+            {/* 场景类型 */}
+            <div>
+              <label htmlFor="filter-scene" className="block text-xs font-medium text-gray-500 mb-1.5">
+                场景类型
+              </label>
+              <select
+                id="filter-scene"
+                value={sceneType}
+                onChange={(e: ChangeEvent<HTMLSelectElement>) => setSceneType(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
+              >
+                <option value="">全部</option>
+                {(filters?.scene_types || []).map((s) => (
+                  <option key={s} value={s}>{SCENE_TYPE_LABELS[s] || s}</option>
+                ))}
+              </select>
+            </div>
 
-          {/* 状态筛选 */}
-          <div>
-            <label htmlFor="filter-status" className="block text-xs font-medium text-gray-500 mb-2">
-              状态
-            </label>
-            <select
-              id="filter-status"
-              value={status}
-              onChange={(e: ChangeEvent<HTMLSelectElement>) => setStatus(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
-            >
-              <option value="">全部</option>
-              {(filters?.statuses || []).map((s) => (
-                <option key={s} value={s}>{STATUS_LABELS[s] || s}</option>
-              ))}
-            </select>
-          </div>
+            {/* 状态 */}
+            <div>
+              <label htmlFor="filter-status" className="block text-xs font-medium text-gray-500 mb-1.5">
+                状态
+              </label>
+              <select
+                id="filter-status"
+                value={status}
+                onChange={(e: ChangeEvent<HTMLSelectElement>) => setStatus(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
+              >
+                <option value="">全部</option>
+                {(filters?.statuses || []).map((s) => (
+                  <option key={s} value={s}>{STATUS_LABELS[s] || s}</option>
+                ))}
+              </select>
+            </div>
 
-          {/* 国家 */}
-          <div>
-            <label htmlFor="filter-country" className="block text-xs font-medium text-gray-500 mb-2">
-              国家
-            </label>
-            <select
-              id="filter-country"
-              value={country}
-              onChange={(e: ChangeEvent<HTMLSelectElement>) => setCountry(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
-            >
-              <option value="">全部</option>
-              {(filters?.countries || []).map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-          </div>
+            {/* 国家 */}
+            <div>
+              <label htmlFor="filter-country" className="block text-xs font-medium text-gray-500 mb-1.5">
+                国家
+              </label>
+              <select
+                id="filter-country"
+                value={country}
+                onChange={(e: ChangeEvent<HTMLSelectElement>) => setCountry(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
+              >
+                <option value="">全部</option>
+                {(filters?.countries || []).map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
 
-          {/* 省份 */}
-          <div>
-            <label htmlFor="filter-province" className="block text-xs font-medium text-gray-500 mb-2">
-              省份
-            </label>
-            <select
-              id="filter-province"
-              value={province}
-              onChange={(e: ChangeEvent<HTMLSelectElement>) => setProvince(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
-            >
-              <option value="">全部</option>
-              {(filters?.provinces || []).map((p) => (
-                <option key={p} value={p}>{p}</option>
-              ))}
-            </select>
-          </div>
+            {/* 省份 */}
+            <div>
+              <label htmlFor="filter-province" className="block text-xs font-medium text-gray-500 mb-1.5">
+                省份
+              </label>
+              <select
+                id="filter-province"
+                value={province}
+                onChange={(e: ChangeEvent<HTMLSelectElement>) => setProvince(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
+              >
+                <option value="">全部</option>
+                {(filters?.provinces || []).map((p) => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
+            </div>
 
-          {/* 城市 */}
-          <div>
-            <label htmlFor="filter-city" className="block text-xs font-medium text-gray-500 mb-2">
-              城市
-            </label>
-            <select
-              id="filter-city"
-              value={city}
-              onChange={(e: ChangeEvent<HTMLSelectElement>) => setCity(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
-            >
-              <option value="">全部</option>
-              {(filters?.cities || []).map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-          </div>
+            {/* 城市 */}
+            <div>
+              <label htmlFor="filter-city" className="block text-xs font-medium text-gray-500 mb-1.5">
+                城市
+              </label>
+              <select
+                id="filter-city"
+                value={city}
+                onChange={(e: ChangeEvent<HTMLSelectElement>) => setCity(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
+              >
+                <option value="">全部</option>
+                {(filters?.cities || []).map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
 
-          {/* 区/县 */}
-          <div>
-            <label htmlFor="filter-district" className="block text-xs font-medium text-gray-500 mb-2">
-              区/县
-            </label>
-            <select
-              id="filter-district"
-              value={district}
-              onChange={(e: ChangeEvent<HTMLSelectElement>) => setDistrict(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
-            >
-              <option value="">全部</option>
-              {(filters?.districts || []).map((d) => (
-                <option key={d} value={d}>{d}</option>
-              ))}
-            </select>
+            {/* 区/县 */}
+            <div>
+              <label htmlFor="filter-district" className="block text-xs font-medium text-gray-500 mb-1.5">
+                区/县
+              </label>
+              <select
+                id="filter-district"
+                value={district}
+                onChange={(e: ChangeEvent<HTMLSelectElement>) => setDistrict(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
+              >
+                <option value="">全部</option>
+                {(filters?.districts || []).map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {/* 标签多选：从 filters 接口获取可选标签列表 */}
