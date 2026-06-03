@@ -274,7 +274,18 @@ func (s *SearchService) searchHybrid(ctx context.Context, indexName string, req 
 		return nil, fmt.Errorf("marshal hybrid query: %w", err)
 	}
 
-	slog.Debug("hybrid search", "index", indexName, "query_len", len(bodyBytes))
+	slog.Debug("hybrid search request details",
+		"index", indexName,
+		"page", page,
+		"from", from,
+		"size", pageSize,
+		"k", k,
+		"vector_dim", len(queryVec),
+		"filter_count", len(filters),
+		"pipeline", pipelineName,
+		"query_len", len(bodyBytes),
+		"query_body", truncateJSON(bodyBytes, 800),
+	)
 
 	resp, err := s.client.Client().Search(ctx, &opensearchapi.SearchReq{
 		Indices: []string{indexName},
@@ -284,8 +295,38 @@ func (s *SearchService) searchHybrid(ctx context.Context, indexName string, req 
 		},
 	})
 	if err != nil {
+		// Dump full OpenSearch error (includes status, type, reason, root_cause, caused_by)
+		status := 0
+		if resp != nil && resp.Inspect().Response != nil {
+			status = resp.Inspect().Response.StatusCode
+		}
+		slog.Error("hybrid search OpenSearch request failed",
+			"index", indexName,
+			"page", page,
+			"from", from,
+			"size", pageSize,
+			"k", k,
+			"vector_dim", len(queryVec),
+			"filter_count", len(filters),
+			"pipeline", pipelineName,
+			"http_status", status,
+			"error", err.Error(),
+			"error_type", fmt.Sprintf("%T", err),
+			"query_len", len(bodyBytes),
+			"query_body", truncateJSON(bodyBytes, 2000),
+		)
 		return nil, fmt.Errorf("hybrid search: %w", err)
 	}
+
+	slog.Debug("hybrid search OpenSearch response OK",
+		"index", indexName,
+		"took_ms", resp.Took,
+		"hits_total", resp.Hits.Total.Value,
+		"hits_count", len(resp.Hits.Hits),
+		"shards_total", resp.Shards.Total,
+		"shards_failed", resp.Shards.Failed,
+		"shards_successful", resp.Shards.Successful,
+	)
 
 	return s.buildSearchResponse(resp, req)
 }
@@ -305,8 +346,28 @@ func (s *SearchService) searchBM25(ctx context.Context, indexName string, req *t
 		Body:    bytes.NewReader(bodyBytes),
 	})
 	if err != nil {
+		status := 0
+		if resp != nil && resp.Inspect().Response != nil {
+			status = resp.Inspect().Response.StatusCode
+		}
+		slog.Error("BM25 search OpenSearch request failed",
+			"index", indexName,
+			"page", req.Page,
+			"page_size", req.PageSize,
+			"http_status", status,
+			"error", err.Error(),
+			"error_type", fmt.Sprintf("%T", err),
+			"query", truncateJSON(bodyBytes, 2000),
+		)
 		return nil, fmt.Errorf("BM25 search: %w", err)
 	}
+
+	slog.Debug("BM25 search OpenSearch response OK",
+		"index", indexName,
+		"took_ms", resp.Took,
+		"hits_total", resp.Hits.Total.Value,
+		"hits_count", len(resp.Hits.Hits),
+	)
 
 	return s.buildSearchResponse(resp, req)
 }
