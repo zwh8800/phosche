@@ -259,7 +259,8 @@ func (s *SearchService) searchHybrid(ctx context.Context, indexName string, req 
 		"size": pageSize,
 		"query": map[string]any{
 			"hybrid": map[string]any{
-				"queries": []any{bm25Query, knnQuery},
+				"queries":          []any{bm25Query, knnQuery},
+				"pagination_depth": from + pageSize,
 			},
 		},
 		"highlight": map[string]any{
