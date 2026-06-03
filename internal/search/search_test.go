@@ -23,44 +23,44 @@ import (
 const testIndex = "test_photos_search"
 
 type testDoc struct {
-	ID                string   `json:"id"`
-	Description       string   `json:"description"`
-	Tags              []string `json:"tags"`
-	Objects           []string `json:"objects"`
-	SceneType         string   `json:"scene_type"`
-	DateTimeOriginal  string   `json:"date_time_original"`
-	Status            string   `json:"status"`
+	ID               string   `json:"id"`
+	Description      string   `json:"description"`
+	Tags             []string `json:"tags"`
+	Objects          []string `json:"objects"`
+	SceneType        string   `json:"scene_type"`
+	DateTimeOriginal string   `json:"date_time_original"`
+	Status           string   `json:"status"`
 }
 
 var testDocs = []testDoc{
 	{
 		ID: "1", Description: "A beautiful mountain landscape at sunrise",
 		Tags: []string{"nature", "mountain"}, Objects: []string{"mountain", "tree"},
-		SceneType: "outdoor",
+		SceneType:        "outdoor",
 		DateTimeOriginal: "2024-06-15T10:00:00Z", Status: "analyzed",
 	},
 	{
 		ID: "2", Description: "Beautiful sunset over the ocean",
 		Tags: []string{"nature", "sunset"}, Objects: []string{"ocean", "sun"},
-		SceneType: "outdoor",
+		SceneType:        "outdoor",
 		DateTimeOriginal: "2024-06-20T18:00:00Z", Status: "analyzed",
 	},
 	{
 		ID: "3", Description: "Indoor portrait with studio lighting",
 		Tags: []string{"portrait", "indoor"}, Objects: []string{"person"},
-		SceneType: "indoor",
+		SceneType:        "indoor",
 		DateTimeOriginal: "2024-07-01T14:00:00Z", Status: "analyzed",
 	},
 	{
 		ID: "4", Description: "Mountain hiking trail in autumn",
 		Tags: []string{"nature", "mountain", "hiking"}, Objects: []string{"mountain", "trail"},
-		SceneType: "outdoor",
+		SceneType:        "outdoor",
 		DateTimeOriginal: "2024-05-01T08:00:00Z", Status: "analyzed",
 	},
 	{
 		ID: "5", Description: "City skyline at night",
 		Tags: []string{"city", "night"}, Objects: []string{"building", "sky"},
-		SceneType: "outdoor",
+		SceneType:        "outdoor",
 		DateTimeOriginal: "2024-08-15T22:00:00Z", Status: "analyzed",
 	},
 }
@@ -84,9 +84,9 @@ func setupSearchTest(t *testing.T) (*SearchService, func()) {
 		Image:        "opensearchproject/opensearch:2.19.5",
 		ExposedPorts: []string{"9200/tcp"},
 		Env: map[string]string{
-			"discovery.type":            "single-node",
-			"DISABLE_SECURITY_PLUGIN":   "true",
-			"OPENSEARCH_JAVA_OPTS":      "-Xms512m -Xmx512m",
+			"discovery.type":          "single-node",
+			"DISABLE_SECURITY_PLUGIN": "true",
+			"OPENSEARCH_JAVA_OPTS":    "-Xms512m -Xmx512m",
 		},
 		WaitingFor: wait.ForHTTP("/").WithPort("9200/tcp").WithStartupTimeout(90 * time.Second),
 	}

@@ -395,16 +395,16 @@ func (s *SearchService) GetFilters(ctx context.Context, indexName string, userEm
 				"terms": map[string]any{"field": "scene_type", "size": 20},
 			},
 			"countries": map[string]any{
-				"terms": map[string]any{"field": "country.keyword", "size": 50},
+				"terms": map[string]any{"field": "country", "size": 50},
 			},
 			"provinces": map[string]any{
-				"terms": map[string]any{"field": "province.keyword", "size": 50},
+				"terms": map[string]any{"field": "province", "size": 50},
 			},
 			"cities": map[string]any{
-				"terms": map[string]any{"field": "city.keyword", "size": 50},
+				"terms": map[string]any{"field": "city", "size": 50},
 			},
 			"districts": map[string]any{
-				"terms": map[string]any{"field": "district.keyword", "size": 50},
+				"terms": map[string]any{"field": "district", "size": 50},
 			},
 			"statuses": map[string]any{
 				"terms": map[string]any{"field": "status", "size": 10},
@@ -557,7 +557,7 @@ func (s *SearchService) buildQuery(req *types.SearchRequest, userEmail string) m
 	if req.Country != "" {
 		filter = append(filter, map[string]any{
 			"term": map[string]any{
-				"country.keyword": req.Country,
+				"country": req.Country,
 			},
 		})
 	}
@@ -566,7 +566,7 @@ func (s *SearchService) buildQuery(req *types.SearchRequest, userEmail string) m
 	if req.Province != "" {
 		filter = append(filter, map[string]any{
 			"term": map[string]any{
-				"province.keyword": req.Province,
+				"province": req.Province,
 			},
 		})
 	}
@@ -575,7 +575,7 @@ func (s *SearchService) buildQuery(req *types.SearchRequest, userEmail string) m
 	if req.City != "" {
 		filter = append(filter, map[string]any{
 			"term": map[string]any{
-				"city.keyword": req.City,
+				"city": req.City,
 			},
 		})
 	}
@@ -584,7 +584,7 @@ func (s *SearchService) buildQuery(req *types.SearchRequest, userEmail string) m
 	if req.District != "" {
 		filter = append(filter, map[string]any{
 			"term": map[string]any{
-				"district.keyword": req.District,
+				"district": req.District,
 			},
 		})
 	}
@@ -649,25 +649,25 @@ func (s *SearchService) buildFilters(req *types.SearchRequest, userEmail string)
 
 	if req.Country != "" {
 		filter = append(filter, map[string]any{
-			"term": map[string]any{"country.keyword": req.Country},
+			"term": map[string]any{"country": req.Country},
 		})
 	}
 
 	if req.Province != "" {
 		filter = append(filter, map[string]any{
-			"term": map[string]any{"province.keyword": req.Province},
+			"term": map[string]any{"province": req.Province},
 		})
 	}
 
 	if req.City != "" {
 		filter = append(filter, map[string]any{
-			"term": map[string]any{"city.keyword": req.City},
+			"term": map[string]any{"city": req.City},
 		})
 	}
 
 	if req.District != "" {
 		filter = append(filter, map[string]any{
-			"term": map[string]any{"district.keyword": req.District},
+			"term": map[string]any{"district": req.District},
 		})
 	}
 
@@ -688,6 +688,17 @@ type aggBucket struct {
 type aggBucketWithCount struct {
 	Key      string `json:"key"`
 	DocCount int64  `json:"doc_count"`
+}
+
+// collectNonEmptyKeys filters out empty-string buckets from terms aggregations.
+func collectNonEmptyKeys(buckets []aggBucket) []string {
+	keys := make([]string, 0, len(buckets))
+	for _, b := range buckets {
+		if b.Key != "" {
+			keys = append(keys, b.Key)
+		}
+	}
+	return keys
 }
 
 // buildSearchResponse converts typed OpenSearch SearchResp to types.SearchResponse.
@@ -819,52 +830,25 @@ func (s *SearchService) parseStatsResponse(resp *opensearchapi.SearchResp) (*typ
 // 前端可直接用于填充下拉筛选器的选项列表。
 func (s *SearchService) parseFiltersResponse(aggsRaw json.RawMessage) (*types.FiltersResponse, error) {
 	var result struct {
-		Tags        aggResult `json:"tags"`
-		SceneTypes  aggResult `json:"scene_types"`
-		Countries   aggResult `json:"countries"`
-		Provinces   aggResult `json:"provinces"`
-		Cities      aggResult `json:"cities"`
-		Districts   aggResult `json:"districts"`
-		Statuses    aggResult `json:"statuses"`
+		Tags       aggResult `json:"tags"`
+		SceneTypes aggResult `json:"scene_types"`
+		Countries  aggResult `json:"countries"`
+		Provinces  aggResult `json:"provinces"`
+		Cities     aggResult `json:"cities"`
+		Districts  aggResult `json:"districts"`
+		Statuses   aggResult `json:"statuses"`
 	}
 	if err := json.Unmarshal(aggsRaw, &result); err != nil {
 		return nil, fmt.Errorf("decode filters aggs: %w", err)
 	}
 
-	tags := make([]string, 0, len(result.Tags.Buckets))
-	for _, b := range result.Tags.Buckets {
-		tags = append(tags, b.Key)
-	}
-
-	scenes := make([]string, 0, len(result.SceneTypes.Buckets))
-	for _, b := range result.SceneTypes.Buckets {
-		scenes = append(scenes, b.Key)
-	}
-
-	countries := make([]string, 0, len(result.Countries.Buckets))
-	for _, b := range result.Countries.Buckets {
-		countries = append(countries, b.Key)
-	}
-
-	provinces := make([]string, 0, len(result.Provinces.Buckets))
-	for _, b := range result.Provinces.Buckets {
-		provinces = append(provinces, b.Key)
-	}
-
-	cities := make([]string, 0, len(result.Cities.Buckets))
-	for _, b := range result.Cities.Buckets {
-		cities = append(cities, b.Key)
-	}
-
-	districts := make([]string, 0, len(result.Districts.Buckets))
-	for _, b := range result.Districts.Buckets {
-		districts = append(districts, b.Key)
-	}
-
-	statuses := make([]string, 0, len(result.Statuses.Buckets))
-	for _, b := range result.Statuses.Buckets {
-		statuses = append(statuses, b.Key)
-	}
+	tags := collectNonEmptyKeys(result.Tags.Buckets)
+	scenes := collectNonEmptyKeys(result.SceneTypes.Buckets)
+	countries := collectNonEmptyKeys(result.Countries.Buckets)
+	provinces := collectNonEmptyKeys(result.Provinces.Buckets)
+	cities := collectNonEmptyKeys(result.Cities.Buckets)
+	districts := collectNonEmptyKeys(result.Districts.Buckets)
+	statuses := collectNonEmptyKeys(result.Statuses.Buckets)
 
 	return &types.FiltersResponse{
 		Tags:       tags,
