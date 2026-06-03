@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	openai "github.com/sashabaranov/go-openai"
 	"github.com/sashabaranov/go-openai/jsonschema"
@@ -125,16 +126,33 @@ func (c *OpenAIClient) AnalyzeImage(ctx context.Context, imageData []byte, promp
 }
 
 func unmarshalAnalysisResult(result *types.AnalysisResult, content string, rf *openai.ChatCompletionResponseFormat) error {
+	cleaned := stripMarkdownCodeFence(content)
 	if rf != nil && rf.JSONSchema != nil {
 		if def, ok := rf.JSONSchema.Schema.(*jsonschema.Definition); ok {
-			if err := def.Unmarshal(content, result); err != nil {
+			if err := def.Unmarshal(cleaned, result); err != nil {
 				return fmt.Errorf("unmarshal analysis result against schema: %w", err)
 			}
 			return nil
 		}
 	}
-	if err := json.Unmarshal([]byte(content), result); err != nil {
+	if err := json.Unmarshal([]byte(cleaned), result); err != nil {
 		return fmt.Errorf("unmarshal analysis result: %w", err)
 	}
 	return nil
+}
+
+func stripMarkdownCodeFence(s string) string {
+	s = strings.TrimSpace(s)
+	if !strings.HasPrefix(s, "```") {
+		return s
+	}
+	// 找到第一行结尾（跳过 ```json 等语言标识符）
+	if idx := strings.Index(s, "\n"); idx != -1 {
+		s = s[idx+1:]
+	}
+	// 去掉尾部的 ```
+	if strings.HasSuffix(s, "```") {
+		s = s[:len(s)-3]
+	}
+	return strings.TrimSpace(s)
 }

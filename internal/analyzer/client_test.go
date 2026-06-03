@@ -465,6 +465,30 @@ func TestLLMClient_ContextCancellation(t *testing.T) {
 
 // --- Response Format Tests ---
 
+func TestStripMarkdownCodeFence(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"no fence", `{"key":"value"}`, `{"key":"value"}`},
+		{"fenced json", "```json\n{\"key\":\"value\"}\n```", `{"key":"value"}`},
+		{"fenced plain", "```\n{\"key\":\"value\"}\n```", `{"key":"value"}`},
+		{"fenced with spaces", "  ```json  \n  {\"key\":\"value\"}  \n  ```  ", `{"key":"value"}`},
+		{"only opening fence", "```json\n{\"key\":\"value\"}", `{"key":"value"}`},
+		{"plain text", "hello world", "hello world"},
+		{"empty", "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := stripMarkdownCodeFence(tt.input)
+			if got != tt.want {
+				t.Errorf("stripMarkdownCodeFence(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestNewOpenAIClient_ValidResponseFormats(t *testing.T) {
 	tests := []struct {
 		format   string
