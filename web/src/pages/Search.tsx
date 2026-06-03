@@ -33,6 +33,7 @@ import {
   useState,
   useEffect,
   useRef,
+  useCallback,
   memo,
   type FormEvent,
   type ChangeEvent,
@@ -387,7 +388,7 @@ export default function Search() {
    * 将当前筛选状态构建为 URL 查询参数
    * 仅包含有值的参数，空值不写入 URL
    */
-  const buildParams = (): URLSearchParams => {
+  const buildParams = useCallback((): URLSearchParams => {
     const p = new URLSearchParams();
     if (query) p.set('query', query);
     if (dateFrom) p.set('date_from', dateFrom);
@@ -400,7 +401,33 @@ export default function Search() {
     if (status) p.set('status', status);
     if (selectedTags.length > 0) p.set('tags', selectedTags.join(','));
     return p;
-  };
+  }, [query, dateFrom, dateTo, sceneType, country, province, city, district, status, selectedTags]);
+
+  /**
+   * 筛选条件变化时自动同步到 URL（300ms 防抖）
+   * 不包含 query（搜索词），query 仅在用户显式提交时更新
+   */
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const p = new URLSearchParams();
+      if (dateFrom) p.set('date_from', dateFrom);
+      if (dateTo) p.set('date_to', dateTo);
+      if (sceneType) p.set('scene_type', sceneType);
+      if (country) p.set('country', country);
+      if (province) p.set('province', province);
+      if (city) p.set('city', city);
+      if (district) p.set('district', district);
+      if (status) p.set('status', status);
+      if (selectedTags.length > 0) p.set('tags', selectedTags.join(','));
+      // 保留 URL 中已有的 query 参数
+      const currentQuery = searchParams.get('query');
+      if (currentQuery) p.set('query', currentQuery);
+      setSearchParams(p, { replace: true });
+    }, 300);
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateFrom, dateTo, sceneType, country, province, city, district, status, selectedTags]);
 
   /**
    * 切换标签选中状态
