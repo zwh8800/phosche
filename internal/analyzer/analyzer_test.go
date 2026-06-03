@@ -94,8 +94,8 @@ func TestAnalyzer_ValidResponse(t *testing.T) {
 func TestAnalyzer_RetrySuccess(t *testing.T) {
 	mock := &mockLLMClient{
 		calls: []mockCall{
-			{err: errors.New("ollama API error (status 500): internal error")},
-			{err: errors.New("ollama API error (status 502): bad gateway")},
+		{err: errors.New("error, status code: 500, status: 500 Internal Server Error, message: internal error")},
+		{err: errors.New("error, status code: 502, status: 502 Bad Gateway, message: bad gateway")},
 			{result: validResult(), err: nil},
 		},
 	}
@@ -116,9 +116,9 @@ func TestAnalyzer_RetrySuccess(t *testing.T) {
 func TestAnalyzer_RetryExhausted(t *testing.T) {
 	mock := &mockLLMClient{
 		calls: []mockCall{
-			{err: errors.New("ollama API error (status 500): internal error")},
-			{err: errors.New("ollama API error (status 500): internal error")},
-			{err: errors.New("ollama API error (status 500): internal error")},
+			{err: errors.New("error, status code: 500, status: 500 Internal Server Error, message: internal error")},
+			{err: errors.New("error, status code: 500, status: 500 Internal Server Error, message: internal error")},
+			{err: errors.New("error, status code: 500, status: 500 Internal Server Error, message: internal error")},
 		},
 	}
 	analyzer := NewImageAnalyzer(mock, "", 2, 30*time.Second)
@@ -149,7 +149,7 @@ func TestAnalyzer_MissingField(t *testing.T) {
 func TestAnalyzer_NonRetryableError(t *testing.T) {
 	mock := &mockLLMClient{
 		calls: []mockCall{
-			{err: errors.New("ollama API error (status 400): bad request")},
+			{err: errors.New("error, status code: 400, status: 400 Bad Request, message: bad request")},
 		},
 	}
 	analyzer := NewImageAnalyzer(mock, "", 2, 30*time.Second)

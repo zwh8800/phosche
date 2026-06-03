@@ -69,23 +69,11 @@ func Run(distFS fs.FS, configPath string) {
 	// 创建索引服务（带断路器功能，队列容量 100）
 	indexerSvc := indexer.NewIndexerService(osClient, 100)
 
-	// 创建 LLM 客户端（通过工厂方法，支持 Ollama 和 OpenAI 两种后端）
-	llmClient, err := analyzer.NewLLMClient(analyzer.LLMClientConfig{
-		Provider: cfg.LLM.Provider,
-		Ollama: analyzer.OllamaClientConfig{
-			BaseURL: cfg.LLM.Ollama.BaseURL,
-			Model:   cfg.LLM.Ollama.Model,
-		},
-		OpenAI: analyzer.OpenAIClientConfig{
-			APIKey:  cfg.LLM.OpenAI.APIKey,
-			BaseURL: cfg.LLM.OpenAI.BaseURL,
-			Model:   cfg.LLM.OpenAI.Model,
-		},
+	llmClient := analyzer.NewLLMClient(analyzer.LLMClientConfig{
+		BaseURL: cfg.LLM.OpenAI.BaseURL,
+		Model:   cfg.LLM.OpenAI.Model,
+		APIKey:  cfg.LLM.OpenAI.APIKey,
 	})
-	if err != nil {
-		slog.Error("failed to create LLM client", "error", err)
-		os.Exit(1)
-	}
 
 	// 创建图片分析器（配置重试次数和超时时间）
 	imgAnalyzer := analyzer.NewImageAnalyzer(
@@ -251,6 +239,7 @@ func logStartupInfo(cfg *config.Config) {
 		"port", cfg.Server.Port,
 		"opensearch_addresses", cfg.OpenSearch.Addresses,
 		"llm_provider", cfg.LLM.Provider,
+		"llm_model", cfg.LLM.OpenAI.Model,
 		"watch_dirs", cfg.Watch.Directories,
 		"index", cfg.OpenSearch.IndexName,
 	)

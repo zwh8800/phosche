@@ -45,7 +45,7 @@
 | HTTP 路由 | chi/v5 |
 | 结构化日志 | log/slog |
 | 搜索引擎 | OpenSearch 2.x（opensearch-go 客户端 + IK 中文分词） |
-| AI 分析 | Ollama（本地）/ OpenAI（云端），双协议统一接口 |
+| AI 分析 | Ollama（本地）/ OpenAI（云端），OpenAI 兼容协议统一接口 |
 | 逆地理编码 | 高德地图 REST API（GPS 坐标 → 可读地址） |
 | 图片解码 | 标准库 + golang.org/x/image/webp + gen2brain/heic |
 | EXIF 提取 | dsoprea/go-exif/v3 |
@@ -218,7 +218,11 @@ server:
   log_level: info    # 日志级别：debug/info/warn/error
 
 llm:
-  provider: openai   # 或 ollama（见下方网络说明）
+  provider: openai  # 当前仅支持 openai（含 Ollama 等兼容协议）
+  openai:
+    base_url: https://api.openai.com/v1  # 本地 Ollama 用 http://localhost:11434/v1
+    model: gpt-4o                        # 本地 Ollama 用 llama3.2-vision
+    api_key: "sk-..."                    # 本地 Ollama 留空即可
 
 env:
   amap_key: ""       # 高德地图 API Key（用于逆地理编码，可选）
@@ -252,7 +256,7 @@ docker run -d \
 
 **访问本地 Ollama（可选）：**
 
-如果 LLM provider 配置为 `ollama` 且 Ollama 运行在宿主机上，需要让容器能够访问宿主机的网络：
+如果 Ollama 运行在宿主机上，需要让容器能够访问宿主机的网络：
 
 ```bash
 # macOS / Windows（Docker Desktop）
@@ -266,13 +270,14 @@ docker run -d \
   phosche
 ```
 
-然后在 `config.yaml` 中将 Ollama 地址改为 `http://host.docker.internal:11434`：
+然后在 `config.yaml` 中将 Ollama 地址设为 `http://host.docker.internal:11434/v1`：
 
 ```yaml
 llm:
-  provider: ollama
-  ollama:
-    base_url: http://host.docker.internal:11434
+  provider: openai
+  openai:
+    base_url: http://host.docker.internal:11434/v1
+    model: llama3.2-vision
 ```
 
 > **Linux 宿主机**：使用 `--network host` 替代端口映射和 `--add-host`，Ollama 地址填 `http://localhost:11434`。
@@ -313,15 +318,14 @@ docker rm phosche
 
 ### `llm` — AI 分析
 
+LLM 使用 OpenAI 兼容协议统一接入，本地 Ollama 和云端 OpenAI 共用同一套配置。
+
 | 配置项 | 类型 | 默认值 | 说明 |
 |--------|------|--------|------|
-| `provider` | `string` | `"ollama"` | LLM 提供商，可选 `"ollama"` 或 `"openai"` |
-| `ollama.base_url` | `string` | `"http://localhost:11434"` | Ollama 服务地址 |
-| `ollama.model` | `string` | `"llama3.2-vision"` | Ollama 视觉模型名称 |
-| `openai.api_key` | `string` | `""` | OpenAI API 密钥 |
-| `openai.base_url` | `string` | `"https://api.openai.com/v1"` | OpenAI API 地址（可替换为兼容接口） |
-| `openai.model` | `string` | `"gpt-4o"` | OpenAI 模型名称 |
-| `prompt` | `string` | 内置默认提示词 | 发送给 LLM 的提示词，要求返回 JSON 格式的结构化分析结果 |
+| `provider` | `string` | 必填 | LLM 提供商，当前仅支持 `"openai"`（含 Ollama 等兼容协议） |
+| `openai.base_url` | `string` | 必填 | API 地址。本地 Ollama：`http://localhost:11434/v1`；云端 OpenAI：`https://api.openai.com/v1` |
+| `openai.model` | `string` | 必填 | 模型名称。如 `llama3.2-vision`（Ollama）、`gpt-4o`（OpenAI） |
+| `openai.api_key` | `string` | `""` | API 密钥（可选，使用本地 Ollama 时留空即可） |
 | `max_retries` | `int` | `3` | 分析失败时的最大重试次数 |
 | `concurrency` | `int` | `2` | 同时进行的 AI 分析任务数 |
 | `timeout_seconds` | `int` | `60` | 单次 AI 分析请求的超时时间（秒） |
@@ -617,8 +621,7 @@ phosche/
 ├── internal/                  # 核心内部包
 │   ├── analyzer/              # AI 分析层
 │   │   ├── client.go          # LLM 客户端接口 + 工厂方法
-│   │   ├── ollama.go          # Ollama 协议实现（/api/chat）
-│   │   ├── openai.go          # OpenAI 协议实现（/v1/chat/completions）
+│   │   ├── openai.go          # OpenAI 兼容协议实现（/v1/chat/completions，Ollama 与 OpenAI 共用）
 │   │   └── analyzer.go        # 图片分析器（图片预处理、重试逻辑、结果校验）
 │   │
 │   ├── api/                   # REST API 层
@@ -848,7 +851,7 @@ git push origin v1.0.0
 1. **文件发现** — 启动时执行全量目录扫描，发现已有照片；之后通过 fsnotify 实时监听文件系统的 Create/Write 事件
 2. **去重与去抖** — DedupFilter 基于 `path + mtime + size` 三重校验去重；Debounce 机制合并短时间内的多次文件写入事件
 3. **图片解码** — 根据文件扩展名选择对应的解码器（JPEG/PNG/WebP/HEIC），同时提取 EXIF 元数据（拍摄时间、相机型号、光圈、ISO、GPS 等）
-4. **AI 分析** — 图片缩放到最大 2048 像素（保持宽高比），编码为 JPEG 后发送给 LLM。支持 Ollama（base64 图片）和 OpenAI（data URL）两种协议。LLM 返回 JSON 格式的结构化分析结果。EXIF 和逆地理编码信息会附加到 LLM 提示词中作为上下文
+4. **AI 分析** — 图片缩放到最大 2048 像素（保持宽高比），编码为 JPEG 后发送给 LLM。Ollama 和 OpenAI 均使用 OpenAI 兼容协议（data URL）。LLM 返回 JSON 格式的结构化分析结果。EXIF 和逆地理编码信息会附加到 LLM 提示词中作为上下文
 5. **OpenSearch 索引** — 将照片元数据、EXIF 信息、AI 分析结果和逆地理编码信息合并为 PhotoDocument，索引到 OpenSearch。使用路径的 SHA-256 哈希作为文档 ID
 6. **缓存生成** — 分析完成后自动生成 400px 缩略图和 HEIC→JPEG 全尺寸缓存，存储到 `server.cache_dir` 目录
 7. **Web 展示** — React SPA 提供时间线浏览和全文搜索界面，通过 REST API 与后端交互

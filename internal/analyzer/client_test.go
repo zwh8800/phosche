@@ -26,24 +26,23 @@ var expectedResult = &types.AnalysisResult{
 	Confidence:  0.95,
 }
 
-// --- Ollama Tests ---
+// --- Ollama Provider Tests (via OpenAI-compatible protocol) ---
 
-func TestOllamaClient_RequestFormat(t *testing.T) {
+func TestOllamaProvider_OpenAIProtocol(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Validate method
 		if r.Method != http.MethodPost {
 			t.Errorf("expected POST, got %s", r.Method)
 		}
-		// Validate path
-		if r.URL.Path != "/api/chat" {
-			t.Errorf("expected path /api/chat, got %s", r.URL.Path)
+		// Validate path — Ollama's OpenAI-compatible endpoint
+		if r.URL.Path != "/v1/chat/completions" {
+			t.Errorf("expected path /v1/chat/completions, got %s", r.URL.Path)
 		}
-		// Validate content type
-		if ct := r.Header.Get("Content-Type"); ct != "application/json" {
-			t.Errorf("expected Content-Type application/json, got %s", ct)
+		// Validate Authorization header — apiKey is "ollama" for local Ollama
+		if auth := r.Header.Get("Authorization"); auth != "Bearer ollama" {
+			t.Errorf("expected Authorization 'Bearer ollama', got %s", auth)
 		}
 
-		// Parse body
 		var body map[string]interface{}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			t.Fatalf("failed to decode body: %v", err)
@@ -54,12 +53,7 @@ func TestOllamaClient_RequestFormat(t *testing.T) {
 			t.Errorf("expected model 'llama3.2-vision', got %v", body["model"])
 		}
 
-		// Validate stream field
-		if stream, ok := body["stream"].(bool); !ok || stream != false {
-			t.Errorf("expected stream=false, got %v", body["stream"])
-		}
-
-		// Validate messages structure
+		// Validate messages structure with multimodal content array
 		messages, ok := body["messages"].([]interface{})
 		if !ok || len(messages) == 0 {
 			t.Fatal("expected messages array with at least one message")
@@ -69,31 +63,54 @@ func TestOllamaClient_RequestFormat(t *testing.T) {
 			t.Errorf("expected role 'user', got %v", msg["role"])
 		}
 
-		// Validate images field exists inside message and contains base64 data
-		if images, ok := msg["images"].([]interface{}); ok {
-			if len(images) == 0 {
-				t.Error("expected images array in message to contain at least one image")
-			}
-		} else {
-			t.Error("expected images field in message")
+		content, ok := msg["content"].([]interface{})
+		if !ok {
+			t.Fatal("expected content to be an array (multimodal)")
 		}
 
-		// Return valid response
-		ollamaResp := map[string]interface{}{
-			"model":      "llama3.2-vision",
-			"created_at": "2024-01-01T00:00:00Z",
-			"message": map[string]interface{}{
-				"role":    "assistant",
-				"content": validAnalysisResultJSON(),
+		hasImageURL := false
+		for _, part := range content {
+			partMap := part.(map[string]interface{})
+			if partMap["type"] == "image_url" {
+				hasImageURL = true
+				imageURL, ok := partMap["image_url"].(map[string]interface{})
+				if !ok {
+					t.Error("image_url field missing or invalid")
+					continue
+				}
+				url, ok := imageURL["url"].(string)
+				if !ok || !strings.HasPrefix(url, "data:image/jpeg;base64,") {
+					t.Errorf("expected data URL with 'data:image/jpeg;base64,' prefix, got %v", url)
+				}
+			}
+		}
+		if !hasImageURL {
+			t.Error("expected image_url part in content array")
+		}
+
+		// Return valid OpenAI-format response
+		openAIResp := map[string]interface{}{
+			"id":      "chatcmpl-ollama-123",
+			"object":  "chat.completion",
+			"created": 1234567890,
+			"model":   "llama3.2-vision",
+			"choices": []map[string]interface{}{
+				{
+					"index": 0,
+					"message": map[string]interface{}{
+						"role":    "assistant",
+						"content": validAnalysisResultJSON(),
+					},
+					"finish_reason": "stop",
+				},
 			},
-			"done": true,
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(ollamaResp)
+		json.NewEncoder(w).Encode(openAIResp)
 	}))
 	defer server.Close()
 
-	client := NewOllamaClient(server.URL, "llama3.2-vision")
+	client := NewOpenAIClient("ollama", server.URL+"/v1", "llama3.2-vision")
 	result, err := client.AnalyzeImage(context.Background(), []byte("fake-image-data"), "describe this image")
 	if err != nil {
 		t.Fatalf("AnalyzeImage failed: %v", err)
@@ -104,35 +121,6 @@ func TestOllamaClient_RequestFormat(t *testing.T) {
 	}
 	if result.SceneType != expectedResult.SceneType {
 		t.Errorf("expected scene_type %q, got %q", expectedResult.SceneType, result.SceneType)
-	}
-}
-
-func TestOllamaClient_ResponseParsing_StringEncodedJSON(t *testing.T) {
-	// Ollama may return message.content as a JSON string (string-encoded JSON)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		jsonStr := validAnalysisResultJSON()
-		ollamaResp := map[string]interface{}{
-			"model":      "llama3.2-vision",
-			"created_at": "2024-01-01T00:00:00Z",
-			"message": map[string]interface{}{
-				"role":    "assistant",
-				"content": jsonStr, // string, not parsed object
-			},
-			"done": true,
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(ollamaResp)
-	}))
-	defer server.Close()
-
-	client := NewOllamaClient(server.URL, "llama3.2-vision")
-	result, err := client.AnalyzeImage(context.Background(), []byte("fake-image-data"), "describe this image")
-	if err != nil {
-		t.Fatalf("AnalyzeImage failed: %v", err)
-	}
-
-	if result.Description != expectedResult.Description {
-		t.Errorf("expected description %q, got %q", expectedResult.Description, result.Description)
 	}
 }
 
@@ -269,14 +257,30 @@ func TestOpenAIClient_ResponseParsing(t *testing.T) {
 
 // --- Error Handling Tests ---
 
-func TestLLMClient_InvalidJSON_Ollama(t *testing.T) {
+func TestLLMClient_InvalidJSON_OllamaProvider(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		openAIResp := map[string]interface{}{
+			"id":      "chatcmpl-ollama-123",
+			"object":  "chat.completion",
+			"created": 1234567890,
+			"model":   "llama3.2-vision",
+			"choices": []map[string]interface{}{
+				{
+					"index": 0,
+					"message": map[string]interface{}{
+						"role":    "assistant",
+						"content": `{broken json!!!`,
+					},
+					"finish_reason": "stop",
+				},
+			},
+		}
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{invalid json!!!`))
+		json.NewEncoder(w).Encode(openAIResp)
 	}))
 	defer server.Close()
 
-	client := NewOllamaClient(server.URL, "llama3.2-vision")
+	client := NewOpenAIClient("ollama", server.URL+"/v1", "llama3.2-vision")
 	_, err := client.AnalyzeImage(context.Background(), []byte("fake-image-data"), "describe this image")
 	if err == nil {
 		t.Error("expected error for invalid JSON, got nil")
@@ -297,14 +301,14 @@ func TestLLMClient_InvalidJSON_OpenAI(t *testing.T) {
 	}
 }
 
-func TestLLMClient_HTTPError_Ollama(t *testing.T) {
+func TestLLMClient_HTTPError_OllamaProvider(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"error":"internal server error"}`))
+		w.Write([]byte(`{"error":{"message":"internal server error"}}`))
 	}))
 	defer server.Close()
 
-	client := NewOllamaClient(server.URL, "llama3.2-vision")
+	client := NewOpenAIClient("ollama", server.URL+"/v1", "llama3.2-vision")
 	_, err := client.AnalyzeImage(context.Background(), []byte("fake-image-data"), "describe this image")
 	if err == nil {
 		t.Error("expected error for HTTP 500, got nil")
@@ -327,40 +331,84 @@ func TestLLMClient_HTTPError_OpenAI(t *testing.T) {
 
 // --- Factory Tests ---
 
-func TestNewLLMClient_UnsupportedProvider(t *testing.T) {
-	cfg := LLMClientConfig{Provider: "anthropic"}
-	_, err := NewLLMClient(cfg)
-	if err == nil {
-		t.Error("expected error for unsupported provider, got nil")
+func TestNewLLMClient_OllamaNoAPIKey(t *testing.T) {
+	cfg := LLMClientConfig{
+		BaseURL: "http://localhost:11434",
+		Model:   "llama3.2-vision",
+	}
+	client := NewLLMClient(cfg)
+	oc, ok := client.(*OpenAIClient)
+	if !ok {
+		t.Fatalf("expected *OpenAIClient, got %T", client)
+	}
+	if oc.client == nil {
+		t.Fatal("OpenAIClient.inner client is nil")
+	}
+	if oc.model != "llama3.2-vision" {
+		t.Errorf("model = %q, want llama3.2-vision", oc.model)
 	}
 }
 
-func TestNewLLMClient_Ollama(t *testing.T) {
+func TestNewLLMClient_OpenAIWithAPIKey(t *testing.T) {
 	cfg := LLMClientConfig{
-		Provider: "ollama",
-		Ollama:   OllamaClientConfig{BaseURL: "http://localhost:11434", Model: "llama3.2-vision"},
+		BaseURL: "https://api.openai.com",
+		Model:   "gpt-4o",
+		APIKey:  "sk-test",
 	}
-	client, err := NewLLMClient(cfg)
-	if err != nil {
-		t.Fatalf("NewLLMClient failed: %v", err)
+	client := NewLLMClient(cfg)
+	oc, ok := client.(*OpenAIClient)
+	if !ok {
+		t.Fatalf("expected *OpenAIClient, got %T", client)
 	}
-	if _, ok := client.(*OllamaClient); !ok {
-		t.Errorf("expected *OllamaClient, got %T", client)
+	if oc.model != "gpt-4o" {
+		t.Errorf("model = %q, want gpt-4o", oc.model)
 	}
 }
 
-func TestNewLLMClient_OpenAI(t *testing.T) {
+func TestNewLLMClient_AutoAppendsV1(t *testing.T) {
+	server := newMockOpenAIServer(t)
+	defer server.Close()
+
 	cfg := LLMClientConfig{
-		Provider: "openai",
-		OpenAI:   OpenAIClientConfig{APIKey: "sk-test", BaseURL: "https://api.openai.com/v1", Model: "gpt-4o"},
+		BaseURL: server.URL,
+		Model:   "llama3.2-vision",
 	}
-	client, err := NewLLMClient(cfg)
+	client := NewLLMClient(cfg)
+	result, err := client.AnalyzeImage(context.Background(), []byte("fake"), "describe")
 	if err != nil {
-		t.Fatalf("NewLLMClient failed: %v", err)
+		t.Fatalf("AnalyzeImage failed: %v", err)
 	}
-	if _, ok := client.(*OpenAIClient); !ok {
-		t.Errorf("expected *OpenAIClient, got %T", client)
+	if result == nil {
+		t.Fatal("expected non-nil result")
 	}
+}
+
+func newMockOpenAIServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" {
+			t.Errorf("expected path /v1/chat/completions, got %s", r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":      "chatcmpl-123",
+			"object":  "chat.completion",
+			"model":   "llama3.2-vision",
+			"created": 1234567890,
+			"choices": []map[string]interface{}{
+				{
+					"index": 0,
+					"message": map[string]interface{}{
+						"role":    "assistant",
+						"content": validAnalysisResultJSON(),
+					},
+					"finish_reason": "stop",
+				},
+			},
+		})
+	}))
 }
 
 // --- Context Cancellation Test ---
@@ -375,7 +423,7 @@ func TestLLMClient_ContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // cancel immediately
 
-	client := NewOllamaClient(server.URL, "llama3.2-vision")
+	client := NewOpenAIClient("ollama", server.URL+"/v1", "llama3.2-vision")
 	_, err := client.AnalyzeImage(ctx, []byte("fake-image-data"), "describe this image")
 	if err == nil {
 		t.Error("expected error for cancelled context, got nil")

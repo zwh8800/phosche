@@ -57,26 +57,19 @@ func (w WatchConfig) IsAuthorized(path string, userEmail string) bool {
 
 // LLMConfig 是 AI 分析配置，控制 LLM 后端的选择和分析参数。
 type LLMConfig struct {
-	Provider       string       `yaml:"provider"`        // LLM 提供商，可选 "ollama" 或 "openai"
-	Ollama         OllamaConfig `yaml:"ollama"`          // Ollama 本地模型配置
-	OpenAI         OpenAIConfig `yaml:"openai"`          // OpenAI（或兼容接口）云端 API 配置
+	Provider       string       `yaml:"provider"`        // LLM 提供商，当前仅支持 "openai"（含 Ollama 等兼容协议）
+	OpenAI         OpenAIConfig `yaml:"openai"`          // OpenAI 兼容协议配置
 	MaxRetries     int          `yaml:"max_retries"`     // 分析失败时的最大重试次数
 	Concurrency    int          `yaml:"concurrency"`     // 同时进行的 AI 分析任务数
 	TimeoutSeconds int          `yaml:"timeout_seconds"` // 单次 AI 分析请求的超时时间（秒）
 	OutputLanguage string       `yaml:"output_language"` // 输出语言，影响分析结果描述的语言
 }
 
-// OllamaConfig 是 Ollama 本地模型配置。
-type OllamaConfig struct {
-	BaseURL string `yaml:"base_url"` // Ollama 服务地址，如 http://localhost:11434
-	Model   string `yaml:"model"`    // 视觉模型名称，如 llama3.2-vision
-}
-
-// OpenAIConfig 是 OpenAI（或兼容接口）云端 API 配置。
+// OpenAIConfig 是 OpenAI 兼容协议配置（也适用于 Ollama 等本地 OpenAI 兼容服务）。
 type OpenAIConfig struct {
-	APIKey  string `yaml:"api_key"`  // OpenAI API 密钥
-	BaseURL string `yaml:"base_url"` // API 地址，可替换为兼容的第三方接口
-	Model   string `yaml:"model"`    // 模型名称，如 gpt-4o
+	APIKey  string `yaml:"api_key"`  // API 密钥（可选，Ollama 等本地服务留空）
+	BaseURL string `yaml:"base_url"` // API 地址，如 https://api.openai.com/v1 或 http://localhost:11434/v1
+	Model   string `yaml:"model"`    // 模型名称，如 gpt-4o 或 llama3.2-vision
 }
 
 // OSConfig 是 OpenSearch 连接配置。
@@ -241,11 +234,9 @@ func validate(cfg *Config) error {
 		return fmt.Errorf("watch.directories: must not be empty")
 	}
 
-	// llm.provider 必须是 "ollama" 或 "openai"
-	switch cfg.LLM.Provider {
-	case "ollama", "openai":
-	default:
-		return fmt.Errorf("llm.provider: must be one of [ollama, openai], got %q", cfg.LLM.Provider)
+	// llm.provider 必须是 "openai"
+	if cfg.LLM.Provider != "openai" {
+		return fmt.Errorf("llm.provider: must be \"openai\", got %q", cfg.LLM.Provider)
 	}
 
 	// opensearch.addresses 和 index_name 为必填项

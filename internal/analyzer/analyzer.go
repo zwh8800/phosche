@@ -15,6 +15,8 @@ import (
 	"strings"
 	"time"
 
+	openai "github.com/sashabaranov/go-openai"
+
 	"github.com/zwh8800/phosche/internal/types"
 	"golang.org/x/image/draw"
 )
@@ -314,8 +316,9 @@ func (a *ImageAnalyzer) validateResult(result *types.AnalysisResult) error {
 
 // isRetryable 判断 LLM 客户端返回的错误是否可重试。
 // 错误分类规则：
-//   - 4xx HTTP 状态码 → 不可重试（客户端错误，如认证失败、参数错误）
-//   - 5xx HTTP 状态码 → 可重试（服务端临时错误）
+//   - *openai.APIError：429 → 可重试（限流），4xx → 不可重试，5xx → 可重试
+//   - 4xx HTTP 状态码（字符串匹配兜底） → 不可重试（客户端错误，如认证失败、参数错误）
+//   - 5xx HTTP 状态码（字符串匹配兜底） → 可重试（服务端临时错误）
 //   - net.Error（网络错误） → 可重试（连接超时、DNS 解析失败等）
 //   - context.Canceled → 不可重试（用户主动取消）
 //   - *url.Error → 解包后检查内部错误类型
@@ -330,15 +333,29 @@ func isRetryable(err error) bool {
 		return false
 	}
 
+	// go-openai SDK typed error: prefer structured HTTP status code over string matching
+	var apiErr *openai.APIError
+	if errors.As(err, &apiErr) {
+		if apiErr.HTTPStatusCode == 429 {
+			return true
+		}
+		if apiErr.HTTPStatusCode >= 400 && apiErr.HTTPStatusCode < 500 {
+			return false
+		}
+		if apiErr.HTTPStatusCode >= 500 {
+			return true
+		}
+	}
+
 	errStr := err.Error()
 
-	// 4xx 客户端错误不可重试
-	if strings.Contains(errStr, "status 4") {
+	// 4xx 客户端错误不可重试（兼容旧格式 "status 400" 和 SDK 格式 "status: 400"）
+	if strings.Contains(errStr, "status 4") || strings.Contains(errStr, "status: 4") {
 		return false
 	}
 
-	// 5xx 服务端错误可重试
-	if strings.Contains(errStr, "status 5") {
+	// 5xx 服务端错误可重试（兼容旧格式 "status 500" 和 SDK 格式 "status: 500"）
+	if strings.Contains(errStr, "status 5") || strings.Contains(errStr, "status: 5") {
 		return true
 	}
 

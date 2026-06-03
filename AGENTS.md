@@ -79,7 +79,7 @@ unanalyzed → analyzing → failed（不可恢复错误）
 ## 配置
 
 - 复制 `config.example.yaml` → `config.yaml`（已 gitignore）
-- 必填字段：`watch.directories`、`opensearch.addresses`、`llm.provider`
+- 必填字段：`watch.directories`、`opensearch.addresses`、`llm.provider`、`llm.openai.base_url`、`llm.openai.model`
 - 配置加载逻辑：`internal/config/config.go`，带默认值和校验
 - 环境变量覆盖：设置 `CONFIG_PATH` 可覆盖默认 `config.yaml` 路径
 - `env` 配置项：

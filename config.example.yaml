@@ -24,20 +24,16 @@ watch:
 # LLM AI 分析配置
 # =============================================================================
 llm:
-  # LLM 提供商，可选 "ollama"（本地）或 "openai"（云端）
-  provider: ollama
-  ollama:
-    # Ollama 服务地址
-    base_url: http://localhost:11434
-    # 视觉模型名称（需要支持图片输入的多模态模型）
-    model: llama3.2-vision
+  # LLM 提供商，当前仅支持 "openai"（含 Ollama 等 OpenAI 兼容协议）
+  provider: openai
+  # OpenAI 兼容协议配置（也适用于 Ollama 等本地 OpenAI 兼容服务）
   openai:
-    # OpenAI API 密钥
+    # API 地址，如 https://api.openai.com/v1 或 http://localhost:11434/v1（Ollama）
+    base_url: http://localhost:11434/v1
+    # 模型名称，如 gpt-4o 或 llama3.2-vision
+    model: llama3.2-vision
+    # API 密钥（可选，Ollama 等本地服务留空）
     api_key: ""
-    # API 地址（可替换为兼容的第三方接口）
-    base_url: https://api.openai.com/v1
-    # 模型名称
-    model: gpt-4o
   # 分析失败时的最大重试次数
   max_retries: 3
   # 同时进行的 AI 分析任务数

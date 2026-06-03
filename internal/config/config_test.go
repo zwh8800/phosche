@@ -25,14 +25,11 @@ watch:
   debounce_ms: 500
   min_dir_depth: 1
 llm:
-  provider: ollama
-  ollama:
-    base_url: http://localhost:11434
-    model: llama3.2-vision
+  provider: openai
   openai:
+    base_url: http://localhost:11434/v1
+    model: llama3.2-vision
     api_key: ""
-    base_url: https://api.openai.com/v1
-    model: gpt-4o
   max_retries: 3
   concurrency: 2
   timeout_seconds: 60
@@ -67,11 +64,17 @@ server:
 	if cfg.Watch.MinDirDepth != 1 {
 		t.Errorf("Watch.MinDirDepth = %d, want 1", cfg.Watch.MinDirDepth)
 	}
-	if cfg.LLM.Provider != "ollama" {
-		t.Errorf("LLM.Provider = %q, want ollama", cfg.LLM.Provider)
+	if cfg.LLM.Provider != "openai" {
+		t.Errorf("LLM.Provider = %q, want openai", cfg.LLM.Provider)
 	}
-	if cfg.LLM.Ollama.BaseURL != "http://localhost:11434" {
-		t.Errorf("LLM.Ollama.BaseURL = %q", cfg.LLM.Ollama.BaseURL)
+	if cfg.LLM.OpenAI.BaseURL != "http://localhost:11434/v1" {
+		t.Errorf("LLM.OpenAI.BaseURL = %q, want http://localhost:11434/v1", cfg.LLM.OpenAI.BaseURL)
+	}
+	if cfg.LLM.OpenAI.Model != "llama3.2-vision" {
+		t.Errorf("LLM.OpenAI.Model = %q, want llama3.2-vision", cfg.LLM.OpenAI.Model)
+	}
+	if cfg.LLM.OpenAI.APIKey != "" {
+		t.Errorf("LLM.OpenAI.APIKey = %q, want empty", cfg.LLM.OpenAI.APIKey)
 	}
 	if len(cfg.OpenSearch.Addresses) != 1 || cfg.OpenSearch.Addresses[0] != "http://localhost:9200" {
 		t.Errorf("unexpected OS.Addresses: %v", cfg.OpenSearch.Addresses)
@@ -101,7 +104,10 @@ func TestLoadConfig_MissingRequired(t *testing.T) {
 watch:
   directories: []
 llm:
-  provider: ollama
+  provider: openai
+  openai:
+    base_url: http://localhost:11434/v1
+    model: llama3.2-vision
 opensearch:
   addresses:
     - http://localhost:9200
@@ -120,7 +126,10 @@ watch:
   directories:
     - /photos
 llm:
-  provider: ollama
+  provider: openai
+  openai:
+    base_url: http://localhost:11434/v1
+    model: llama3.2-vision
 opensearch:
   addresses:
     - http://localhost:9200
@@ -133,6 +142,27 @@ opensearch:
 		}
 	})
 
+	t.Run("missing opensearch addresses", func(t *testing.T) {
+		yaml := `
+watch:
+  directories:
+    - /photos
+llm:
+  provider: openai
+  openai:
+    base_url: http://localhost:11434/v1
+    model: llama3.2-vision
+opensearch:
+  addresses: []
+  index_name: phosche
+`
+		path := writeTempYAML(t, yaml)
+		_, err := LoadConfig(path)
+		if err == nil {
+			t.Fatal("expected error for empty addresses, got nil")
+		}
+	})
+
 	t.Run("invalid llm provider", func(t *testing.T) {
 		yaml := `
 watch:
@@ -140,6 +170,9 @@ watch:
     - /photos
 llm:
   provider: invalid-provider
+  openai:
+    base_url: http://localhost:11434/v1
+    model: llama3.2-vision
 opensearch:
   addresses:
     - http://localhost:9200
@@ -151,24 +184,6 @@ opensearch:
 			t.Fatal("expected error for invalid provider, got nil")
 		}
 	})
-
-	t.Run("missing opensearch addresses", func(t *testing.T) {
-		yaml := `
-watch:
-  directories:
-    - /photos
-llm:
-  provider: openai
-opensearch:
-  addresses: []
-  index_name: phosche
-`
-		path := writeTempYAML(t, yaml)
-		_, err := LoadConfig(path)
-		if err == nil {
-			t.Fatal("expected error for empty addresses, got nil")
-		}
-	})
 }
 
 func TestLoadConfig_Defaults(t *testing.T) {
@@ -178,6 +193,9 @@ watch:
     - /photos
 llm:
   provider: openai
+  openai:
+    base_url: http://localhost:11434/v1
+    model: llama3.2-vision
 opensearch:
   addresses:
     - http://localhost:9200
@@ -225,7 +243,7 @@ func TestLoadConfig_FileNotFound(t *testing.T) {
 	}
 }
 
-func TestLoadConfig_OpenAIProvider(t *testing.T) {
+func TestLoadConfig_WithAPIKey(t *testing.T) {
 	yaml := `
 watch:
   directories:
@@ -233,9 +251,9 @@ watch:
 llm:
   provider: openai
   openai:
-    api_key: sk-test123
     base_url: https://api.openai.com/v1
     model: gpt-4o
+    api_key: sk-test123
 opensearch:
   addresses:
     - http://localhost:9200
@@ -250,10 +268,13 @@ opensearch:
 	if cfg.LLM.Provider != "openai" {
 		t.Errorf("LLM.Provider = %q, want openai", cfg.LLM.Provider)
 	}
-	if cfg.LLM.OpenAI.APIKey != "sk-test123" {
-		t.Errorf("LLM.OpenAI.APIKey = %q", cfg.LLM.OpenAI.APIKey)
+	if cfg.LLM.OpenAI.BaseURL != "https://api.openai.com/v1" {
+		t.Errorf("LLM.OpenAI.BaseURL = %q, want https://api.openai.com/v1", cfg.LLM.OpenAI.BaseURL)
 	}
 	if cfg.LLM.OpenAI.Model != "gpt-4o" {
-		t.Errorf("LLM.OpenAI.Model = %q", cfg.LLM.OpenAI.Model)
+		t.Errorf("LLM.OpenAI.Model = %q, want gpt-4o", cfg.LLM.OpenAI.Model)
+	}
+	if cfg.LLM.OpenAI.APIKey != "sk-test123" {
+		t.Errorf("LLM.OpenAI.APIKey = %q, want sk-test123", cfg.LLM.OpenAI.APIKey)
 	}
 }
