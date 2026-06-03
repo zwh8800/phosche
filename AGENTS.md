@@ -114,3 +114,60 @@ unanalyzed → analyzing → failed（不可恢复错误）
 - 逆地理编码：高德 API，格式化地址存入 ES
 - 缓存命名：`{photoID}_thumb.jpg` / `{photoID}_full.jpg`
 - `cache/` 目录已 gitignore（`internal/cache/` 生成的缩略图）
+
+## Git 提交规范
+
+**必须使用中文**编写提交信息，格式采用 Conventional Commits 规范：
+
+### 提交格式
+
+```
+<type>(<scope>): <subject>
+
+<body>
+
+<footer>
+```
+
+- **type**: 提交类型（必填）
+  - `feat`: 新功能
+  - `fix`: 修复 bug
+  - `refactor`: 重构（非新功能、非修复）
+  - `docs`: 文档变更
+  - `style`: 代码格式调整（不影响逻辑）
+  - `test`: 测试相关
+  - `chore`: 构建/工具链变更
+  - `perf`: 性能优化
+
+- **scope**: 影响范围（可选），如 `analyzer`、`config`、`api`、`web` 等
+
+- **subject**: 简短描述（必填），使用中文
+
+### 示例
+
+```
+feat(analyzer): 新增批量分析接口，支持并发处理多张图片
+
+- 实现 /api/batch-analyze 端点
+- 最大并发数由 config.batch_concurrency 控制（默认 5）
+- 返回结果包含每张图片的处理状态
+
+Closes #123
+```
+
+```
+fix(search): 修复按日期范围搜索时结果不准确的问题
+
+调整时间戳比较逻辑，使用 Unix 时间戳而非格式化字符串
+```
+
+```
+refactor(config): 简化配置加载流程
+
+- 移除冗余的 validateSchema 函数
+- 统一使用 go-playground/validator 进行校验
+```
+
+```
+chore(docker): 优化 Docker 镜像大小，从 1.2GB 缩减至 450MB
+```
