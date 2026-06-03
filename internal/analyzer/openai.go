@@ -73,13 +73,7 @@ func buildResponseFormat(responseFormatType string) (*openai.ChatCompletionRespo
 func (c *OpenAIClient) AnalyzeImage(ctx context.Context, imageData []byte, prompt string) (*types.AnalysisResult, error) {
 	encodedImage := "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(imageData)
 
-	slog.Debug("openai: sending request",
-		"model", c.model,
-		"prompt", truncate(prompt, 200),
-		"image_bytes", len(imageData),
-	)
-
-	resp, err := c.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
+	req := openai.ChatCompletionRequest{
 		Model: c.model,
 		Messages: []openai.ChatCompletionMessage{
 			{
@@ -99,23 +93,22 @@ func (c *OpenAIClient) AnalyzeImage(ctx context.Context, imageData []byte, promp
 			},
 		},
 		ResponseFormat: c.responseFormat,
-	})
+	}
+
+	logRequest(req)
+
+	resp, err := c.client.CreateChatCompletion(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("openai request failed: %w", err)
 	}
 
-	slog.Debug("openai: received response",
-		"choices", len(resp.Choices),
-		"usage_prompt_tokens", resp.Usage.PromptTokens,
-		"usage_completion_tokens", resp.Usage.CompletionTokens,
-	)
+	logResponse(resp)
 
 	if len(resp.Choices) == 0 {
 		return nil, fmt.Errorf("openai response has no choices")
 	}
 
 	content := resp.Choices[0].Message.Content
-	slog.Debug("openai: response content", "content", truncate(content, 2000))
 
 	var result types.AnalysisResult
 	if err := unmarshalAnalysisResult(&result, content, c.responseFormat); err != nil {
@@ -123,6 +116,23 @@ func (c *OpenAIClient) AnalyzeImage(ctx context.Context, imageData []byte, promp
 	}
 
 	return &result, nil
+}
+
+func logRequest(req openai.ChatCompletionRequest) {
+	reqForLog := req
+	imageURL := reqForLog.Messages[0].MultiContent[1].ImageURL.URL
+	reqForLog.Messages[0].MultiContent[1].ImageURL = &openai.ChatMessageImageURL{
+		URL: imageURL[:min(len(imageURL), 100)] + "...(truncated)",
+	}
+	if reqJSON, err := json.Marshal(reqForLog); err == nil {
+		slog.Debug("openai: sending request", "request", string(reqJSON))
+	}
+}
+
+func logResponse(resp openai.ChatCompletionResponse) {
+	if respJSON, err := json.Marshal(resp); err == nil {
+		slog.Debug("openai: received response", "response", string(respJSON))
+	}
 }
 
 func unmarshalAnalysisResult(result *types.AnalysisResult, content string, rf *openai.ChatCompletionResponseFormat) error {
