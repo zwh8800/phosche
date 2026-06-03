@@ -110,7 +110,7 @@ func TestOllamaProvider_OpenAIProtocol(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := NewOpenAIClient("ollama", server.URL+"/v1", "llama3.2-vision", "")
+	client, err := NewOpenAIClient("ollama", server.URL+"/v1", "llama3.2-vision", "", 0, 0)
 	if err != nil {
 		t.Fatalf("NewOpenAIClient: %v", err)
 	}
@@ -210,7 +210,7 @@ func TestOpenAIClient_RequestFormat(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := NewOpenAIClient("test-api-key", server.URL+"/v1", "gpt-4o", "")
+	client, err := NewOpenAIClient("test-api-key", server.URL+"/v1", "gpt-4o", "", 0, 0)
 	if err != nil {
 		t.Fatalf("NewOpenAIClient: %v", err)
 	}
@@ -247,7 +247,7 @@ func TestOpenAIClient_ResponseParsing(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := NewOpenAIClient("test-api-key", server.URL+"/v1", "gpt-4o", "")
+	client, err := NewOpenAIClient("test-api-key", server.URL+"/v1", "gpt-4o", "", 0, 0)
 	if err != nil {
 		t.Fatalf("NewOpenAIClient: %v", err)
 	}
@@ -289,7 +289,7 @@ func TestLLMClient_InvalidJSON_OllamaProvider(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := NewOpenAIClient("ollama", server.URL+"/v1", "llama3.2-vision", "")
+	client, err := NewOpenAIClient("ollama", server.URL+"/v1", "llama3.2-vision", "", 0, 0)
 	if err != nil {
 		t.Fatalf("NewOpenAIClient: %v", err)
 	}
@@ -306,7 +306,7 @@ func TestLLMClient_InvalidJSON_OpenAI(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := NewOpenAIClient("test-api-key", server.URL+"/v1", "gpt-4o", "")
+	client, err := NewOpenAIClient("test-api-key", server.URL+"/v1", "gpt-4o", "", 0, 0)
 	if err != nil {
 		t.Fatalf("NewOpenAIClient: %v", err)
 	}
@@ -323,7 +323,7 @@ func TestLLMClient_HTTPError_OllamaProvider(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := NewOpenAIClient("ollama", server.URL+"/v1", "llama3.2-vision", "")
+	client, err := NewOpenAIClient("ollama", server.URL+"/v1", "llama3.2-vision", "", 0, 0)
 	if err != nil {
 		t.Fatalf("NewOpenAIClient: %v", err)
 	}
@@ -340,7 +340,7 @@ func TestLLMClient_HTTPError_OpenAI(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := NewOpenAIClient("test-api-key", server.URL+"/v1", "gpt-4o", "")
+	client, err := NewOpenAIClient("test-api-key", server.URL+"/v1", "gpt-4o", "", 0, 0)
 	if err != nil {
 		t.Fatalf("NewOpenAIClient: %v", err)
 	}
@@ -453,7 +453,7 @@ func TestLLMClient_ContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // cancel immediately
 
-	client, err := NewOpenAIClient("ollama", server.URL+"/v1", "llama3.2-vision", "")
+	client, err := NewOpenAIClient("ollama", server.URL+"/v1", "llama3.2-vision", "", 0, 0)
 	if err != nil {
 		t.Fatalf("NewOpenAIClient: %v", err)
 	}
@@ -501,7 +501,7 @@ func TestNewOpenAIClient_ValidResponseFormats(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.format, func(t *testing.T) {
-			client, err := NewOpenAIClient("k", "http://x/v1", "m", tt.format)
+			client, err := NewOpenAIClient("k", "http://x/v1", "m", tt.format, 0, 0)
 			if err != nil {
 				t.Fatalf("NewOpenAIClient(%q): %v", tt.format, err)
 			}
@@ -519,9 +519,175 @@ func TestNewOpenAIClient_ValidResponseFormats(t *testing.T) {
 }
 
 func TestNewOpenAIClient_InvalidResponseFormat(t *testing.T) {
-	_, err := NewOpenAIClient("k", "http://x/v1", "m", "bogus")
+	_, err := NewOpenAIClient("k", "http://x/v1", "m", "bogus", 0, 0)
 	if err == nil {
 		t.Fatal("expected error for invalid response_format, got nil")
+	}
+}
+
+func TestOpenAIClient_MaxTokensSetInRequestBody(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+		mt, ok := body["max_tokens"]
+		if !ok {
+			t.Fatal("max_tokens missing from request body when set to 8192")
+		}
+		if mt.(float64) != 8192 {
+			t.Errorf("max_tokens = %v, want 8192", mt)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":      "chatcmpl-test",
+			"object":  "chat.completion",
+			"created": 1234567890,
+			"model":   "test",
+			"choices": []map[string]interface{}{
+				{
+					"index":         0,
+					"message":       map[string]interface{}{"role": "assistant", "content": validAnalysisResultJSON()},
+					"finish_reason": "stop",
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client, err := NewOpenAIClient("k", server.URL+"/v1", "m", "", 8192, 0)
+	if err != nil {
+		t.Fatalf("NewOpenAIClient: %v", err)
+	}
+	_, err = client.AnalyzeImage(context.Background(), []byte("fake"), "describe")
+	if err != nil {
+		t.Fatalf("AnalyzeImage: %v", err)
+	}
+}
+
+func TestOpenAIClient_MaxTokensZeroOmitted(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+		if _, ok := body["max_tokens"]; ok {
+			t.Error("max_tokens should be omitted when set to 0")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":      "chatcmpl-test",
+			"object":  "chat.completion",
+			"created": 1234567890,
+			"model":   "test",
+			"choices": []map[string]interface{}{
+				{
+					"index":         0,
+					"message":       map[string]interface{}{"role": "assistant", "content": validAnalysisResultJSON()},
+					"finish_reason": "stop",
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client, err := NewOpenAIClient("k", server.URL+"/v1", "m", "", 0, 0)
+	if err != nil {
+		t.Fatalf("NewOpenAIClient: %v", err)
+	}
+	_, err = client.AnalyzeImage(context.Background(), []byte("fake"), "describe")
+	if err != nil {
+		t.Fatalf("AnalyzeImage: %v", err)
+	}
+}
+
+func TestOpenAIClient_MaxCompletionTokensSetInRequestBody(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+		if _, ok := body["max_tokens"]; ok {
+			t.Error("max_tokens should be omitted when set to 0")
+		}
+		mct, ok := body["max_completion_tokens"]
+		if !ok {
+			t.Fatal("max_completion_tokens missing from request body when set to 16384")
+		}
+		if mct.(float64) != 16384 {
+			t.Errorf("max_completion_tokens = %v, want 16384", mct)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":      "chatcmpl-test",
+			"object":  "chat.completion",
+			"created": 1234567890,
+			"model":   "test",
+			"choices": []map[string]interface{}{
+				{
+					"index":         0,
+					"message":       map[string]interface{}{"role": "assistant", "content": validAnalysisResultJSON()},
+					"finish_reason": "stop",
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client, err := NewOpenAIClient("k", server.URL+"/v1", "m", "", 0, 16384)
+	if err != nil {
+		t.Fatalf("NewOpenAIClient: %v", err)
+	}
+	_, err = client.AnalyzeImage(context.Background(), []byte("fake"), "describe")
+	if err != nil {
+		t.Fatalf("AnalyzeImage: %v", err)
+	}
+}
+
+func TestOpenAIClient_BothTokenLimitsSet(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+		mt, ok := body["max_tokens"]
+		if !ok {
+			t.Fatal("max_tokens missing from request body")
+		}
+		if mt.(float64) != 8192 {
+			t.Errorf("max_tokens = %v, want 8192", mt)
+		}
+		mct, ok := body["max_completion_tokens"]
+		if !ok {
+			t.Fatal("max_completion_tokens missing from request body")
+		}
+		if mct.(float64) != 16384 {
+			t.Errorf("max_completion_tokens = %v, want 16384", mct)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":      "chatcmpl-test",
+			"object":  "chat.completion",
+			"created": 1234567890,
+			"model":   "test",
+			"choices": []map[string]interface{}{
+				{
+					"index":         0,
+					"message":       map[string]interface{}{"role": "assistant", "content": validAnalysisResultJSON()},
+					"finish_reason": "stop",
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client, err := NewOpenAIClient("k", server.URL+"/v1", "m", "", 8192, 16384)
+	if err != nil {
+		t.Fatalf("NewOpenAIClient: %v", err)
+	}
+	_, err = client.AnalyzeImage(context.Background(), []byte("fake"), "describe")
+	if err != nil {
+		t.Fatalf("AnalyzeImage: %v", err)
 	}
 }
 
@@ -594,7 +760,7 @@ func TestOpenAIClient_ResponseFormatInRequestBody(t *testing.T) {
 			}))
 			defer server.Close()
 
-			client, err := NewOpenAIClient("k", server.URL+"/v1", "m", tt.format)
+			client, err := NewOpenAIClient("k", server.URL+"/v1", "m", tt.format, 0, 0)
 			if err != nil {
 				t.Fatalf("NewOpenAIClient: %v", err)
 			}

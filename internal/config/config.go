@@ -71,6 +71,8 @@ type OpenAIConfig struct {
 	BaseURL        string `yaml:"base_url"`         // API 地址，如 https://api.openai.com/v1 或 http://localhost:11434/v1
 	Model          string `yaml:"model"`            // 模型名称，如 gpt-4o 或 llama3.2-vision
 	ResponseFormat string `yaml:"response_format"`  // 响应格式：json_object（默认）、json_schema、text
+	MaxTokens           int `yaml:"max_tokens"`            // 最大输出 token 数（兼容 LMStudio/Ollama），0 表示不设置
+	MaxCompletionTokens int `yaml:"max_completion_tokens"` // 最大完成 token 数（含 reasoning，兼容 OpenAI 新 API），0 表示不设置
 }
 
 // OSConfig 是 OpenSearch 连接配置。

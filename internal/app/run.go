@@ -70,10 +70,12 @@ func Run(distFS fs.FS, configPath string) {
 	indexerSvc := indexer.NewIndexerService(osClient, 100)
 
 	llmClient, err := analyzer.NewLLMClient(analyzer.LLMClientConfig{
-		BaseURL:        cfg.LLM.OpenAI.BaseURL,
-		Model:          cfg.LLM.OpenAI.Model,
-		APIKey:         cfg.LLM.OpenAI.APIKey,
-		ResponseFormat: cfg.LLM.OpenAI.ResponseFormat,
+		BaseURL:             cfg.LLM.OpenAI.BaseURL,
+		Model:               cfg.LLM.OpenAI.Model,
+		APIKey:              cfg.LLM.OpenAI.APIKey,
+		ResponseFormat:      cfg.LLM.OpenAI.ResponseFormat,
+		MaxTokens:           cfg.LLM.OpenAI.MaxTokens,
+		MaxCompletionTokens: cfg.LLM.OpenAI.MaxCompletionTokens,
 	})
 	if err != nil {
 		slog.Error("failed to create LLM client", "error", err)

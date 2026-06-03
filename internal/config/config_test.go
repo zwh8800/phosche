@@ -289,6 +289,66 @@ opensearch:
 	}
 }
 
+func TestLoadConfig_MaxTokens(t *testing.T) {
+	t.Run("parse both token limits", func(t *testing.T) {
+		yaml := `
+watch:
+  directories:
+    - /photos
+llm:
+  provider: openai
+  openai:
+    base_url: http://localhost:11434/v1
+    model: llama3.2-vision
+    max_tokens: 8192
+    max_completion_tokens: 16384
+opensearch:
+  addresses:
+    - http://localhost:9200
+  index_name: phosche
+`
+		path := writeTempYAML(t, yaml)
+		cfg, err := LoadConfig(path)
+		if err != nil {
+			t.Fatalf("LoadConfig() error = %v", err)
+		}
+		if cfg.LLM.OpenAI.MaxTokens != 8192 {
+			t.Errorf("LLM.OpenAI.MaxTokens = %d, want 8192", cfg.LLM.OpenAI.MaxTokens)
+		}
+		if cfg.LLM.OpenAI.MaxCompletionTokens != 16384 {
+			t.Errorf("LLM.OpenAI.MaxCompletionTokens = %d, want 16384", cfg.LLM.OpenAI.MaxCompletionTokens)
+		}
+	})
+
+	t.Run("default both are 0", func(t *testing.T) {
+		yaml := `
+watch:
+  directories:
+    - /photos
+llm:
+  provider: openai
+  openai:
+    base_url: http://localhost:11434/v1
+    model: llama3.2-vision
+opensearch:
+  addresses:
+    - http://localhost:9200
+  index_name: phosche
+`
+		path := writeTempYAML(t, yaml)
+		cfg, err := LoadConfig(path)
+		if err != nil {
+			t.Fatalf("LoadConfig() error = %v", err)
+		}
+		if cfg.LLM.OpenAI.MaxTokens != 0 {
+			t.Errorf("LLM.OpenAI.MaxTokens = %d, want 0 (default)", cfg.LLM.OpenAI.MaxTokens)
+		}
+		if cfg.LLM.OpenAI.MaxCompletionTokens != 0 {
+			t.Errorf("LLM.OpenAI.MaxCompletionTokens = %d, want 0 (default)", cfg.LLM.OpenAI.MaxCompletionTokens)
+		}
+	})
+}
+
 func TestLoadConfig_FileNotFound(t *testing.T) {
 	_, err := LoadConfig("/nonexistent/path/config.yaml")
 	if err == nil {

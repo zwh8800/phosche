@@ -16,14 +16,18 @@ import (
 
 // OpenAIClient wraps the go-openai library to implement LLMClient.
 type OpenAIClient struct {
-	client         *openai.Client
-	model          string
-	responseFormat *openai.ChatCompletionResponseFormat
+	client              *openai.Client
+	model               string
+	responseFormat      *openai.ChatCompletionResponseFormat
+	maxTokens           int
+	maxCompletionTokens int
 }
 
 // NewOpenAIClient creates an OpenAIClient.
 // responseFormatType 支持 json_object / json_schema / text，空字符串默认为 json_object。
-func NewOpenAIClient(apiKey, baseURL, model, responseFormatType string) (*OpenAIClient, error) {
+// maxTokens 控制可见输出 token 数（兼容 LMStudio/Ollama），0 表示不设置。
+// maxCompletionTokens 控制总生成 token 数（含 reasoning，兼容 OpenAI 新 API），0 表示不设置。
+func NewOpenAIClient(apiKey, baseURL, model, responseFormatType string, maxTokens, maxCompletionTokens int) (*OpenAIClient, error) {
 	config := openai.DefaultConfig(apiKey)
 	if baseURL != "" {
 		config.BaseURL = baseURL
@@ -35,9 +39,11 @@ func NewOpenAIClient(apiKey, baseURL, model, responseFormatType string) (*OpenAI
 	}
 
 	return &OpenAIClient{
-		client:         openai.NewClientWithConfig(config),
-		model:          model,
-		responseFormat: rf,
+		client:              openai.NewClientWithConfig(config),
+		model:               model,
+		responseFormat:      rf,
+		maxTokens:           maxTokens,
+		maxCompletionTokens: maxCompletionTokens,
 	}, nil
 }
 
@@ -92,7 +98,9 @@ func (c *OpenAIClient) AnalyzeImage(ctx context.Context, imageData []byte, promp
 				},
 			},
 		},
-		ResponseFormat: c.responseFormat,
+		ResponseFormat:      c.responseFormat,
+		MaxTokens:           c.maxTokens,
+		MaxCompletionTokens: c.maxCompletionTokens,
 	}
 
 	logRequest(req)

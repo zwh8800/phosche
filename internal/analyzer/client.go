@@ -21,6 +21,8 @@ type LLMClientConfig struct {
 	Model          string // 模型名称，如 llama3.2-vision 或 gpt-4o
 	APIKey         string // API 密钥（可选，留空时使用 "ollama" 占位符）
 	ResponseFormat string // 响应格式：json_object / json_schema / text，空字符串默认 json_object
+	MaxTokens           int // 最大输出 token 数（兼容 LMStudio/Ollama），0 表示不设置
+	MaxCompletionTokens int // 最大完成 token 数（含 reasoning，兼容 OpenAI 新 API），0 表示不设置
 }
 
 // NewLLMClient 基于 OpenAI 兼容协议创建 LLM 客户端。
@@ -34,5 +36,5 @@ func NewLLMClient(cfg LLMClientConfig) (LLMClient, error) {
 	if !strings.HasSuffix(baseURL, "/v1") {
 		baseURL += "/v1"
 	}
-	return NewOpenAIClient(apiKey, baseURL, cfg.Model, cfg.ResponseFormat)
+	return NewOpenAIClient(apiKey, baseURL, cfg.Model, cfg.ResponseFormat, cfg.MaxTokens, cfg.MaxCompletionTokens)
 }

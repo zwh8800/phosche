@@ -40,6 +40,12 @@ llm:
     #   text         — 无结构约束，由 prompt 引导 LLM 输出 JSON（兼容性最宽泛，依赖模型遵循 prompt）
     # 留空时等同于 json_object
     response_format: ""
+    # 最大输出 token 数（兼容 LMStudio/Ollama），0 表示不设置（由服务端决定）
+    # LMStudio 默认 4096，reasoning 模型会消耗大量 token 用于思考过程，建议设为 8192 或更高
+    max_tokens: 0
+    # 最大完成 token 数（含 reasoning token，兼容 OpenAI 新 API），0 表示不设置
+    # 主要用于 OpenAI 官方 API 的 reasoning 模型（o1/o3 系列）
+    max_completion_tokens: 0
   # 分析失败时的最大重试次数
   max_retries: 3
   # 同时进行的 AI 分析任务数
