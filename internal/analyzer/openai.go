@@ -119,18 +119,21 @@ func (c *OpenAIClient) AnalyzeImage(ctx context.Context, imageData []byte, promp
 }
 
 func logRequest(req openai.ChatCompletionRequest) {
-	reqForLog := req
-	reqForLog.Messages = make([]openai.ChatCompletionMessage, len(req.Messages))
-	copy(reqForLog.Messages, req.Messages)
+	data, err := json.Marshal(req)
+	if err != nil {
+		return
+	}
 
-	multiContent := make([]openai.ChatMessagePart, len(req.Messages[0].MultiContent))
-	copy(multiContent, req.Messages[0].MultiContent)
-	reqForLog.Messages[0].MultiContent = multiContent
+	var reqForLog openai.ChatCompletionRequest
+	if err := json.Unmarshal(data, &reqForLog); err != nil {
+		return
+	}
 
 	imageURL := reqForLog.Messages[0].MultiContent[1].ImageURL.URL
 	reqForLog.Messages[0].MultiContent[1].ImageURL = &openai.ChatMessageImageURL{
 		URL: imageURL[:min(len(imageURL), 100)] + "...(truncated)",
 	}
+
 	if reqJSON, err := json.Marshal(reqForLog); err == nil {
 		slog.Debug("openai: sending request", "request", string(reqJSON))
 	}
