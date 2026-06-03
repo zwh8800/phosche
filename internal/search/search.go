@@ -239,6 +239,7 @@ func (s *SearchService) searchHybrid(ctx context.Context, indexName string, req 
 	}
 
 	// KNN sub-query (OpenSearch knn query clause)
+	// filter 确保 province/country/date 等筛选条件在 kNN 检索中同样生效
 	k := s.hybridCfg.KNNK
 	if k <= 0 {
 		k = pageSize * 2
@@ -248,6 +249,11 @@ func (s *SearchService) searchHybrid(ctx context.Context, indexName string, req 
 			"embedding": map[string]any{
 				"vector": queryVec,
 				"k":      k,
+				"filter": map[string]any{
+					"bool": map[string]any{
+						"filter": filters,
+					},
+				},
 			},
 		},
 	}
