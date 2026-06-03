@@ -67,9 +67,10 @@ type LLMConfig struct {
 
 // OpenAIConfig 是 OpenAI 兼容协议配置（也适用于 Ollama 等本地 OpenAI 兼容服务）。
 type OpenAIConfig struct {
-	APIKey  string `yaml:"api_key"`  // API 密钥（可选，Ollama 等本地服务留空）
-	BaseURL string `yaml:"base_url"` // API 地址，如 https://api.openai.com/v1 或 http://localhost:11434/v1
-	Model   string `yaml:"model"`    // 模型名称，如 gpt-4o 或 llama3.2-vision
+	APIKey         string `yaml:"api_key"`          // API 密钥（可选，Ollama 等本地服务留空）
+	BaseURL        string `yaml:"base_url"`         // API 地址，如 https://api.openai.com/v1 或 http://localhost:11434/v1
+	Model          string `yaml:"model"`            // 模型名称，如 gpt-4o 或 llama3.2-vision
+	ResponseFormat string `yaml:"response_format"`  // 响应格式：json_object（默认）、json_schema、text
 }
 
 // OSConfig 是 OpenSearch 连接配置。
@@ -237,6 +238,13 @@ func validate(cfg *Config) error {
 	// llm.provider 必须是 "openai"
 	if cfg.LLM.Provider != "openai" {
 		return fmt.Errorf("llm.provider: must be \"openai\", got %q", cfg.LLM.Provider)
+	}
+
+	// llm.openai.response_format 必须是 json_object、json_schema、text 之一（允许为空，等同 json_object）
+	switch cfg.LLM.OpenAI.ResponseFormat {
+	case "", "json_object", "json_schema", "text":
+	default:
+		return fmt.Errorf("llm.openai.response_format: must be one of [json_object, json_schema, text], got %q", cfg.LLM.OpenAI.ResponseFormat)
 	}
 
 	// opensearch.addresses 和 index_name 为必填项

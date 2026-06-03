@@ -34,6 +34,12 @@ llm:
     model: llama3.2-vision
     # API 密钥（可选，Ollama 等本地服务留空）
     api_key: ""
+    # 响应格式，决定 API 如何约束 LLM 输出结构：
+    #   json_object  — 要求返回 JSON（兼容 OpenAI / Ollama / 大多数兼容后端）
+    #   json_schema  — 要求返回严格符合 analysis_result schema 的 JSON（LM Studio 等仅支持此格式时选用）
+    #   text         — 无结构约束，由 prompt 引导 LLM 输出 JSON（兼容性最宽泛，依赖模型遵循 prompt）
+    # 留空时等同于 json_object
+    response_format: ""
   # 分析失败时的最大重试次数
   max_retries: 3
   # 同时进行的 AI 分析任务数

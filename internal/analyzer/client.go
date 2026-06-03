@@ -17,14 +17,15 @@ type LLMClient interface {
 
 // LLMClientConfig 使用 OpenAI 兼容协议统一配置本地和云端 LLM。
 type LLMClientConfig struct {
-	BaseURL string // OpenAI 兼容 API 地址（不含 /v1，工厂自动追加）
-	Model   string // 模型名称，如 llama3.2-vision 或 gpt-4o
-	APIKey  string // API 密钥（可选，留空时使用 "ollama" 占位符）
+	BaseURL        string // OpenAI 兼容 API 地址（不含 /v1，工厂自动追加）
+	Model          string // 模型名称，如 llama3.2-vision 或 gpt-4o
+	APIKey         string // API 密钥（可选，留空时使用 "ollama" 占位符）
+	ResponseFormat string // 响应格式：json_object / json_schema / text，空字符串默认 json_object
 }
 
 // NewLLMClient 基于 OpenAI 兼容协议创建 LLM 客户端。
 // 如果 APIKey 为空则使用 "ollama" 占位符；如果 BaseURL 不以 /v1 结尾则自动追加。
-func NewLLMClient(cfg LLMClientConfig) LLMClient {
+func NewLLMClient(cfg LLMClientConfig) (LLMClient, error) {
 	apiKey := cfg.APIKey
 	if apiKey == "" {
 		apiKey = "ollama"
@@ -33,5 +34,5 @@ func NewLLMClient(cfg LLMClientConfig) LLMClient {
 	if !strings.HasSuffix(baseURL, "/v1") {
 		baseURL += "/v1"
 	}
-	return NewOpenAIClient(apiKey, baseURL, cfg.Model)
+	return NewOpenAIClient(apiKey, baseURL, cfg.Model, cfg.ResponseFormat)
 }

@@ -184,6 +184,59 @@ opensearch:
 			t.Fatal("expected error for invalid provider, got nil")
 		}
 	})
+
+	t.Run("invalid response_format", func(t *testing.T) {
+		yaml := `
+watch:
+  directories:
+    - /photos
+llm:
+  provider: openai
+  openai:
+    base_url: http://localhost:11434/v1
+    model: llama3.2-vision
+    response_format: xml_output
+opensearch:
+  addresses:
+    - http://localhost:9200
+  index_name: phosche
+`
+		path := writeTempYAML(t, yaml)
+		_, err := LoadConfig(path)
+		if err == nil {
+			t.Fatal("expected error for invalid response_format, got nil")
+		}
+	})
+}
+
+func TestLoadConfig_ResponseFormats(t *testing.T) {
+	for _, format := range []string{"", "json_object", "json_schema", "text"} {
+		t.Run(format, func(t *testing.T) {
+			yaml := `
+watch:
+  directories:
+    - /photos
+llm:
+  provider: openai
+  openai:
+    base_url: http://localhost:11434/v1
+    model: llama3.2-vision
+    response_format: ` + format + `
+opensearch:
+  addresses:
+    - http://localhost:9200
+  index_name: phosche
+`
+			path := writeTempYAML(t, yaml)
+			cfg, err := LoadConfig(path)
+			if err != nil {
+				t.Fatalf("LoadConfig() error = %v", err)
+			}
+			if cfg.LLM.OpenAI.ResponseFormat != format {
+				t.Errorf("ResponseFormat = %q, want %q", cfg.LLM.OpenAI.ResponseFormat, format)
+			}
+		})
+	}
 }
 
 func TestLoadConfig_Defaults(t *testing.T) {

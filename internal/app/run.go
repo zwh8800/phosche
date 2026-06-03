@@ -69,11 +69,16 @@ func Run(distFS fs.FS, configPath string) {
 	// 创建索引服务（带断路器功能，队列容量 100）
 	indexerSvc := indexer.NewIndexerService(osClient, 100)
 
-	llmClient := analyzer.NewLLMClient(analyzer.LLMClientConfig{
-		BaseURL: cfg.LLM.OpenAI.BaseURL,
-		Model:   cfg.LLM.OpenAI.Model,
-		APIKey:  cfg.LLM.OpenAI.APIKey,
+	llmClient, err := analyzer.NewLLMClient(analyzer.LLMClientConfig{
+		BaseURL:        cfg.LLM.OpenAI.BaseURL,
+		Model:          cfg.LLM.OpenAI.Model,
+		APIKey:         cfg.LLM.OpenAI.APIKey,
+		ResponseFormat: cfg.LLM.OpenAI.ResponseFormat,
 	})
+	if err != nil {
+		slog.Error("failed to create LLM client", "error", err)
+		os.Exit(1)
+	}
 
 	// 创建图片分析器（配置重试次数和超时时间）
 	imgAnalyzer := analyzer.NewImageAnalyzer(

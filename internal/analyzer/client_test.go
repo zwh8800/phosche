@@ -12,7 +12,7 @@ import (
 )
 
 func validAnalysisResultJSON() string {
-	return `{"description":"A cat sitting on a windowsill","tags":["cat","windowsill","indoor"],"objects":["cat","window"],"scene_type":"indoor","colors":[{"name":"白色","hex":"#F9FAFB"},{"name":"棕色","hex":"#92400E"}],"people_count":0,"has_text":false,"confidence":0.95}`
+	return `{"description":"A cat sitting on a windowsill","tags":["cat","windowsill","indoor"],"objects":["cat","window"],"scene_type":"indoor","colors":[{"name":"白色","hex":"#F9FAFB"},{"name":"棕色","hex":"#92400E"}],"people_count":0,"has_text":false,"text":"","confidence":0.95}`
 }
 
 var expectedResult = &types.AnalysisResult{
@@ -110,7 +110,10 @@ func TestOllamaProvider_OpenAIProtocol(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOpenAIClient("ollama", server.URL+"/v1", "llama3.2-vision")
+	client, err := NewOpenAIClient("ollama", server.URL+"/v1", "llama3.2-vision", "")
+	if err != nil {
+		t.Fatalf("NewOpenAIClient: %v", err)
+	}
 	result, err := client.AnalyzeImage(context.Background(), []byte("fake-image-data"), "describe this image")
 	if err != nil {
 		t.Fatalf("AnalyzeImage failed: %v", err)
@@ -207,7 +210,10 @@ func TestOpenAIClient_RequestFormat(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOpenAIClient("test-api-key", server.URL+"/v1", "gpt-4o")
+	client, err := NewOpenAIClient("test-api-key", server.URL+"/v1", "gpt-4o", "")
+	if err != nil {
+		t.Fatalf("NewOpenAIClient: %v", err)
+	}
 	result, err := client.AnalyzeImage(context.Background(), []byte("fake-image-data"), "describe this image")
 	if err != nil {
 		t.Fatalf("AnalyzeImage failed: %v", err)
@@ -241,7 +247,10 @@ func TestOpenAIClient_ResponseParsing(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOpenAIClient("test-api-key", server.URL+"/v1", "gpt-4o")
+	client, err := NewOpenAIClient("test-api-key", server.URL+"/v1", "gpt-4o", "")
+	if err != nil {
+		t.Fatalf("NewOpenAIClient: %v", err)
+	}
 	result, err := client.AnalyzeImage(context.Background(), []byte("fake-image-data"), "describe this image")
 	if err != nil {
 		t.Fatalf("AnalyzeImage failed: %v", err)
@@ -280,8 +289,11 @@ func TestLLMClient_InvalidJSON_OllamaProvider(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOpenAIClient("ollama", server.URL+"/v1", "llama3.2-vision")
-	_, err := client.AnalyzeImage(context.Background(), []byte("fake-image-data"), "describe this image")
+	client, err := NewOpenAIClient("ollama", server.URL+"/v1", "llama3.2-vision", "")
+	if err != nil {
+		t.Fatalf("NewOpenAIClient: %v", err)
+	}
+	_, err = client.AnalyzeImage(context.Background(), []byte("fake-image-data"), "describe this image")
 	if err == nil {
 		t.Error("expected error for invalid JSON, got nil")
 	}
@@ -294,8 +306,11 @@ func TestLLMClient_InvalidJSON_OpenAI(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOpenAIClient("test-api-key", server.URL+"/v1", "gpt-4o")
-	_, err := client.AnalyzeImage(context.Background(), []byte("fake-image-data"), "describe this image")
+	client, err := NewOpenAIClient("test-api-key", server.URL+"/v1", "gpt-4o", "")
+	if err != nil {
+		t.Fatalf("NewOpenAIClient: %v", err)
+	}
+	_, err = client.AnalyzeImage(context.Background(), []byte("fake-image-data"), "describe this image")
 	if err == nil {
 		t.Error("expected error for invalid JSON, got nil")
 	}
@@ -308,8 +323,11 @@ func TestLLMClient_HTTPError_OllamaProvider(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOpenAIClient("ollama", server.URL+"/v1", "llama3.2-vision")
-	_, err := client.AnalyzeImage(context.Background(), []byte("fake-image-data"), "describe this image")
+	client, err := NewOpenAIClient("ollama", server.URL+"/v1", "llama3.2-vision", "")
+	if err != nil {
+		t.Fatalf("NewOpenAIClient: %v", err)
+	}
+	_, err = client.AnalyzeImage(context.Background(), []byte("fake-image-data"), "describe this image")
 	if err == nil {
 		t.Error("expected error for HTTP 500, got nil")
 	}
@@ -322,8 +340,11 @@ func TestLLMClient_HTTPError_OpenAI(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOpenAIClient("test-api-key", server.URL+"/v1", "gpt-4o")
-	_, err := client.AnalyzeImage(context.Background(), []byte("fake-image-data"), "describe this image")
+	client, err := NewOpenAIClient("test-api-key", server.URL+"/v1", "gpt-4o", "")
+	if err != nil {
+		t.Fatalf("NewOpenAIClient: %v", err)
+	}
+	_, err = client.AnalyzeImage(context.Background(), []byte("fake-image-data"), "describe this image")
 	if err == nil {
 		t.Error("expected error for HTTP 500, got nil")
 	}
@@ -336,7 +357,10 @@ func TestNewLLMClient_OllamaNoAPIKey(t *testing.T) {
 		BaseURL: "http://localhost:11434",
 		Model:   "llama3.2-vision",
 	}
-	client := NewLLMClient(cfg)
+	client, err := NewLLMClient(cfg)
+	if err != nil {
+		t.Fatalf("NewLLMClient: %v", err)
+	}
 	oc, ok := client.(*OpenAIClient)
 	if !ok {
 		t.Fatalf("expected *OpenAIClient, got %T", client)
@@ -355,7 +379,10 @@ func TestNewLLMClient_OpenAIWithAPIKey(t *testing.T) {
 		Model:   "gpt-4o",
 		APIKey:  "sk-test",
 	}
-	client := NewLLMClient(cfg)
+	client, err := NewLLMClient(cfg)
+	if err != nil {
+		t.Fatalf("NewLLMClient: %v", err)
+	}
 	oc, ok := client.(*OpenAIClient)
 	if !ok {
 		t.Fatalf("expected *OpenAIClient, got %T", client)
@@ -373,7 +400,10 @@ func TestNewLLMClient_AutoAppendsV1(t *testing.T) {
 		BaseURL: server.URL,
 		Model:   "llama3.2-vision",
 	}
-	client := NewLLMClient(cfg)
+	client, err := NewLLMClient(cfg)
+	if err != nil {
+		t.Fatalf("NewLLMClient: %v", err)
+	}
 	result, err := client.AnalyzeImage(context.Background(), []byte("fake"), "describe")
 	if err != nil {
 		t.Fatalf("AnalyzeImage failed: %v", err)
@@ -423,9 +453,134 @@ func TestLLMClient_ContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // cancel immediately
 
-	client := NewOpenAIClient("ollama", server.URL+"/v1", "llama3.2-vision")
-	_, err := client.AnalyzeImage(ctx, []byte("fake-image-data"), "describe this image")
+	client, err := NewOpenAIClient("ollama", server.URL+"/v1", "llama3.2-vision", "")
+	if err != nil {
+		t.Fatalf("NewOpenAIClient: %v", err)
+	}
+	_, err = client.AnalyzeImage(ctx, []byte("fake-image-data"), "describe this image")
 	if err == nil {
 		t.Error("expected error for cancelled context, got nil")
+	}
+}
+
+// --- Response Format Tests ---
+
+func TestNewOpenAIClient_ValidResponseFormats(t *testing.T) {
+	tests := []struct {
+		format   string
+		wantType string
+	}{
+		{"", "json_object"},
+		{"json_object", "json_object"},
+		{"text", "text"},
+		{"json_schema", "json_schema"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.format, func(t *testing.T) {
+			client, err := NewOpenAIClient("k", "http://x/v1", "m", tt.format)
+			if err != nil {
+				t.Fatalf("NewOpenAIClient(%q): %v", tt.format, err)
+			}
+			if client.responseFormat == nil {
+				t.Fatal("responseFormat is nil")
+			}
+			if got := string(client.responseFormat.Type); got != tt.wantType {
+				t.Errorf("responseFormat.Type = %q, want %q", got, tt.wantType)
+			}
+			if tt.format == "json_schema" && client.responseFormat.JSONSchema == nil {
+				t.Error("expected JSONSchema to be set for json_schema format")
+			}
+		})
+	}
+}
+
+func TestNewOpenAIClient_InvalidResponseFormat(t *testing.T) {
+	_, err := NewOpenAIClient("k", "http://x/v1", "m", "bogus")
+	if err == nil {
+		t.Fatal("expected error for invalid response_format, got nil")
+	}
+}
+
+func TestNewLLMClient_InvalidResponseFormat(t *testing.T) {
+	cfg := LLMClientConfig{
+		BaseURL:        "http://localhost:11434",
+		Model:          "llama3.2-vision",
+		ResponseFormat: "bogus",
+	}
+	_, err := NewLLMClient(cfg)
+	if err == nil {
+		t.Fatal("expected error for invalid response_format, got nil")
+	}
+}
+
+func TestOpenAIClient_ResponseFormatInRequestBody(t *testing.T) {
+	tests := []struct {
+		format       string
+		wantTypeKey  string
+		wantHasJSON  bool
+	}{
+		{"json_object", "json_object", false},
+		{"text", "text", false},
+		{"json_schema", "json_schema", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.format, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var body map[string]interface{}
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Fatalf("decode body: %v", err)
+				}
+				rf, ok := body["response_format"].(map[string]interface{})
+				if !ok {
+					t.Fatal("response_format missing from request body")
+				}
+				gotType, _ := rf["type"].(string)
+				if gotType != tt.wantTypeKey {
+					t.Errorf("response_format.type = %q, want %q", gotType, tt.wantTypeKey)
+				}
+				hasJSONSchema := rf["json_schema"] != nil
+				if hasJSONSchema != tt.wantHasJSON {
+					t.Errorf("json_schema present = %v, want %v", hasJSONSchema, tt.wantHasJSON)
+				}
+				if tt.wantHasJSON {
+					js := rf["json_schema"].(map[string]interface{})
+					if js["name"] != "analysis_result" {
+						t.Errorf("json_schema.name = %v, want analysis_result", js["name"])
+					}
+					if js["strict"] != true {
+						t.Errorf("json_schema.strict = %v, want true", js["strict"])
+					}
+				}
+
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"id":      "chatcmpl-test",
+					"object":  "chat.completion",
+					"created": 1234567890,
+					"model":   "test",
+					"choices": []map[string]interface{}{
+						{
+							"index":         0,
+							"message":       map[string]interface{}{"role": "assistant", "content": validAnalysisResultJSON()},
+							"finish_reason": "stop",
+						},
+					},
+				})
+			}))
+			defer server.Close()
+
+			client, err := NewOpenAIClient("k", server.URL+"/v1", "m", tt.format)
+			if err != nil {
+				t.Fatalf("NewOpenAIClient: %v", err)
+			}
+			result, err := client.AnalyzeImage(context.Background(), []byte("fake"), "describe")
+			if err != nil {
+				t.Fatalf("AnalyzeImage: %v", err)
+			}
+			if result.Description != expectedResult.Description {
+				t.Errorf("description = %q, want %q", result.Description, expectedResult.Description)
+			}
+		})
 	}
 }
