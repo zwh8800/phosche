@@ -120,6 +120,13 @@ func (c *OpenAIClient) AnalyzeImage(ctx context.Context, imageData []byte, promp
 
 func logRequest(req openai.ChatCompletionRequest) {
 	reqForLog := req
+	reqForLog.Messages = make([]openai.ChatCompletionMessage, len(req.Messages))
+	copy(reqForLog.Messages, req.Messages)
+
+	multiContent := make([]openai.ChatMessagePart, len(req.Messages[0].MultiContent))
+	copy(multiContent, req.Messages[0].MultiContent)
+	reqForLog.Messages[0].MultiContent = multiContent
+
 	imageURL := reqForLog.Messages[0].MultiContent[1].ImageURL.URL
 	reqForLog.Messages[0].MultiContent[1].ImageURL = &openai.ChatMessageImageURL{
 		URL: imageURL[:min(len(imageURL), 100)] + "...(truncated)",
