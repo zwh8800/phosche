@@ -511,7 +511,7 @@ function PhotoDetailModal({
           )}
 
           {/* ── Image area ── 照片显示区域 ── */}
-          <div className="relative flex items-center justify-center bg-gray-900 lg:w-[55%] min-h-[280px] lg:min-h-0 max-h-[50vh] lg:max-h-full">
+          <div className="relative flex items-center justify-center bg-gray-900 lg:w-[55%] min-h-[280px] lg:min-h-0 max-h-[50vh] lg:max-h-full overflow-hidden shrink-0">
             {/*
              * 图片加载失败时隐藏 <img> 元素，显示相邻的 "无法加载图片" 占位文字。
              * onError 触发后：1) 设置 img display:none；2) 显示相邻的 fallback div
