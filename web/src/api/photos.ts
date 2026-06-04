@@ -99,12 +99,11 @@ export async function searchPhotos(req: SearchRequest): Promise<SearchResponse> 
  * 调用 GET /api/photos/{path} 端点，path 为照片的相对文件路径。
  * 返回完整的照片文档，包括 EXIF 元数据和 AI 分析结果。
  *
- * @param path - 照片的相对文件路径（如 "2024/01/IMG_0001.jpg"）
+ * @param id - 照片 ID（SHA-256 哈希，64 位十六进制字符串）
  * @returns Promise<PhotoDocument> 完整的照片文档信息
  */
-export async function fetchPhotoDetail(path: string): Promise<PhotoDocument> {
-  // 对路径进行 URL 编码，防止特殊字符导致请求路径异常
-  const { data } = await apiClient.get<PhotoDocument>(`/photos/${encodeURIComponent(path)}`);
+export async function fetchPhotoDetail(id: string): Promise<PhotoDocument> {
+  const { data } = await apiClient.get<PhotoDocument>(`/photos/${id}`);
   return data;
 }
 

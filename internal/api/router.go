@@ -23,6 +23,7 @@ type PhotoSearcher interface {
 // Indexer 定义 API 层依赖的照片索引操作接口。
 type Indexer interface {
 	GetPhoto(ctx context.Context, path string, indexName string) (*types.PhotoDocument, error)
+	GetPhotoByID(ctx context.Context, id string, indexName string) (*types.PhotoDocument, error)
 	DeletePhoto(ctx context.Context, path string, indexName string) error
 }
 
@@ -85,7 +86,7 @@ func NewRouter(srv *Server) chi.Router {
 		r.Get("/filters", srv.filtersHandler)
 		r.Get("/stats", srv.statsHandler)
 		r.Post("/search", srv.searchHandler)
-		r.Get("/photos/*", srv.photoDetailHandler)
+		r.Get("/photos/{id}", srv.photoDetailHandler)
 	})
 
 	return r

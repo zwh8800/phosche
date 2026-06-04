@@ -37,10 +37,8 @@ import PhotoDetailModal from '../components/PhotoDetail';
  * 关闭弹窗时通过 navigate(-1) 返回上一页，保持与浏览器历史一致。
  */
 function PhotoDetail() {
-  // 从路由参数中提取通配符（*）匹配的原始路径片段（URI 编码状态）
-  const { '*': wildcard } = useParams<{ '*': string }>();
-  // 将 URI 编码的路径解码为实际文件系统路径；wildcard 为 undefined 时兜底为空字符串
-  const id = wildcard ? decodeURIComponent(wildcard) : '';
+  // 从路由参数中提取照片 ID
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
   // 使用 React Query 发起 API 请求获取照片详情

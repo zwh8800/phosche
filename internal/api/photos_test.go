@@ -21,6 +21,10 @@ func (m *mockCleaner) GetPhoto(ctx context.Context, path string, indexName strin
 	return nil, nil
 }
 
+func (m *mockCleaner) GetPhotoByID(ctx context.Context, id string, indexName string) (*types.PhotoDocument, error) {
+	return nil, nil
+}
+
 func (m *mockCleaner) DeletePhoto(ctx context.Context, path string, indexName string) error {
 	m.deletedPaths = append(m.deletedPaths, path)
 	return m.err

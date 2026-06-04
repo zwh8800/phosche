@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"net/url"
 
 	"github.com/go-chi/chi/v5"
 	apperrors "github.com/zwh8800/phosche/internal/errors"
@@ -17,23 +16,17 @@ type photoDetailResponse struct {
 	PhotoURL string `json:"photo_url"`
 }
 
-// photoDetailHandler 获取单张照片详情，通过 URL 路径中的照片 ID 查询。
-// 从 chi URL 参数中获取 URL 编码的照片路径，调用 Indexer.GetPhoto 从 ES 获取照片文档。
+// photoDetailHandler 获取单张照片详情，通过 URL 路径中的照片 ID（SHA-256 哈希）查询。
+// 从 chi URL 参数中获取照片 ID，调用 Indexer.GetPhotoByID 从 ES 获取照片文档。
 // 若返回 NOT_FOUND 错误，响应 404 状态码；成功时返回嵌入 photo_url 的照片详情。
 func (s *Server) photoDetailHandler(w http.ResponseWriter, r *http.Request) {
-	rawID := chi.URLParam(r, "*")
-	if rawID == "" {
+	id := chi.URLParam(r, "id")
+	if id == "" {
 		writeJSONError(w, http.StatusBadRequest, "BAD_REQUEST", "Photo ID is required")
 		return
 	}
 
-	id, err := url.PathUnescape(rawID)
-	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "BAD_REQUEST", "Invalid photo ID")
-		return
-	}
-
-	doc, err := s.Indexer.GetPhoto(r.Context(), id, s.IndexName)
+	doc, err := s.Indexer.GetPhotoByID(r.Context(), id, s.IndexName)
 	if err != nil {
 		var appErr *apperrors.AppError
 		if errors.As(err, &appErr) && appErr.Code == "NOT_FOUND" {

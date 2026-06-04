@@ -14,11 +14,19 @@ import (
 )
 
 type mockIndexer struct {
-	getPhotoFunc func(ctx context.Context, path string, indexName string) (*types.PhotoDocument, error)
+	getPhotoFunc     func(ctx context.Context, path string, indexName string) (*types.PhotoDocument, error)
+	getPhotoByIDFunc func(ctx context.Context, id string, indexName string) (*types.PhotoDocument, error)
 }
 
 func (m *mockIndexer) GetPhoto(ctx context.Context, path string, indexName string) (*types.PhotoDocument, error) {
 	return m.getPhotoFunc(ctx, path, indexName)
+}
+
+func (m *mockIndexer) GetPhotoByID(ctx context.Context, id string, indexName string) (*types.PhotoDocument, error) {
+	if m.getPhotoByIDFunc != nil {
+		return m.getPhotoByIDFunc(ctx, id, indexName)
+	}
+	return nil, nil
 }
 
 func (m *mockIndexer) DeletePhoto(_ context.Context, _ string, _ string) error {
@@ -55,8 +63,8 @@ func TestGetPhotoDetail_Success(t *testing.T) {
 	}
 
 	mock := &mockIndexer{
-		getPhotoFunc: func(_ context.Context, path string, indexName string) (*types.PhotoDocument, error) {
-			assert.Equal(t, "2024/01/IMG_001.jpg", path)
+		getPhotoByIDFunc: func(_ context.Context, id string, indexName string) (*types.PhotoDocument, error) {
+			assert.Equal(t, "abc123def456", id)
 			assert.Equal(t, "photos-index", indexName)
 			return expectedDoc, nil
 		},
@@ -69,7 +77,7 @@ func TestGetPhotoDetail_Success(t *testing.T) {
 	ts := httptest.NewServer(router)
 	defer ts.Close()
 
-	resp, err := http.Get(ts.URL + "/api/photos/2024%2F01%2FIMG_001.jpg")
+	resp, err := http.Get(ts.URL + "/api/photos/abc123def456")
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
@@ -101,8 +109,8 @@ func TestGetPhotoDetail_Success(t *testing.T) {
 
 func TestGetPhotoDetail_NotFound(t *testing.T) {
 	mock := &mockIndexer{
-		getPhotoFunc: func(_ context.Context, path string, indexName string) (*types.PhotoDocument, error) {
-			return nil, apperrors.NewNotFoundError("photo not found: " + path)
+		getPhotoByIDFunc: func(_ context.Context, id string, indexName string) (*types.PhotoDocument, error) {
+			return nil, apperrors.NewNotFoundError("photo not found: " + id)
 		},
 	}
 
@@ -113,7 +121,7 @@ func TestGetPhotoDetail_NotFound(t *testing.T) {
 	ts := httptest.NewServer(router)
 	defer ts.Close()
 
-	resp, err := http.Get(ts.URL + "/api/photos/nonexistent.jpg")
+	resp, err := http.Get(ts.URL + "/api/photos/nonexistent")
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
@@ -131,7 +139,7 @@ func TestGetPhotoDetail_NotFound(t *testing.T) {
 
 func TestGetPhotoDetail_InternalError(t *testing.T) {
 	mock := &mockIndexer{
-		getPhotoFunc: func(_ context.Context, path string, indexName string) (*types.PhotoDocument, error) {
+		getPhotoByIDFunc: func(_ context.Context, id string, indexName string) (*types.PhotoDocument, error) {
 			return nil, apperrors.NewInternalError(assert.AnError)
 		},
 	}
@@ -143,7 +151,7 @@ func TestGetPhotoDetail_InternalError(t *testing.T) {
 	ts := httptest.NewServer(router)
 	defer ts.Close()
 
-	resp, err := http.Get(ts.URL + "/api/photos/some-photo.jpg")
+	resp, err := http.Get(ts.URL + "/api/photos/error-photo")
 	require.NoError(t, err)
 	defer resp.Body.Close()
 

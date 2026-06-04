@@ -279,7 +279,7 @@ function SkeletonCard() {
  * - 图片加载失败时隐藏 img 标签并显示占位文字
  * - 分析中的照片显示右上角状态标签 + 骨架屏描述占位
  * - 已分析的照片显示 AI 生成的描述和标签（最多 3 个 + 溢出计数）
- * - 点击跳转到照片详情页（/photo/{path}）
+ * - 点击跳转到照片详情页（/photo/{id}）
  *
  * @param photo - 照片文档对象，包含路径、描述、标签、状态等信息
  */
@@ -289,7 +289,7 @@ function PhotoCard({ photo }: { photo: PhotoDocument }) {
   return (
     <button
       type="button"
-      onClick={() => navigate(`/photo/${encodeURIComponent(photo.path)}`)}
+      onClick={() => navigate(`/photo/${photo.id}`)}
       className="group cursor-pointer text-left"
     >
       {/* 缩略图区域：方形裁剪，悬停时有缩放动画 */}

@@ -233,6 +233,34 @@ func (s *IndexerService) GetPhoto(ctx context.Context, path string, indexName st
 	return &doc, nil
 }
 
+// GetPhotoByID retrieves a photo document directly by its ID (SHA-256 hash).
+// Unlike GetPhoto which takes a file path and computes the hash, this method
+// uses the ID directly as the Elasticsearch document ID.
+func (s *IndexerService) GetPhotoByID(ctx context.Context, id string, indexName string) (*types.PhotoDocument, error) {
+	s.logger.Debug("GetPhotoByID", "id", id, "index", indexName)
+
+	resp, err := s.client.Client().Document.Get(ctx, opensearchapi.DocumentGetReq{
+		Index:      indexName,
+		DocumentID: id,
+	})
+	if err != nil {
+		if strings.Contains(err.Error(), "not_found") || strings.Contains(err.Error(), "404") {
+			return nil, apperrors.NewNotFoundError("photo not found: " + id)
+		}
+		return nil, fmt.Errorf("get document: %w", err)
+	}
+	if !resp.Found {
+		return nil, apperrors.NewNotFoundError("photo not found: " + id)
+	}
+
+	var doc types.PhotoDocument
+	if err := json.Unmarshal(resp.Source, &doc); err != nil {
+		return nil, fmt.Errorf("decode document: %w", err)
+	}
+
+	return &doc, nil
+}
+
 // ListAnalyzed 查询所有 status=analyzed 的文档，返回 path → mtime 映射。
 //
 // 用途：流水线启动时调用，快速获取已分析照片列表。

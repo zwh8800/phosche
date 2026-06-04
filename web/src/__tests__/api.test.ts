@@ -1,7 +1,7 @@
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
-import { fetchPhotos, searchPhotos } from '../api/photos';
+import { fetchPhotos, searchPhotos, fetchPhotoDetail } from '../api/photos';
 import type { PhotoDocument, SearchRequest } from '../types';
 
 const mockPhoto: PhotoDocument = {
@@ -28,12 +28,18 @@ const mockPhoto: PhotoDocument = {
 };
 
 const handlers = [
+  http.get('http://localhost:8080/api/photos/:id', ({ params }) => {
+    if (params.id === 'abc123def456') {
+      return HttpResponse.json(mockPhoto);
+    }
+    return new HttpResponse(null, { status: 404 });
+  }),
   http.get('http://localhost:8080/api/photos', ({ request }) => {
     const url = new URL(request.url);
     const page = Number(url.searchParams.get('page')) || 1;
     const pageSize = Number(url.searchParams.get('page_size')) || 20;
     return HttpResponse.json({
-      photos: [mockPhoto],
+      hits: [mockPhoto],
       total: 1,
       page,
       page_size: pageSize,
@@ -81,5 +87,17 @@ describe('searchPhotos', () => {
     expect(result.hits[0].id).toBe('photo-1');
     expect(result.total).toBe(1);
     expect(result.total_pages).toBe(1);
+  });
+});
+
+describe('fetchPhotoDetail', () => {
+  it('fetches photo by ID', async () => {
+    const result = await fetchPhotoDetail('abc123def456');
+    expect(result.id).toBe('photo-1');
+    expect(result.description).toBe('A beautiful sunset');
+  });
+
+  it('throws error for nonexistent ID', async () => {
+    await expect(fetchPhotoDetail('nonexistent')).rejects.toThrow();
   });
 });

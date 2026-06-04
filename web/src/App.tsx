@@ -50,7 +50,7 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <Timeline /> },
       { path: 'search', element: <Search /> },
-      { path: 'photo/*', element: <PhotoDetail /> },
+      { path: 'photo/:id', element: <PhotoDetail /> },
       { path: '*', element: <NotFound /> },
     ],
   },
