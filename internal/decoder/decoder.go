@@ -2,6 +2,7 @@
 package decoder
 
 import (
+	"bytes"
 	"fmt"
 	"image"
 	"image/jpeg"
@@ -46,20 +47,26 @@ type DecodeResult struct {
 	EXIF     *types.EXIFInfo
 }
 
-// DecodeImage 根据文件扩展名自动选择解码器，解码图片并提取 EXIF 元数据。
+// DecodeImage 根据文件内容魔数自动选择解码器，解码图片并提取 EXIF 元数据。
+// 优先使用文件头魔数识别真实格式，扩展名与实际内容不符时自动纠正并告警。
 func DecodeImage(path string) (*DecodeResult, error) {
-	ext := strings.ToLower(filepath.Ext(path))
-
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("decoder: open file: %w", err)
 	}
 	defer f.Close()
 
+	ext := strings.ToLower(filepath.Ext(path))
+	if detected := detectImageFormat(f); detected != "" && detected != ext {
+		slog.Warn("decoder: format mismatch, using detected format",
+			"path", path, "extension", ext, "detected", detected)
+		ext = detected
+	}
+	f.Seek(0, io.SeekStart)
+
 	var img image.Image
 	var mimeType string
 
-	// 根据文件扩展名选择对应的图片解码器
 	switch ext {
 	case ".jpg", ".jpeg":
 		img, err = jpeg.Decode(f)
@@ -92,6 +99,38 @@ func DecodeImage(path string) (*DecodeResult, error) {
 		MIMEType: mimeType,
 		EXIF:     exifInfo,
 	}, nil
+}
+
+var imageMagicBytes = []struct {
+	ext    string
+	magic  []byte
+	offset int
+}{
+	{".jpg", []byte{0xFF, 0xD8, 0xFF}, 0},
+	{".png", []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}, 0},
+	{".heic", []byte("ftyp"), 4},
+}
+
+const magicBufSize = 12
+
+func detectImageFormat(r io.Reader) string {
+	buf := make([]byte, magicBufSize)
+	n, _ := io.ReadFull(r, buf)
+
+	for _, m := range imageMagicBytes {
+		if m.offset+len(m.magic) > n {
+			continue
+		}
+		if bytes.Equal(buf[m.offset:m.offset+len(m.magic)], m.magic) {
+			return m.ext
+		}
+	}
+
+	if n >= 12 && string(buf[0:4]) == "RIFF" && string(buf[8:12]) == "WEBP" {
+		return ".webp"
+	}
+
+	return ""
 }
 
 // decodeHEIC 使用 gen2brain/heic 库解码 HEIC/HEIF 格式图片。

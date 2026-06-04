@@ -1,6 +1,8 @@
 package decoder
 
 import (
+	"bytes"
+	"fmt"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -36,23 +38,24 @@ func generateTestJPEG(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "test.jpg")
+	if err := os.WriteFile(path, generateJPEGBytes(), 0o644); err != nil {
+		t.Fatalf("failed to create test JPEG: %v", err)
+	}
+	return path
+}
 
+func generateJPEGBytes() []byte {
 	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
 	for y := range 10 {
 		for x := range 10 {
 			img.Set(x, y, color.RGBA{R: uint8(x * 25), G: uint8(y * 25), B: 128, A: 255})
 		}
 	}
-
-	f, err := os.Create(path)
-	if err != nil {
-		t.Fatalf("failed to create test JPEG: %v", err)
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, img, nil); err != nil {
+		panic(fmt.Sprintf("failed to encode JPEG: %v", err))
 	}
-	defer f.Close()
-	if err := jpeg.Encode(f, img, nil); err != nil {
-		t.Fatalf("failed to encode test JPEG: %v", err)
-	}
-	return path
+	return buf.Bytes()
 }
 
 func generateTestPNG(t *testing.T) string {
@@ -151,6 +154,22 @@ func TestDecodeHEIC(t *testing.T) {
 	}
 	if result.MIMEType != "image/heic" {
 		t.Errorf("expected MIME type image/heic, got %q", result.MIMEType)
+	}
+}
+
+func TestDecodeFormatMismatch_JPEGasHEIC(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "actually_jpeg.heic")
+	if err := os.WriteFile(path, generateJPEGBytes(), 0o644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	result, err := DecodeImage(path)
+	if err != nil {
+		t.Fatalf("DecodeImage(%q) error: %v", path, err)
+	}
+	if result.MIMEType != "image/jpeg" {
+		t.Errorf("expected MIME type image/jpeg for JPEG content in .heic file, got %q", result.MIMEType)
 	}
 }
 
