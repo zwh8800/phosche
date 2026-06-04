@@ -41,6 +41,14 @@ func (m *fullMockSearcher) Search(_ context.Context, _ string, _ *types.SearchRe
 	return m.searchResp, m.searchErr
 }
 
+func (m *fullMockSearcher) FindSimilar(_ context.Context, _ string, _ string, _ []float32, _ string) (*types.RecommendationResponse, error) {
+	return &types.RecommendationResponse{}, nil
+}
+
+func (m *fullMockSearcher) FindNearby(_ context.Context, _ string, _ string, _, _ float64, _ string) (*types.RecommendationResponse, error) {
+	return &types.RecommendationResponse{}, nil
+}
+
 // ============================================================
 // SCENARIO 1: Health Check
 // ============================================================

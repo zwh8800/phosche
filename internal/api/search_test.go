@@ -29,6 +29,12 @@ func (m *mockSearcher) GetFilters(_ context.Context, _ string, _ string) (*types
 func (m *mockSearcher) GetStats(_ context.Context, _ string, _ string) (*types.StatsResponse, error) {
 	return &types.StatsResponse{}, nil
 }
+func (m *mockSearcher) FindSimilar(_ context.Context, _ string, _ string, _ []float32, _ string) (*types.RecommendationResponse, error) {
+	return &types.RecommendationResponse{}, nil
+}
+func (m *mockSearcher) FindNearby(_ context.Context, _ string, _ string, _, _ float64, _ string) (*types.RecommendationResponse, error) {
+	return &types.RecommendationResponse{}, nil
+}
 
 func TestSearch_Success(t *testing.T) {
 	mock := &mockSearcher{

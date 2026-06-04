@@ -26,3 +26,11 @@ func (m *mockSearchService) Search(ctx context.Context, indexName string, req *t
 	}
 	return &types.SearchResponse{}, nil
 }
+
+func (m *mockSearchService) FindSimilar(_ context.Context, _ string, _ string, _ []float32, _ string) (*types.RecommendationResponse, error) {
+	return &types.RecommendationResponse{}, nil
+}
+
+func (m *mockSearchService) FindNearby(_ context.Context, _ string, _ string, _, _ float64, _ string) (*types.RecommendationResponse, error) {
+	return &types.RecommendationResponse{}, nil
+}

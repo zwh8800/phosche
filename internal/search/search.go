@@ -76,6 +76,8 @@ type Searcher interface {
 	Search(ctx context.Context, indexName string, req *types.SearchRequest, userEmail string) (*types.SearchResponse, error)
 	GetFilters(ctx context.Context, indexName string, userEmail string) (*types.FiltersResponse, error)
 	GetStats(ctx context.Context, indexName string, userEmail string) (*types.StatsResponse, error)
+	FindSimilar(ctx context.Context, indexName string, photoID string, embedding []float32, userEmail string) (*types.RecommendationResponse, error)
+	FindNearby(ctx context.Context, indexName string, photoID string, lat, lon float64, userEmail string) (*types.RecommendationResponse, error)
 }
 
 // SearchService 提供基于 OpenSearch 的全文搜索和条件过滤查询。
@@ -789,6 +791,220 @@ func (s *SearchService) GetStats(ctx context.Context, indexName string, userEmai
 	}
 
 	return s.parseStatsResponse(resp)
+}
+
+// FindSimilar 查找与指定照片视觉相似的照片，基于 kNN 向量检索。
+//
+// 使用照片的 embedding 向量通过 hybrid 搜索管道执行 kNN 查询，返回最相似的 3 张照片。
+// 查询条件包含 email 访问过滤和排除源照片自身。
+func (s *SearchService) FindSimilar(ctx context.Context, indexName string, photoID string, embedding []float32, userEmail string) (*types.RecommendationResponse, error) {
+	if len(embedding) == 0 {
+		return &types.RecommendationResponse{Photos: []types.PhotoDocument{}, Total: 0}, nil
+	}
+
+	accessFilter := []any{
+		buildEmailFilter(userEmail),
+		map[string]any{
+			"bool": map[string]any{
+				"must_not": map[string]any{
+					"term": map[string]any{"_id": photoID},
+				},
+			},
+		},
+	}
+
+	// BM25 sub-query: match_all with access filter (constant score, kNN dominates via RRF)
+	bm25Query := map[string]any{
+		"bool": map[string]any{
+			"filter": accessFilter,
+		},
+	}
+
+	// kNN sub-query: embedding vector search
+	knnQuery := map[string]any{
+		"knn": map[string]any{
+			"embedding": map[string]any{
+				"vector": embedding,
+				"k":      4,
+				"filter": map[string]any{
+					"bool": map[string]any{
+						"filter": []any{
+							buildEmailFilter(userEmail),
+						},
+					},
+				},
+			},
+		},
+	}
+
+	query := map[string]any{
+		"size": 3,
+		"query": map[string]any{
+			"hybrid": map[string]any{
+				"queries": []any{bm25Query, knnQuery},
+			},
+		},
+	}
+
+	bodyBytes, err := json.Marshal(query)
+	if err != nil {
+		return nil, fmt.Errorf("marshal find-similar query: %w", err)
+	}
+
+	slog.Debug("find similar request",
+		"index", indexName,
+		"photo_id", photoID,
+		"embedding_dim", len(embedding),
+		"pipeline", pipelineName,
+		"query_body", truncateJSON(bodyBytes, 800),
+	)
+
+	resp, err := s.client.Client().Search(ctx, &opensearchapi.SearchReq{
+		Indices: []string{indexName},
+		Body:    bytes.NewReader(bodyBytes),
+		Params: opensearchapi.SearchParams{
+			SearchPipeline: pipelineName,
+		},
+	})
+	if err != nil {
+		status := 0
+		if resp != nil && resp.Inspect().Response != nil {
+			status = resp.Inspect().Response.StatusCode
+		}
+		slog.Error("find similar OpenSearch request failed",
+			"index", indexName,
+			"photo_id", photoID,
+			"http_status", status,
+			"pipeline", pipelineName,
+			"error", err.Error(),
+		)
+		return nil, fmt.Errorf("find similar: %w", err)
+	}
+
+	slog.Debug("find similar OpenSearch response OK",
+		"index", indexName,
+		"photo_id", photoID,
+		"took_ms", resp.Took,
+		"hits_total", resp.Hits.Total.Value,
+		"hits_count", len(resp.Hits.Hits),
+	)
+
+	return s.buildRecommendationResponse(resp), nil
+}
+
+// FindNearby 查找与指定照片地理位置相近的照片，基于 Haversine 脚本计算距离。
+//
+// 使用 5km 半径范围搜索附近照片，按距离升序排列，返回最近的 3 张。
+// 查询条件包含 email 访问过滤、状态为 analyzed 和排除源照片自身。
+func (s *SearchService) FindNearby(ctx context.Context, indexName string, photoID string, lat, lon float64, userEmail string) (*types.RecommendationResponse, error) {
+	if lat == 0 && lon == 0 {
+		return &types.RecommendationResponse{Photos: []types.PhotoDocument{}, Total: 0}, nil
+	}
+
+	haversineScript := map[string]any{
+		"source": "double R = 6371; double lat1 = doc['exif.gps_lat'].value * Math.PI / 180; double lat2 = params.lat * Math.PI / 180; double dLat = (params.lat - doc['exif.gps_lat'].value) * Math.PI / 180; double dLon = (params.lon - doc['exif.gps_lon'].value) * Math.PI / 180; double a = sin(dLat/2) * sin(dLat/2) + cos(lat1) * cos(lat2) * sin(dLon/2) * sin(dLon/2); double c = 2 * atan2(sqrt(a), sqrt(1-a)); return R * c;",
+		"lang":   "painless",
+		"params": map[string]any{"lat": lat, "lon": lon},
+	}
+
+	distanceFilterScript := map[string]any{
+		"source": "double R = 6371; double lat1 = doc['exif.gps_lat'].value * Math.PI / 180; double lat2 = params.lat * Math.PI / 180; double dLat = (params.lat - doc['exif.gps_lat'].value) * Math.PI / 180; double dLon = (params.lon - doc['exif.gps_lon'].value) * Math.PI / 180; double a = sin(dLat/2) * sin(dLat/2) + cos(lat1) * cos(lat2) * sin(dLon/2) * sin(dLon/2); double c = 2 * atan2(sqrt(a), sqrt(1-a)); return R * c <= params.maxDist;",
+		"lang":   "painless",
+		"params": map[string]any{"lat": lat, "lon": lon, "maxDist": 5.0},
+	}
+
+	query := map[string]any{
+		"size": 3,
+		"query": map[string]any{
+			"bool": map[string]any{
+				"filter": []any{
+					buildEmailFilter(userEmail),
+					map[string]any{"term": map[string]any{"status": "analyzed"}},
+					map[string]any{
+						"bool": map[string]any{
+							"must_not": map[string]any{
+								"term": map[string]any{"_id": photoID},
+							},
+						},
+					},
+					map[string]any{"exists": map[string]any{"field": "exif.gps_lat"}},
+					map[string]any{"script": map[string]any{"script": distanceFilterScript}},
+				},
+			},
+		},
+		"sort": []any{
+			map[string]any{
+				"_script": map[string]any{
+					"type":  "number",
+					"script": haversineScript,
+					"order": "asc",
+				},
+			},
+		},
+	}
+
+	bodyBytes, err := json.Marshal(query)
+	if err != nil {
+		return nil, fmt.Errorf("marshal find-nearby query: %w", err)
+	}
+
+	slog.Debug("find nearby request",
+		"index", indexName,
+		"photo_id", photoID,
+		"lat", lat,
+		"lon", lon,
+		"query_body", truncateJSON(bodyBytes, 500),
+	)
+
+	resp, err := s.client.Client().Search(ctx, &opensearchapi.SearchReq{
+		Indices: []string{indexName},
+		Body:    bytes.NewReader(bodyBytes),
+	})
+	if err != nil {
+		status := 0
+		if resp != nil && resp.Inspect().Response != nil {
+			status = resp.Inspect().Response.StatusCode
+		}
+		slog.Error("find nearby OpenSearch request failed",
+			"index", indexName,
+			"photo_id", photoID,
+			"lat", lat,
+			"lon", lon,
+			"http_status", status,
+			"error", err.Error(),
+		)
+		return nil, fmt.Errorf("find nearby: %w", err)
+	}
+
+	slog.Debug("find nearby OpenSearch response OK",
+		"index", indexName,
+		"photo_id", photoID,
+		"took_ms", resp.Took,
+		"hits_total", resp.Hits.Total.Value,
+		"hits_count", len(resp.Hits.Hits),
+	)
+
+	return s.buildRecommendationResponse(resp), nil
+}
+
+// buildRecommendationResponse converts OpenSearch SearchResp to types.RecommendationResponse.
+// Clears embedding field from results before returning.
+func (s *SearchService) buildRecommendationResponse(resp *opensearchapi.SearchResp) *types.RecommendationResponse {
+	hits := make([]types.PhotoDocument, 0, len(resp.Hits.Hits))
+	for _, hit := range resp.Hits.Hits {
+		var doc types.PhotoDocument
+		if err := json.Unmarshal(hit.Source, &doc); err != nil {
+			slog.Warn("unmarshal recommendation hit failed", "doc_id", hit.ID, "error", err)
+			continue
+		}
+		doc.Embedding = nil
+		hits = append(hits, doc)
+	}
+
+	return &types.RecommendationResponse{
+		Photos: hits,
+		Total:  len(hits),
+	}
 }
 
 // parseStatsResponse 解析 OpenSearch 统计响应，构建按状态分组的计数映射。
