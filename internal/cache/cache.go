@@ -14,7 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/gen2brain/heic"
+	_ "github.com/gen2brain/heic"
 	"golang.org/x/image/draw"
 )
 
@@ -129,18 +129,15 @@ func (g *Generator) FullPath(id string) string {
 	return filepath.Join(g.CacheDir, id+"_full.jpg")
 }
 
-// decodeImage 根据文件扩展名自动选择解码器解码图片。
+// decodeImage 使用 image.Decode 解码图片，标准库已通过 RegisterFormat 注册了所有支持的格式
+//（包括 gen2brain/heic 在 init() 中注册的 HEIC 格式），无需按扩展名手动分派。
 func decodeImage(path string) (image.Image, error) {
-	ext := strings.ToLower(filepath.Ext(path))
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
 
-	if ext == ".heic" || ext == ".heif" {
-		return heic.Decode(f)
-	}
 	img, _, err := image.Decode(f)
 	return img, err
 }

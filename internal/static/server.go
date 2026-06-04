@@ -6,12 +6,13 @@ import (
 	"image"
 	"image/jpeg"
 	"image/png"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/gen2brain/heic"
+	_ "github.com/gen2brain/heic"
 	"github.com/zwh8800/phosche/internal/cache"
 	"golang.org/x/image/draw"
 )
@@ -144,6 +145,7 @@ func PhotoHandler(photoBasePaths []string, cacheGen *cache.Generator) http.Handl
 }
 
 // serveProcessedImage 实时解码、缩放并编码图片。HEIC 自动转 JPEG，PNG 仅当缩放时转 JPEG。
+// 使用 image.Decode 通过文件魔数识别真实格式，不依赖文件扩展名。
 func serveProcessedImage(w http.ResponseWriter, safePath string, maxWidth int) {
 	f, err := os.Open(safePath)
 	if err != nil {
@@ -152,21 +154,8 @@ func serveProcessedImage(w http.ResponseWriter, safePath string, maxWidth int) {
 	}
 	defer f.Close()
 
-	ext := strings.ToLower(filepath.Ext(safePath))
-
-	var img image.Image
-	var decodeErr error
-	outputJPEG := ext == ".jpg" || ext == ".jpeg"
-
-	switch ext {
-	case ".jpg", ".jpeg":
-		img, decodeErr = jpeg.Decode(f)
-	case ".png":
-		img, decodeErr = png.Decode(f)
-	case ".heic", ".heif":
-		img, decodeErr = heic.Decode(f)
-		outputJPEG = true
-	default:
+	img, decodeErr := decodeImageStatic(f)
+	if decodeErr != nil {
 		fi, err := f.Stat()
 		if err != nil {
 			http.Error(w, "file not found", http.StatusNotFound)
@@ -177,10 +166,7 @@ func serveProcessedImage(w http.ResponseWriter, safePath string, maxWidth int) {
 		return
 	}
 
-	if decodeErr != nil {
-		http.Error(w, "failed to decode image", http.StatusInternalServerError)
-		return
-	}
+	outputJPEG := isHEICContent(safePath)
 
 	if maxWidth > 0 {
 		bounds := img.Bounds()
@@ -202,4 +188,24 @@ func serveProcessedImage(w http.ResponseWriter, safePath string, maxWidth int) {
 		w.Header().Set("Content-Type", "image/png")
 		png.Encode(w, img)
 	}
+}
+
+func decodeImageStatic(r io.ReadSeeker) (image.Image, error) {
+	img, _, err := image.Decode(r)
+	if err != nil {
+		return nil, err
+	}
+	r.Seek(0, io.SeekStart)
+	return img, nil
+}
+
+func isHEICContent(path string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	buf := make([]byte, 12)
+	n, _ := io.ReadFull(f, buf)
+	return n >= 8 && string(buf[4:8]) == "ftyp"
 }
