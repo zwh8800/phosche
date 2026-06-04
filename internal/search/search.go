@@ -40,10 +40,7 @@ type EmbeddingCache interface {
 
 // HybridConfig 是混合检索参数。
 type HybridConfig struct {
-	RRFWindowSize    int
-	RRFRankConstant  int
-	KNNK             int
-	KNNNumCandidates int
+	RRFRankConstant int
 }
 
 // SearchOption 是 SearchService 的函数式配置选项。
@@ -263,10 +260,7 @@ func (s *SearchService) searchHybrid(ctx context.Context, indexName string, req 
 
 	// KNN 子查询（OpenSearch knn 查询子句）：基于向量相似度的近邻检索
 	// filter 确保 province/country/date 等筛选条件在 kNN 检索中同样生效
-	k := s.hybridCfg.KNNK
-	if k <= 0 {
-		k = pageSize * 2
-	}
+	k := pageSize * 2
 	knnQuery := map[string]any{
 		"knn": map[string]any{
 			"embedding": map[string]any{
