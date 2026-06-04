@@ -151,6 +151,14 @@ export interface GeoInfo {
   city?: string;
   /** 区/县名称 */
   district?: string;
+  /** 乡镇/街道名称 */
+  township?: string;
+  /** 商圈名称 */
+  business_area?: string;
+  /** 街道名称 */
+  street?: string;
+  /** 门牌号 */
+  street_number?: string;
   /** 详细地址 */
   address?: string;
   /** 格式化的完整地址（高德 API 返回的 formatted_address） */
@@ -174,6 +182,14 @@ export interface PhotoDocument extends Photo, AnalysisResult {
   city?: string;
   /** 区/县名称 */
   district?: string;
+  /** 乡镇/街道名称 */
+  township?: string;
+  /** 商圈名称 */
+  business_area?: string;
+  /** 街道名称 */
+  street?: string;
+  /** 门牌号 */
+  street_number?: string;
   /** 详细地址 */
   address?: string;
   /** 格式化的完整地址 */

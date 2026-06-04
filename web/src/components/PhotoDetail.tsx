@@ -379,6 +379,29 @@ function PhotoDetailModal({
   // displayUrl 追加 ?convert=1，后端将 HEIC 等格式转换为 JPEG 供浏览器直接显示
   const displayUrl = `${imageUrl}?convert=1`;
 
+  const [downloadToast, setDownloadToast] = useState(false);
+
+  const handleDownload = async () => {
+    try {
+      const response = await fetch(imageUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = photo.path.split('/').pop() || 'photo.jpg';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+
+      setDownloadToast(true);
+      setTimeout(() => setDownloadToast(false), 3000);
+    } catch (error) {
+      console.error('下载失败:', error);
+      alert('下载失败，请稍后重试');
+    }
+  };
+
   // 格式化 EXIF 拍摄时间为中文完整日期（年月日 + 星期 + 时分）
   const dateStr = photo.exif?.date_time_original
     ? new Date(photo.exif.date_time_original).toLocaleDateString('zh-CN', {
@@ -427,9 +450,8 @@ function PhotoDetailModal({
           onClick={(e) => e.stopPropagation()}
         >
           <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
-            <a
-              href={imageUrl}
-              download
+            <button
+              onClick={handleDownload}
               className="flex items-center justify-center w-9 h-9 rounded-full bg-black/20 hover:bg-black/40 text-white backdrop-blur-sm transition-colors cursor-pointer"
               title="下载原图"
               aria-label="下载原图"
@@ -448,7 +470,7 @@ function PhotoDetailModal({
                 <path d="M4 7l4 4 4-4" />
                 <path d="M2 12v1.5A0.5 0.5 0 0 0 2.5 14h11a0.5 0.5 0 0 0 .5-.5V12" />
               </svg>
-            </a>
+            </button>
 
             <button
               onClick={onClose}
@@ -764,36 +786,53 @@ function PhotoDetailModal({
                       </div>
                     )}
 
-                    {/* 拍摄日期：中文长格式（含星期），如 "2024年1月15日 星期一 14:30" */}
+                    {/* 拍摄日期 */}
                     {dateStr && (
-                      <p className="text-sm text-gray-500 mb-2">{dateStr}</p>
+                      <div className="flex items-start gap-2 mb-2">
+                        <svg className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                        </svg>
+                        <p className="text-sm text-gray-500">{dateStr}</p>
+                      </div>
                     )}
-
-                    {/*
-                     * GPS 坐标：十进制格式，纬度/经度保留 6 位小数，
-                     * 使用等宽字体以保持对齐。
-                     */}
-                    {photo.exif!.gps_lat != null &&
-                      photo.exif!.gps_lon != null && (
-                        <p className="text-xs text-gray-400 font-mono">
-                          {photo.exif!.gps_lat.toFixed(6)},{' '}
-                          {photo.exif!.gps_lon.toFixed(6)}
-                        </p>
-                      )}
 
                     {/*
                      * 格式化地址：优先展示高德逆地理编码返回的完整地址，
                      * 若无则拼接省/市/区三级行政区域名称。
+                     * 第二行补充展示更细粒度的地理层级（国家/省/市/区 + 街道/门牌）。
+                     * 第三行展示 GPS 十进制坐标（等宽字体）。
                      */}
-                    {(photo.formatted_address || photo.city) && (
-                      <div className="flex items-start gap-2 mt-2">
-                        <svg className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
-                        </svg>
-                        <span className="text-sm text-gray-600">
-                          {photo.formatted_address || [photo.province, photo.city, photo.district].filter(Boolean).join(' ')}
-                        </span>
+                    {(photo.formatted_address || photo.city || (photo.exif?.gps_lat != null && photo.exif?.gps_lon != null)) && (
+                      <div className="mt-2 space-y-0.5">
+                        {(photo.formatted_address || photo.city) && (
+                          <>
+                            <div className="flex items-start gap-2">
+                              <svg className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+                              </svg>
+                              <span className="text-sm text-gray-600">
+                                {photo.formatted_address || [photo.province, photo.city, photo.district].filter(Boolean).join(' ')}
+                              </span>
+                            </div>
+                            {[
+                              [photo.country, photo.province, photo.city, photo.district].filter(Boolean).join(' '),
+                              [photo.township, photo.business_area, photo.street, photo.street_number].filter(Boolean).join(' '),
+                            ].filter(Boolean).join(' · ') && (
+                              <p className="text-xs text-gray-400 pl-6">
+                                {[
+                                  [photo.country, photo.province, photo.city, photo.district].filter(Boolean).join(' '),
+                                  [photo.township, photo.business_area, photo.street, photo.street_number].filter(Boolean).join(' '),
+                                ].filter(Boolean).join(' · ')}
+                              </p>
+                            )}
+                          </>
+                        )}
+                        {photo.exif?.gps_lat != null && photo.exif?.gps_lon != null && (
+                          <p className={`text-xs text-gray-400 font-mono ${(photo.formatted_address || photo.city) ? 'pl-6' : ''}`}>
+                            {photo.exif.gps_lat.toFixed(6)}, {photo.exif.gps_lon.toFixed(6)}
+                          </p>
+                        )}
                       </div>
                     )}
                   </>
@@ -883,6 +922,15 @@ function PhotoDetailModal({
           </div>
         </div>
       </div>
+
+      {downloadToast && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 bg-green-600 text-white px-4 py-2.5 rounded-full shadow-lg animate-[fadeIn_0.2s_ease-out]">
+          <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+          <span className="text-sm font-medium">已开始下载</span>
+        </div>
+      )}
 
       {/*
        * 弹窗入场动画：通过内联 <style> 标签注入 @keyframes fadeIn。
