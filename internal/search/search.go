@@ -24,7 +24,7 @@ import (
 	"github.com/zwh8800/phosche/internal/types"
 )
 
-// pipelineName is the OpenSearch search pipeline for native RRF hybrid search.
+// pipelineName 是 OpenSearch 原生 RRF 混合检索的搜索管道名称。
 const pipelineName = "phosche-rrf-pipeline"
 
 // Embedder 是文本向量化的抽象接口。
@@ -105,8 +105,9 @@ func NewSearchService(client *indexer.OSClient, opts ...SearchOption) *SearchSer
 	return s
 }
 
-// EnsureSearchPipeline creates the RRF search pipeline if it doesn't exist.
-// Called during startup when embedder is configured. Must be called after OpenSearch is available.
+// EnsureSearchPipeline 创建 RRF 搜索管道（如果不存在）。
+// 在启动时调用（embedder 已配置的情况下），需要 OpenSearch 已可用。
+// 使用 PUT /_search/pipeline/{name} 幂等创建，200 表示创建成功，409 表示已存在。
 func (s *SearchService) EnsureSearchPipeline(ctx context.Context) error {
 	if s.embedder == nil {
 		return nil
@@ -143,7 +144,7 @@ func (s *SearchService) EnsureSearchPipeline(ctx context.Context) error {
 	}
 	defer resp.Body.Close()
 
-	// 200 = created, 409 = already exists (idempotent), other = error
+	// 200 = 创建成功，409 = 已存在（幂等），其他状态码 = 错误
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusConflict {
 		b, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("pipeline creation returned %s: %s", resp.Status, string(b))
@@ -178,11 +179,22 @@ func (s *SearchService) getEmbedding(ctx context.Context, text string) ([]float3
 
 // Search 执行全文搜索+条件过滤查询。
 //
+// 混合检索触发条件：req.Query 非空 且 embedder 已配置 且 embedding 计算成功。
+// 降级策略：embedder 未配置 → 纯 BM25；embedding 计算失败 → 日志警告并回退到纯 BM25。
+//
 // 流程：
 //  1. 有查询词且 embedder 可用时，调用 searchHybrid（BM25 + kNN 混合检索，服务端 RRF）
 //  2. 否则调用 searchBM25（纯 BM25 全文检索或过滤）
 //
-// userEmail 用于基于 email 的访问过滤，限制搜索结果仅包含用户有权访问的文档。
+// 参数：
+//   - ctx: 请求上下文
+//   - indexName: OpenSearch 索引名称
+//   - req: 搜索请求（查询词、分页、过滤条件等）
+//   - userEmail: 当前用户邮箱，用于基于 email 的访问过滤，限制搜索结果仅包含用户有权访问的文档
+//
+// 返回值：
+//   - *types.SearchResponse: 包含 hits、total、page、page_size、total_pages
+//   - error: OpenSearch 请求失败或序列化错误
 func (s *SearchService) Search(ctx context.Context, indexName string, req *types.SearchRequest, userEmail string) (*types.SearchResponse, error) {
 	slog.Debug("search request received",
 		"index", indexName,
@@ -212,6 +224,15 @@ func (s *SearchService) Search(ctx context.Context, indexName string, req *types
 }
 
 // searchHybrid 执行 BM25 + kNN 混合检索，通过 OpenSearch search pipeline 实现服务端 RRF。
+//
+// RRF（Reciprocal Rank Fusion）算法原理：
+//   - 分别计算 BM25 和 kNN 两个子查询的排名
+//   - 最终分数 = Σ 1/(rank_constant + rank_i)，rank_i 为文档在各子查询中的排名
+//   - rank_constant 默认 60，控制排名差异的权重衰减速度（值越大，头部与尾部的分数差异越小）
+//   - 该融合在 OpenSearch 服务端通过 search pipeline 的 phase_results_processor 完成
+//
+// 参数：
+//   - queryVec: 查询文本的 embedding 向量，由 getEmbedding 计算
 func (s *SearchService) searchHybrid(ctx context.Context, indexName string, req *types.SearchRequest, queryVec []float32, userEmail string) (*types.SearchResponse, error) {
 	page := req.Page
 	if page <= 0 {
@@ -225,7 +246,7 @@ func (s *SearchService) searchHybrid(ctx context.Context, indexName string, req 
 
 	filters := s.buildFilters(req, userEmail)
 
-	// BM25 sub-query
+	// BM25 子查询：基于关键词的全文检索，使用 multi_match 跨字段匹配
 	bm25Query := map[string]any{
 		"bool": map[string]any{
 			"must": []any{
@@ -240,7 +261,7 @@ func (s *SearchService) searchHybrid(ctx context.Context, indexName string, req 
 		},
 	}
 
-	// KNN sub-query (OpenSearch knn query clause)
+	// KNN 子查询（OpenSearch knn 查询子句）：基于向量相似度的近邻检索
 	// filter 确保 province/country/date 等筛选条件在 kNN 检索中同样生效
 	k := s.hybridCfg.KNNK
 	if k <= 0 {
@@ -260,8 +281,8 @@ func (s *SearchService) searchHybrid(ctx context.Context, indexName string, req 
 		},
 	}
 
-	// Hybrid query combining BM25 and kNN sub-queries
-	// RRF score fusion is applied server-side by the search pipeline
+	// 混合查询：组合 BM25 和 kNN 子查询，通过 search pipeline 实现服务端 RRF 融合
+	// RRF（Reciprocal Rank Fusion）算法：score = Σ 1/(k + rank_i)，k 为 rank_constant
 	query := map[string]any{
 		"from": from,
 		"size": pageSize,
@@ -304,7 +325,7 @@ func (s *SearchService) searchHybrid(ctx context.Context, indexName string, req 
 		},
 	})
 	if err != nil {
-		// Dump full OpenSearch error (includes status, type, reason, root_cause, caused_by)
+		// 输出完整的 OpenSearch 错误信息（包含 status、type、reason、root_cause、caused_by）
 		status := 0
 		if resp != nil && resp.Inspect().Response != nil {
 			status = resp.Inspect().Response.StatusCode
@@ -440,6 +461,7 @@ func (s *SearchService) GetFilters(ctx context.Context, indexName string, userEm
 }
 
 // buildQuery 是核心查询构造器，将 SearchRequest 转换为 OpenSearch 查询 DSL。
+// 仅用于纯 BM25 模式（searchBM25），混合检索模式使用 searchHybrid 独立构建查询。
 //
 // 构建规则（按顺序）：
 //  1. 分页默认值：page=1, pageSize=20
@@ -698,7 +720,7 @@ type aggBucketWithCount struct {
 	DocCount int64  `json:"doc_count"`
 }
 
-// collectNonEmptyKeys filters out empty-string buckets from terms aggregations.
+// collectNonEmptyKeys 从词项聚合结果中过滤掉空字符串桶。
 func collectNonEmptyKeys(buckets []aggBucket) []string {
 	keys := make([]string, 0, len(buckets))
 	for _, b := range buckets {
@@ -709,7 +731,7 @@ func collectNonEmptyKeys(buckets []aggBucket) []string {
 	return keys
 }
 
-// buildSearchResponse converts typed OpenSearch SearchResp to types.SearchResponse.
+// buildSearchResponse 将 OpenSearch 类型化响应转换为标准搜索响应格式。
 func (s *SearchService) buildSearchResponse(resp *opensearchapi.SearchResp, req *types.SearchRequest) (*types.SearchResponse, error) {
 	total := int64(resp.Hits.Total.Value)
 
@@ -795,8 +817,17 @@ func (s *SearchService) GetStats(ctx context.Context, indexName string, userEmai
 
 // FindSimilar 查找与指定照片视觉相似的照片，基于 kNN 向量检索。
 //
-// 使用照片的 embedding 向量通过 hybrid 搜索管道执行 kNN 查询，返回最相似的 3 张照片。
-// 查询条件包含 email 访问过滤和排除源照片自身。
+// 算法：使用 hybrid 搜索管道（BM25 + kNN），BM25 使用 match_all 常量分数（不参与排序），
+// kNN 根据 embedding 向量相似度检索最近邻。RRF 融合后 kNN 主导排序结果。
+//
+// 参数：
+//   - photoID: 源照片文档 ID（SHA-256 哈希），用于排除自身
+//   - embedding: 源照片的 embedding 向量（空向量时直接返回空结果）
+//   - userEmail: 访问控制用邮箱
+//
+// 返回值：
+//   - *types.RecommendationResponse: 包含最相似的 3 张照片（排除自身）
+//   - error: OpenSearch 请求失败或序列化错误
 func (s *SearchService) FindSimilar(ctx context.Context, indexName string, photoID string, embedding []float32, userEmail string) (*types.RecommendationResponse, error) {
 	if len(embedding) == 0 {
 		return &types.RecommendationResponse{Photos: []types.PhotoDocument{}, Total: 0}, nil
@@ -813,14 +844,14 @@ func (s *SearchService) FindSimilar(ctx context.Context, indexName string, photo
 		},
 	}
 
-	// BM25 sub-query: match_all with access filter (constant score, kNN dominates via RRF)
+	// BM25 子查询：带访问过滤的 match_all（常量分数，kNN 通过 RRF 主导排序）
 	bm25Query := map[string]any{
 		"bool": map[string]any{
 			"filter": accessFilter,
 		},
 	}
 
-	// kNN sub-query: embedding vector search
+	// KNN 子查询：embedding 向量搜索，k=4 时取 top-3（排除自身后）
 	knnQuery := map[string]any{
 		"knn": map[string]any{
 			"embedding": map[string]any{
@@ -901,8 +932,22 @@ func (s *SearchService) FindSimilar(ctx context.Context, indexName string, photo
 
 // FindNearby 查找与指定照片地理位置相近的照片，基于 Haversine 脚本计算距离。
 //
-// 使用 5km 半径范围搜索附近照片，按距离升序排列，返回最近的 3 张。
-// 查询条件包含 email 访问过滤、状态为 analyzed 和排除源照片自身。
+// Haversine 公式：d = 2R·arcsin(√(sin²(Δlat/2) + cos(lat1)·cos(lat2)·sin²(Δlon/2)))
+// 其中 R=6371km 为地球半径，结果单位为公里。该公式在 OpenSearch 的 painless 脚本中执行。
+//
+// 搜索策略：
+//   - 使用 script filter 限制 5km 半径内的文档
+//   - 使用 script sort 按 Haversine 距离升序排列（最近的在前）
+//   - 仅返回 status=analyzed 的照片（确保有 GPS 数据和完整分析结果）
+//
+// 参数：
+//   - photoID: 源照片文档 ID，用于排除自身
+//   - lat/lon: 源照片的 GPS 坐标（纬度/经度）
+//   - userEmail: 访问控制用邮箱
+//
+// 返回值：
+//   - *types.RecommendationResponse: 包含距离最近的 3 张照片（排除自身）
+//   - error: OpenSearch 请求失败或序列化错误。lat 和 lon 均为 0 时直接返回空结果。
 func (s *SearchService) FindNearby(ctx context.Context, indexName string, photoID string, lat, lon float64, userEmail string) (*types.RecommendationResponse, error) {
 	if lat == 0 && lon == 0 {
 		return &types.RecommendationResponse{Photos: []types.PhotoDocument{}, Total: 0}, nil
@@ -994,8 +1039,8 @@ func (s *SearchService) FindNearby(ctx context.Context, indexName string, photoI
 	return s.buildRecommendationResponse(resp), nil
 }
 
-// buildRecommendationResponse converts OpenSearch SearchResp to types.RecommendationResponse.
-// Clears embedding field from results before returning.
+// buildRecommendationResponse 将 OpenSearch 响应转换为推荐响应格式。
+// 返回前清空 embedding 字段以避免传输大量向量数据。
 func (s *SearchService) buildRecommendationResponse(resp *opensearchapi.SearchResp) *types.RecommendationResponse {
 	hits := make([]types.PhotoDocument, 0, len(resp.Hits.Hits))
 	for _, hit := range resp.Hits.Hits {
