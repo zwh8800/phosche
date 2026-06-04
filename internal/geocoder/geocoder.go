@@ -1,3 +1,5 @@
+// Package geocoder 提供基于高德 API 的逆地理编码能力。
+// 将 GPS 坐标转换为结构化地址信息（省、市、区、街道等）。
 package geocoder
 
 import (
@@ -11,12 +13,17 @@ import (
 	"github.com/zwh8800/phosche/internal/types"
 )
 
+// Geocoder 封装高德逆地理编码 API 客户端。
+// 通过高德 Web 服务 API 将经纬度坐标转换为结构化地址。
 type Geocoder struct {
 	apiKey     string
 	httpClient *http.Client
 	baseURL    string
 }
 
+// NewGeocoder 创建一个新的 Geocoder 实例。
+// apiKey 为高德开放平台的 Web 服务 API Key，
+// 用于身份验证和请求限流。
 func NewGeocoder(apiKey string) *Geocoder {
 	return &Geocoder{
 		apiKey: apiKey,
@@ -25,6 +32,9 @@ func NewGeocoder(apiKey string) *Geocoder {
 	}
 }
 
+// ReverseGeocode 将经纬度坐标转换为结构化地址信息。
+// 返回的 GeoInfo 包含省、市、区、街道等地址层级信息。
+// 如果 API 调用失败或坐标无效，返回错误。
 func (g *Geocoder) ReverseGeocode(ctx context.Context, lat, lon float64) (*types.GeoInfo, error) {
 	if g.apiKey == "" {
 		return nil, nil
