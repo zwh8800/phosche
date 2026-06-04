@@ -118,14 +118,6 @@ const SCENE_TYPE_LABELS: Record<string, string> = {
  * @param tag - 标签文字
  * @returns Tailwind CSS 颜色类名，格式如 "bg-rose-100 text-rose-700"
  */
-/**
- * 根据标签文本计算确定性的颜色
- * 使用 DJB2 哈希算法对标签字符串生成哈希值，然后取模分配到预设的颜色数组中。
- * 确保相同标签在不同渲染周期始终显示相同颜色。
- *
- * @param tag - 标签文本字符串
- * @returns Tailwind CSS 样式类字符串，用于标签的背景色和文字色
- */
 function tagColor(tag: string): string {
   let hash = 0;
   for (let i = 0; i < tag.length; i++) {
@@ -144,16 +136,6 @@ function tagColor(tag: string): string {
  * @param aperture - 光圈原始值，如 "1.8" 或 "f/1.8"
  * @returns 格式化后的光圈字符串，如 "f/1.8"
  */
-/**
- * 格式化光圈值
- * 处理多种光圈值格式：
- * - 已包含 f/ 前缀的直接返回
- * - 纯数字格式自动添加 f/ 前缀
- * - 无法解析的值原样返回
- *
- * @param aperture - 光圈原始字符串（如 "1.8"、"f/1.8"、"F/2.8"）
- * @returns 格式化后的光圈字符串
- */
 function formatAperture(aperture: string): string {
   if (aperture.startsWith('f/') || aperture.startsWith('F/')) return aperture;
   const num = parseFloat(aperture);
@@ -171,13 +153,6 @@ function formatAperture(aperture: string): string {
  *
  * @param bytes - 文件字节数
  * @returns 格式化后的文件大小字符串，如 "3.7 MB"、"128.0 KB"、"512 B"
- */
-/**
- * 将字节数格式化为人类可读的文件大小字符串
- * 根据文件大小自动选择合适的单位（B、KB、MB），保留一位小数。
- *
- * @param bytes - 文件大小（字节数）
- * @returns 格式化后的文件大小字符串（如 "3.5 MB"、"256.0 KB"）
  */
 function formatSize(bytes: number): string {
   if (bytes >= 1024 * 1024) {
@@ -216,13 +191,6 @@ function formatTimestamp(ts: number): string {
  * 1.5 秒后自动恢复为复制图标。使用 navigator.clipboard.writeText API。
  *
  * @param props.text - 需要复制到剪贴板的文本内容（如文件路径）
- */
-/**
- * 复制文本到剪贴板的按钮组件
- * 点击后将传入的文本复制到系统剪贴板，并在 1.5 秒内显示勾号图标表示成功。
- * 使用 navigator.clipboard API 实现复制功能。
- *
- * @param text - 需要复制到剪贴板的文本内容
  */
 function CopyButton({ text }: { text: string }) {
   /** 复制成功状态标志，true 时显示勾号图标，1.5 秒后自动重置 */
@@ -275,13 +243,6 @@ function CopyButton({ text }: { text: string }) {
  *
  * @param props.type - 场景类型标识符，如 "outdoor"、"indoor"
  */
-/**
- * 场景类型徽章组件
- * 显示 AI 分析出的场景类型（室内、室外、水下等），并配有对应的 emoji 图标。
- * 使用 SCENE_TYPE_LABELS 映射获取中文标签，未知类型显示默认 emoji。
- *
- * @param type - 后端 AI 分析返回的场景类型字符串
- */
 function SceneTypeBadge({ type }: { type: string }) {
   /** 场景类型到 emoji 的映射表 */
   const emoji: Record<string, string> = {
@@ -316,19 +277,6 @@ function SceneTypeBadge({ type }: { type: string }) {
  * @param props.onNext  - 切换到下一张的回调（可选）
  * @param props.hasPrev - 是否存在上一张（可选）
  * @param props.hasNext - 是否存在下一张（可选）
- */
-/**
- * 照片详情模态框主组件
- *
- * 使用 React Portal 将弹窗渲染到 document.body 下，遮罩层覆盖整个视口。
- * 支持键盘快捷键（Escape 关闭、← 上一张、→ 下一张）。
- *
- * @param photo - 当前展示的照片文档对象
- * @param onClose - 关闭弹窗回调，点击遮罩、关闭按钮或按 Escape 时触发
- * @param onPrev - 切换上一张照片回调，可选；不存在时隐藏上一张按钮
- * @param onNext - 切换下一张照片回调，可选；不存在时隐藏下一张按钮
- * @param hasPrev - 是否存在上一张，控制上一张按钮条件渲染
- * @param hasNext - 是否存在下一张，控制下一张按钮条件渲染
  */
 function PhotoDetailModal({
   photo,
