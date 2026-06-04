@@ -421,10 +421,10 @@ POST /api/photos/cleanup
 ### 照片详情
 
 ```
-GET /api/photos/{id}
+GET /api/photos/{path}
 ```
 
-`{id}` 是照片路径的 SHA-256 哈希值。
+`{path}` 是照片的相对文件路径（URL 编码），如 `2024/01/IMG_0001.jpg`。
 
 **响应示例：**
 ```json
