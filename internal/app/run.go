@@ -17,6 +17,7 @@ import (
 	"github.com/zwh8800/phosche/internal/api"
 	"github.com/zwh8800/phosche/internal/cache"
 	"github.com/zwh8800/phosche/internal/config"
+	"github.com/zwh8800/phosche/internal/decoder"
 	"github.com/zwh8800/phosche/internal/embedder"
 	"github.com/zwh8800/phosche/internal/geocoder"
 	"github.com/zwh8800/phosche/internal/indexer"
@@ -40,6 +41,14 @@ func Run(distFS fs.FS, configPath string) {
 	})))
 
 	logStartupInfo(cfg)
+
+	// 初始化 EXIF 时间解析的默认时区
+	loc, err := time.LoadLocation(cfg.Server.Timezone)
+	if err != nil {
+		slog.Error("invalid timezone", "timezone", cfg.Server.Timezone, "error", err)
+		os.Exit(1)
+	}
+	decoder.SetDefaultLocation(loc)
 
 	// 初始化 OpenSearch 客户端并创建索引
 	osClient, err := indexer.NewOSClient(cfg.OpenSearch)

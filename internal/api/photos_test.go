@@ -30,6 +30,14 @@ func (m *mockCleaner) DeletePhoto(ctx context.Context, path string, indexName st
 	return m.err
 }
 
+func (m *mockCleaner) UpdateEXIF(_ context.Context, _ string, _ *types.EXIFInfo, _ string) error {
+	return nil
+}
+
+func (m *mockCleaner) ScrollAll(_ context.Context, _ string, _ func(*types.PhotoDocument) error) error {
+	return nil
+}
+
 func newSearchMock(result *types.SearchResponse, err error) *mockSearchService {
 	return &mockSearchService{
 		statsFunc: func(_ context.Context, _ string) (*types.StatsResponse, error) {

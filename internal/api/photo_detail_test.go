@@ -33,6 +33,14 @@ func (m *mockIndexer) DeletePhoto(_ context.Context, _ string, _ string) error {
 	return nil
 }
 
+func (m *mockIndexer) UpdateEXIF(_ context.Context, _ string, _ *types.EXIFInfo, _ string) error {
+	return nil
+}
+
+func (m *mockIndexer) ScrollAll(_ context.Context, _ string, _ func(*types.PhotoDocument) error) error {
+	return nil
+}
+
 func TestGetPhotoDetail_Success(t *testing.T) {
 	expectedDoc := &types.PhotoDocument{
 		Photo: types.Photo{

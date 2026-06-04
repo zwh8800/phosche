@@ -85,6 +85,9 @@ server:
   log_level: info
   # 照片缓存目录（缩略图 + HEIC 转 JPEG），空表示不缓存（实时生成）
   cache_dir: ""
+  # 照片拍摄时区，用于解析无时区信息的 EXIF 时间（如 "Asia/Shanghai"、"America/New_York"）
+  # 当 EXIF 中没有 OffsetTimeOriginal 标签时，使用此时区解析 DateTimeOriginal
+  timezone: "Asia/Shanghai"
 
 # =============================================================================
 # 外部服务配置

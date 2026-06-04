@@ -91,6 +91,7 @@ type ServerConfig struct {
 	DevMode  bool   `yaml:"dev_mode"`  // 开发模式开关
 	LogLevel string `yaml:"log_level"` // 日志级别（debug/info/warn/error）
 	CacheDir string `yaml:"cache_dir"` // 照片缓存目录，空表示不缓存（实时生成）
+	Timezone string `yaml:"timezone"`  // 照片拍摄时区，用于解析无时区信息的 EXIF 时间，如 "Asia/Shanghai"
 }
 
 // EnvConfig 是环境变量配置，包含外部服务的 API Key 等。
@@ -192,6 +193,9 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Server.LogLevel == "" {
 		cfg.Server.LogLevel = "info"
+	}
+	if cfg.Server.Timezone == "" {
+		cfg.Server.Timezone = "Asia/Shanghai"
 	}
 
 	// Embedding defaults

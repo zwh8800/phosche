@@ -25,6 +25,20 @@ import (
 	"golang.org/x/image/webp"
 )
 
+// defaultLocation 是解析无时区 EXIF 时间时使用的默认时区。
+// 由 app 启动时通过 SetDefaultLocation 设置。
+var defaultLocation = time.UTC
+
+// SetDefaultLocation 设置解析 EXIF 时间时使用的默认时区。
+func SetDefaultLocation(loc *time.Location) {
+	defaultLocation = loc
+}
+
+// ExtractEXIF 从照片文件中提取 EXIF 元数据，不解码图片。适用于迁移脚本。
+func ExtractEXIF(path string) (*types.EXIFInfo, error) {
+	return extractEXIF(path)
+}
+
 // DecodeResult 包含解码后的图片对象、MIME 类型和可选的 EXIF 元数据。
 type DecodeResult struct {
 	Image    image.Image
@@ -226,10 +240,7 @@ func parseExif(rawExif []byte) (*types.EXIFInfo, error) {
 	// IFD/Exif: DateTimeOriginal, LensModel, FocalLength, FNumber, ExposureTime, ISOSpeedRatings
 	if exifIfd, ok := index.Lookup["IFD/Exif"]; ok {
 		if v, err := getStringTag(exifIfd, "DateTimeOriginal"); err == nil {
-			// EXIF 时间格式: "2006:01:02 15:04:05" -> RFC3339
-			if t, tErr := time.Parse("2006:01:02 15:04:05", v); tErr == nil {
-				info.DateTimeOriginal = t.Format(time.RFC3339)
-			}
+			info.DateTimeOriginal = parseExifTime(exifIfd, v)
 		}
 
 		if v, err := getStringTag(exifIfd, "LensModel"); err == nil {
@@ -283,6 +294,21 @@ func parseExif(rawExif []byte) (*types.EXIFInfo, error) {
 	}
 
 	return info, nil
+}
+
+// parseExifTime 解析 EXIF 时间字符串，优先使用 OffsetTimeOriginal，否则使用默认时区。
+func parseExifTime(exifIfd *exif.Ifd, timeStr string) string {
+	// 优先读取 EXIF OffsetTimeOriginal (如 "+08:00")
+	if offset, offsetErr := getStringTag(exifIfd, "OffsetTimeOriginal"); offsetErr == nil && offset != "" {
+		if parsed, pErr := time.Parse("2006:01:02 15:04:05 -07:00", timeStr+" "+offset); pErr == nil {
+			return parsed.Format(time.RFC3339)
+		}
+	}
+	// Fallback: 使用配置的默认时区
+	if t, tErr := time.ParseInLocation("2006:01:02 15:04:05", timeStr, defaultLocation); tErr == nil {
+		return t.Format(time.RFC3339)
+	}
+	return ""
 }
 
 // getStringTag 从 IFD 中提取字符串类型的 tag。

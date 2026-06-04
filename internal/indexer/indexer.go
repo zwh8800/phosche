@@ -182,6 +182,34 @@ func (s *IndexerService) BulkIndex(ctx context.Context, docs []*types.PhotoDocum
 // 公开读取操作 — 直通 ES，无需断路器（读操作不改变状态）
 // --------------------------------------------------------------------------
 
+// UpdateEXIF 仅更新照片文档的 EXIF 字段，使用 ES Update API 的 "doc" 部分更新。
+// AI 分析结果、GeoInfo 等其他字段不受影响。
+func (s *IndexerService) UpdateEXIF(ctx context.Context, path string, exif *types.EXIFInfo, indexName string) error {
+	docID := sha256hex(path)
+
+	updateBody := map[string]any{
+		"doc": map[string]any{
+			"exif": exif,
+		},
+	}
+	bodyBytes, err := json.Marshal(updateBody)
+	if err != nil {
+		return fmt.Errorf("marshal update body: %w", err)
+	}
+
+	_, err = s.client.Client().Update(ctx, opensearchapi.UpdateReq{
+		Index:      indexName,
+		DocumentID: docID,
+		Body:       bytes.NewReader(bodyBytes),
+		Params:     opensearchapi.UpdateParams{Refresh: "true"},
+	})
+	if err != nil {
+		return fmt.Errorf("update exif: %w", err)
+	}
+
+	return nil
+}
+
 // DeletePhoto 根据文件路径删除对应的 ES 文档。
 // 文档 _id 为 path 的 SHA-256 哈希值。即使文档不存在（404）也不返回错误，
 // 因为删除一个不存在的文档在语义上是成功的。
@@ -259,6 +287,58 @@ func (s *IndexerService) GetPhotoByID(ctx context.Context, id string, indexName 
 	}
 
 	return &doc, nil
+}
+
+// ScrollAll 使用 search_after 遍历索引中的所有文档，支持超过 10k 条记录。
+// 对每个文档调用 callback 函数，callback 返回 error 时终止遍历。
+func (s *IndexerService) ScrollAll(ctx context.Context, indexName string, callback func(*types.PhotoDocument) error) error {
+	query := map[string]any{
+		"query": map[string]any{
+			"match_all": map[string]any{},
+		},
+		"size": 1000,
+		"sort": []map[string]any{
+			{"_doc": "asc"},
+		},
+	}
+
+	var searchAfter []any
+	for {
+		if searchAfter != nil {
+			query["search_after"] = searchAfter
+		}
+
+		bodyBytes, err := json.Marshal(query)
+		if err != nil {
+			return fmt.Errorf("marshal scroll query: %w", err)
+		}
+
+		resp, err := s.client.Client().Search(ctx, &opensearchapi.SearchReq{
+			Indices: []string{indexName},
+			Body:    bytes.NewReader(bodyBytes),
+		})
+		if err != nil {
+			return fmt.Errorf("scroll search: %w", err)
+		}
+
+		if len(resp.Hits.Hits) == 0 {
+			return nil
+		}
+
+		for _, hit := range resp.Hits.Hits {
+			var doc types.PhotoDocument
+			if err := json.Unmarshal(hit.Source, &doc); err != nil {
+				s.logger.Warn("scroll: unmarshal failed, skipping", "id", hit.ID, "error", err)
+				continue
+			}
+			if err := callback(&doc); err != nil {
+				return err
+			}
+		}
+
+		lastHit := resp.Hits.Hits[len(resp.Hits.Hits)-1]
+		searchAfter = lastHit.Sort
+	}
 }
 
 // ListAnalyzed 查询所有 status=analyzed 的文档，返回 path → mtime 映射。

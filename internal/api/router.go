@@ -25,6 +25,8 @@ type Indexer interface {
 	GetPhoto(ctx context.Context, path string, indexName string) (*types.PhotoDocument, error)
 	GetPhotoByID(ctx context.Context, id string, indexName string) (*types.PhotoDocument, error)
 	DeletePhoto(ctx context.Context, path string, indexName string) error
+	UpdateEXIF(ctx context.Context, path string, exif *types.EXIFInfo, indexName string) error
+	ScrollAll(ctx context.Context, indexName string, callback func(*types.PhotoDocument) error) error
 }
 
 // Server 是 API 层的核心结构体，持有搜索服务（searchService，私有）和索引服务（Indexer，公开）的引用。
@@ -87,6 +89,7 @@ func NewRouter(srv *Server) chi.Router {
 		r.Get("/stats", srv.statsHandler)
 		r.Post("/search", srv.searchHandler)
 		r.Get("/photos/{id}", srv.photoDetailHandler)
+		r.Post("/migrate-timezone", srv.handleMigrateTimezone)
 	})
 
 	return r
