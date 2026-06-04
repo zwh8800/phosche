@@ -17,6 +17,7 @@ import (
 
 	openai "github.com/sashabaranov/go-openai"
 
+	"github.com/zwh8800/phosche/internal/util"
 	"github.com/zwh8800/phosche/internal/types"
 	"golang.org/x/image/draw"
 )
@@ -203,7 +204,7 @@ func (a *ImageAnalyzer) Analyze(ctx context.Context, imageData []byte, imageInfo
 			slog.Info("LLM analysis completed",
 				"duration", time.Since(startTime).Round(time.Millisecond),
 				"attempts", attempt+1,
-				"description", truncate(result.Description, 80),
+				"description", util.Truncate(result.Description, 80),
 				"tags_count", len(result.Tags),
 				"scene_type", result.SceneType,
 				"confidence", result.Confidence,
@@ -223,15 +224,6 @@ func (a *ImageAnalyzer) Analyze(ctx context.Context, imageData []byte, imageInfo
 	}
 
 	return nil, fmt.Errorf("all %d retries exhausted: %w", a.maxRetries, lastErr)
-}
-
-// truncate 截断字符串，用于日志输出中控制长度。
-// 如果字符串长度超过 maxLen，截断后追加 "..." 后缀。
-func truncate(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen] + "..."
 }
 
 // preprocessImage 对原始图片数据进行预处理以减小传输体积。

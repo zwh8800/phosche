@@ -21,6 +21,7 @@ import (
 
 	"github.com/opensearch-project/opensearch-go/v4/opensearchapi"
 	"github.com/zwh8800/phosche/internal/indexer"
+	"github.com/zwh8800/phosche/internal/util"
 	"github.com/zwh8800/phosche/internal/types"
 )
 
@@ -308,7 +309,7 @@ func (s *SearchService) searchHybrid(ctx context.Context, indexName string, req 
 		"filter_count", len(filters),
 		"pipeline", pipelineName,
 		"query_len", len(bodyBytes),
-		"query_body", truncateJSON(bodyBytes, 800),
+		"query_body", util.TruncateBytes(bodyBytes, 800),
 	)
 
 	resp, err := s.client.Client().Search(ctx, &opensearchapi.SearchReq{
@@ -337,7 +338,7 @@ func (s *SearchService) searchHybrid(ctx context.Context, indexName string, req 
 			"error", err.Error(),
 			"error_type", fmt.Sprintf("%T", err),
 			"query_len", len(bodyBytes),
-			"query_body", truncateJSON(bodyBytes, 2000),
+			"query_body", util.TruncateBytes(bodyBytes, 2000),
 		)
 		return nil, fmt.Errorf("hybrid search: %w", err)
 	}
@@ -363,7 +364,7 @@ func (s *SearchService) searchBM25(ctx context.Context, indexName string, req *t
 		return nil, fmt.Errorf("marshal query: %w", err)
 	}
 
-	slog.Debug("BM25 search", "index", indexName, "query", truncateJSON(bodyBytes, 500), "page", req.Page, "page_size", req.PageSize)
+	slog.Debug("BM25 search", "index", indexName, "query", util.TruncateBytes(bodyBytes, 500), "page", req.Page, "page_size", req.PageSize)
 
 	resp, err := s.client.Client().Search(ctx, &opensearchapi.SearchReq{
 		Indices: []string{indexName},
@@ -381,7 +382,7 @@ func (s *SearchService) searchBM25(ctx context.Context, indexName string, req *t
 			"http_status", status,
 			"error", err.Error(),
 			"error_type", fmt.Sprintf("%T", err),
-			"query", truncateJSON(bodyBytes, 2000),
+			"query", util.TruncateBytes(bodyBytes, 2000),
 		)
 		return nil, fmt.Errorf("BM25 search: %w", err)
 	}
@@ -874,7 +875,7 @@ func (s *SearchService) FindSimilar(ctx context.Context, indexName string, photo
 		"photo_id", photoID,
 		"embedding_dim", len(embedding),
 		"pipeline", pipelineName,
-		"query_body", truncateJSON(bodyBytes, 800),
+		"query_body", util.TruncateBytes(bodyBytes, 800),
 	)
 
 	resp, err := s.client.Client().Search(ctx, &opensearchapi.SearchReq{
@@ -985,7 +986,7 @@ func (s *SearchService) FindNearby(ctx context.Context, indexName string, photoI
 		"photo_id", photoID,
 		"lat", lat,
 		"lon", lon,
-		"query_body", truncateJSON(bodyBytes, 500),
+		"query_body", util.TruncateBytes(bodyBytes, 500),
 	)
 
 	resp, err := s.client.Client().Search(ctx, &opensearchapi.SearchReq{
@@ -1037,12 +1038,4 @@ func (s *SearchService) buildRecommendationResponse(resp *opensearchapi.SearchRe
 		Photos: hits,
 		Total:  len(hits),
 	}
-}
-
-// truncateJSON 截断 JSON 字节数组用于日志输出，避免超长查询体淹没日志。
-func truncateJSON(b []byte, maxLen int) string {
-	if len(b) <= maxLen {
-		return string(b)
-	}
-	return string(b[:maxLen]) + "..."
 }
