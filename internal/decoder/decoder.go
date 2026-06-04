@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/dsoprea/go-exif/v3"
 	exifcommon "github.com/dsoprea/go-exif/v3/common"
@@ -364,6 +365,13 @@ func getStringTag(ifd *exif.Ifd, tagName string) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("tag %s is not a string", tagName)
 	}
+	// 清除 EXIF 字符串中的控制字符（某些相机如 GoPro 会在字符串末尾填充 \x00）
+	s = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) && r != '\n' && r != '\r' && r != '\t' {
+			return -1
+		}
+		return r
+	}, s)
 	return s, nil
 }
 
