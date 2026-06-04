@@ -194,6 +194,8 @@ export interface PhotoDocument extends Photo, AnalysisResult {
   address?: string;
   /** 格式化的完整地址 */
   formatted_address?: string;
+  /** 地理坐标 */
+  location?: GeoPoint;
 }
 
 /**
@@ -423,9 +425,21 @@ export interface GeoInfo {
  *
  * @property exif - EXIF 元数据（可选，取决于照片是否包含 EXIF 信息）
  */
+/**
+ * 地理坐标点接口（WGS84 坐标系）
+ */
+export interface GeoPoint {
+  /** 纬度（十进制度数） */
+  lat: number;
+  /** 经度（十进制度数） */
+  lon: number;
+}
+
 export interface PhotoDocument extends Photo, AnalysisResult {
   /** EXIF 元数据信息（相机型号、镜头、光圈、GPS 等），可选 */
   exif?: EXIFInfo;
+  /** 地理坐标点（WGS84 坐标系） */
+  location?: GeoPoint;
   /** 国家名称（扁平化字段，与 GeoInfo.country 对应） */
   country?: string;
   /** 省/自治区/直辖市名称 */
@@ -565,6 +579,16 @@ export interface FiltersResponse {
   districts: string[];
   /** 状态列表 */
   statuses: string[];
+}
+
+/**
+ * 相似/附近照片推荐响应接口
+ */
+export interface RecommendationResponse {
+  /** 推荐的照片文档列表 */
+  photos: PhotoDocument[];
+  /** 推荐结果总数 */
+  total: number;
 }
 
 

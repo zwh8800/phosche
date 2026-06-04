@@ -19,6 +19,7 @@ import type {
   SearchResponse,
   StatsResponse,
   FiltersResponse,
+  RecommendationResponse,
 } from '../types';
 
 /**
@@ -130,5 +131,31 @@ export async function fetchStats(): Promise<StatsResponse> {
  */
 export async function fetchFilters(): Promise<FiltersResponse> {
   const { data } = await apiClient.get<FiltersResponse>('/filters');
+  return data;
+}
+
+/**
+ * 获取相似照片
+ *
+ * 调用 GET /api/photos/{id}/similar 端点，根据照片的 embedding 向量获取相似照片。
+ *
+ * @param id - 照片 ID（SHA-256 哈希）
+ * @returns Promise<RecommendationResponse> 包含相似照片列表和总数
+ */
+export async function fetchSimilarPhotos(id: string): Promise<RecommendationResponse> {
+  const { data } = await apiClient.get<RecommendationResponse>(`/photos/${id}/similar`);
+  return data;
+}
+
+/**
+ * 获取附近照片
+ *
+ * 调用 GET /api/photos/{id}/nearby 端点，根据照片的 GPS 坐标获取附近照片。
+ *
+ * @param id - 照片 ID（SHA-256 哈希）
+ * @returns Promise<RecommendationResponse> 包含附近照片列表和总数
+ */
+export async function fetchNearbyPhotos(id: string): Promise<RecommendationResponse> {
+  const { data } = await apiClient.get<RecommendationResponse>(`/photos/${id}/nearby`);
   return data;
 }

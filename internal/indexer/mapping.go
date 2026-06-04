@@ -12,7 +12,7 @@ import (
 // mappingVersion 追踪当前索引映射的版本号，用于迁移检测。
 // 当映射结构发生变化时，应递增此版本号。启动时若检测到 OS 中
 // 已有索引的 _meta.version 与此不一致，会自动删除旧索引并重建。
-const mappingVersion = "8"
+const mappingVersion = "9"
 
 // buildIndexMapping 构建 OS 索引映射，embeddingDims 控制 knn_vector 维度。
 // embeddingDims 为 0 时不启用 knn_vector 字段（embedding 未配置时）。
@@ -137,8 +137,9 @@ func buildIndexMapping(embeddingDims int) map[string]any {
 				"size":      map[string]any{"type": "long"},
 				"created_at": map[string]any{"type": "date"},
 				"email":     map[string]any{"type": "keyword"},
-				"gps_lat":   map[string]any{"type": "double"},
-				"gps_lon":   map[string]any{"type": "double"},
+			"gps_lat":   map[string]any{"type": "double"},
+			"gps_lon":   map[string]any{"type": "double"},
+			"location":  map[string]any{"type": "geo_point"},
 				"country":       map[string]any{"type": "keyword"},
 				"province":      map[string]any{"type": "keyword"},
 				"city":          map[string]any{"type": "keyword"},

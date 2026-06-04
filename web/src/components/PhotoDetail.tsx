@@ -18,7 +18,10 @@
  */
 import { useEffect, useCallback, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import type { PhotoDocument } from '../types';
+import { fetchSimilarPhotos, fetchNearbyPhotos } from '../api/photos';
 
 /**
  * 照片详情模态框的属性接口
@@ -386,6 +389,20 @@ function PhotoDetailModal({
   const displayUrl = `${imageUrl}?convert=1`;
 
   const [downloadToast, setDownloadToast] = useState(false);
+
+  const { data: similarData } = useQuery({
+    queryKey: ['similar', photo.id],
+    queryFn: () => fetchSimilarPhotos(photo.id),
+    enabled: photo.status === 'analyzed',
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: nearbyData } = useQuery({
+    queryKey: ['nearby', photo.id],
+    queryFn: () => fetchNearbyPhotos(photo.id),
+    enabled: photo.status === 'analyzed' && !!photo.exif?.gps_lat,
+    staleTime: 5 * 60 * 1000,
+  });
 
   const handleDownload = async () => {
     try {
@@ -961,6 +978,73 @@ function PhotoDetailModal({
                   </div>
                 </div>
               </section>
+
+              {(() => {
+                const similarPhotos = similarData?.photos;
+                const nearbyPhotos = nearbyData?.photos;
+                const hasSimilar = !!similarPhotos && similarPhotos.length > 0;
+                const hasNearby = !!nearbyPhotos && nearbyPhotos.length > 0;
+                if (!hasSimilar && !hasNearby) return null;
+                return (
+                  <section>
+                    <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
+                      推荐照片
+                    </h3>
+
+                    {hasSimilar && (
+                      <div className="mb-4">
+                        <p className="text-xs text-gray-400 mb-2">相似照片</p>
+                        <div className="flex gap-2">
+                          {similarPhotos!.map((p) => (
+                            <Link
+                              key={p.id}
+                              to={`/photo/${p.id}`}
+                              className="block w-1/3 aspect-square rounded-lg overflow-hidden bg-gray-100"
+                            >
+                              <img
+                                src={`/photos/${p.path.replace(/^\/+/, '')}?thumb=1`}
+                                alt={p.description || '照片'}
+                                className="w-full h-full object-cover hover:scale-105 transition-transform"
+                                loading="lazy"
+                                onError={(e) => {
+                                  const el = e.currentTarget;
+                                  el.style.display = 'none';
+                                }}
+                              />
+                            </Link>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {hasNearby && (
+                      <div className="mb-4">
+                        <p className="text-xs text-gray-400 mb-2">附近照片</p>
+                        <div className="flex gap-2">
+                          {nearbyPhotos!.map((p) => (
+                            <Link
+                              key={p.id}
+                              to={`/photo/${p.id}`}
+                              className="block w-1/3 aspect-square rounded-lg overflow-hidden bg-gray-100"
+                            >
+                              <img
+                                src={`/photos/${p.path.replace(/^\/+/, '')}?thumb=1`}
+                                alt={p.description || '照片'}
+                                className="w-full h-full object-cover hover:scale-105 transition-transform"
+                                loading="lazy"
+                                onError={(e) => {
+                                  const el = e.currentTarget;
+                                  el.style.display = 'none';
+                                }}
+                              />
+                            </Link>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </section>
+                );
+              })()}
             </div>
           </div>
         </div>

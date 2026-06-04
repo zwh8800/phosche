@@ -18,6 +18,8 @@ type PhotoSearcher interface {
 	Search(ctx context.Context, indexName string, req *types.SearchRequest, userEmail string) (*types.SearchResponse, error)
 	GetFilters(ctx context.Context, indexName string, userEmail string) (*types.FiltersResponse, error)
 	GetStats(ctx context.Context, indexName string, userEmail string) (*types.StatsResponse, error)
+	FindSimilar(ctx context.Context, indexName string, photoID string, embedding []float32, userEmail string) (*types.RecommendationResponse, error)
+	FindNearby(ctx context.Context, indexName string, photoID string, lat, lon float64, userEmail string) (*types.RecommendationResponse, error)
 }
 
 // Indexer 定义 API 层依赖的照片索引操作接口。
@@ -89,6 +91,8 @@ func NewRouter(srv *Server) chi.Router {
 		r.Get("/stats", srv.statsHandler)
 		r.Post("/search", srv.searchHandler)
 		r.Get("/photos/{id}", srv.photoDetailHandler)
+		r.Get("/photos/{id}/similar", srv.similarPhotosHandler)
+		r.Get("/photos/{id}/nearby", srv.nearbyPhotosHandler)
 		r.Post("/migrate-timezone", srv.handleMigrateTimezone)
 	})
 

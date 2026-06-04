@@ -143,14 +143,21 @@ type GeoInfo struct {
 	FormattedAddress string `json:"formatted_address,omitempty" es:"text"`
 }
 
+// GeoPoint 表示地理坐标点（WGS84 坐标系）。
+type GeoPoint struct {
+	Lat float64 `json:"lat"` // 纬度（十进制度数）
+	Lon float64 `json:"lon"` // 经度（十进制度数）
+}
+
 // PhotoDocument 将 Photo（照片元数据）与 AnalysisResult（AI 分析结果）、GeoInfo（逆地理编码信息）组合为扁平化文档，用于 OpenSearch 索引。
 // 通过内嵌结构体，所有字段在 ES 中处于同一层级。
 type PhotoDocument struct {
 	Photo
 	AnalysisResult
 	GeoInfo
-	Embedding        []float32 `json:"embedding,omitempty"`
-	EmbeddingVersion string    `json:"embedding_version,omitempty"`
+	Location           *GeoPoint `json:"location,omitempty"`
+	Embedding          []float32 `json:"embedding,omitempty"`
+	EmbeddingVersion   string    `json:"embedding_version,omitempty"`
 	EmbeddedAt       int64     `json:"embedded_at,omitempty"`
 }
 
@@ -218,4 +225,12 @@ type FiltersResponse struct {
 	Cities     []string `json:"cities"`
 	Districts  []string `json:"districts"`
 	Statuses   []string `json:"statuses"`
+}
+
+// RecommendationResponse 是相似/附近照片推荐的响应结构。
+//   - Photos：推荐的照片文档列表
+//   - Total：推荐结果总数
+type RecommendationResponse struct {
+	Photos []PhotoDocument `json:"photos"`
+	Total  int             `json:"total"`
 }

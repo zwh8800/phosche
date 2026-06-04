@@ -374,6 +374,9 @@ func (p *Pipeline) processPath(ctx context.Context, path string) {
 	if r.geo != nil {
 		doc.GeoInfo = *r.geo
 	}
+	if r.exif != nil && r.exif.GPSLat != 0 && r.exif.GPSLon != 0 {
+		doc.Location = &types.GeoPoint{Lat: r.exif.GPSLat, Lon: r.exif.GPSLon}
+	}
 
 	if p.cfg.Embedder != nil {
 		text, err := embedder.BuildEmbeddingText(*doc, p.cfg.EmbedSourceTemplate)
