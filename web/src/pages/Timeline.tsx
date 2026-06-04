@@ -34,6 +34,126 @@ import { fetchPhotos } from '../api/photos';
 import type { PhotoDocument } from '../types';
 
 /**
+ * 标签颜色调色板（8 色）
+ * 复用自 PhotoDetail 组件，通过 DJB2 哈希确保同一标签始终同色
+ */
+const TAG_COLORS = [
+  'bg-red-100 text-red-700',
+  'bg-amber-100 text-amber-700',
+  'bg-emerald-100 text-emerald-700',
+  'bg-sky-100 text-sky-700',
+  'bg-orange-100 text-orange-700',
+  'bg-rose-100 text-rose-700',
+  'bg-teal-100 text-teal-700',
+  'bg-pink-100 text-pink-700',
+];
+
+/**
+ * DJB2 哈希 → 为标签分配确定性颜色
+ */
+function tagColor(tag: string): string {
+  let hash = 0;
+  for (let i = 0; i < tag.length; i++) {
+    hash = tag.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return TAG_COLORS[Math.abs(hash) % TAG_COLORS.length];
+}
+
+/** 地点展示层级 */
+type LocationHierarchyLevel = 'cityDistrict' | 'provinceCity' | 'countryProvince';
+
+/** 地点聚合结果 */
+interface LocationSummary {
+  level: LocationHierarchyLevel;
+  locations: { label: string; count: number }[];
+}
+
+/** 标签聚合结果 */
+interface TagSummaryItem {
+  tag: string;
+  count: number;
+}
+
+/**
+ * 根据日期组内所有位置数据的地理分布，决定展示层级
+ */
+function determineHierarchyLevel(
+  uniqueCities: Set<string>,
+  uniqueCountries: Set<string>,
+): LocationHierarchyLevel {
+  if (uniqueCities.size <= 1) return 'cityDistrict';
+  if (uniqueCountries.size > 1) return 'countryProvince';
+  return 'provinceCity';
+}
+
+/**
+ * 计算日期组的地点聚合摘要
+ * - 按 (city, district) 组合统计出现频次
+ * - 根据所有唯一城市/国家的分布决定展示层级
+ * - 取频次最高的前 2 个地点
+ */
+function computeLocationSummary(photos: PhotoDocument[]): LocationSummary | null {
+  const freq = new Map<string, number>();
+  const uniqueCountries = new Set<string>();
+  const uniqueCities = new Set<string>();
+
+  for (const p of photos) {
+    if (!p.city) continue;
+    const key = `${p.city}|${p.district ?? ''}`;
+    freq.set(key, (freq.get(key) ?? 0) + 1);
+    uniqueCities.add(p.city);
+    if (p.country) uniqueCountries.add(p.country);
+  }
+
+  if (freq.size === 0) return null;
+
+  const level = determineHierarchyLevel(uniqueCities, uniqueCountries);
+
+  const top = [...freq.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 2);
+
+  const locations = top.map(([key]) => {
+    const [city, district] = key.split('|');
+    switch (level) {
+      case 'cityDistrict':
+        return { label: district ? `${city}·${district}` : city, count: freq.get(key)! };
+      case 'provinceCity': {
+        const sample = photos.find((p) => p.city === city);
+        const prov = sample?.province;
+        return { label: prov ? `${prov}·${city}` : city, count: freq.get(key)! };
+      }
+      case 'countryProvince': {
+        const sample = photos.find((p) => p.city === city);
+        const parts = [sample?.country, sample?.province, city].filter(Boolean);
+        return { label: parts.join('·'), count: freq.get(key)! };
+      }
+    }
+  });
+
+  return { level, locations };
+}
+
+/**
+ * 计算日期组的标签聚合摘要
+ * - 统计所有标签出现频次
+ * - 取频次最高的前 3 个标签
+ */
+function computeTagSummary(photos: PhotoDocument[]): TagSummaryItem[] {
+  const freq = new Map<string, number>();
+  for (const p of photos) {
+    if (!p.tags) continue;
+    for (const tag of p.tags) {
+      freq.set(tag, (freq.get(tag) ?? 0) + 1);
+    }
+  }
+  return [...freq.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([tag, count]) => ({ tag, count }));
+}
+
+/**
  * 照片状态 → 中文标签映射表
  *
  * 状态值由后端流水线维护，映射为前端显示的中文文本，
@@ -354,7 +474,14 @@ export default function Timeline() {
       }
     }
 
-    return [...groups.entries()].sort(([a], [b]) => b.localeCompare(a));
+    return [...groups.entries()]
+      .sort(([a], [b]) => b.localeCompare(a))
+      .map(([dateStr, photos]) => ({
+        dateStr,
+        photos,
+        tagSummary: computeTagSummary(photos),
+        locationSummary: computeLocationSummary(photos),
+      }));
   }, [data]);
 
   // ========== 条件渲染：错误状态 ==========
@@ -429,7 +556,7 @@ export default function Timeline() {
        * 每组包含一个 sticky 定位的日期标题（带毛玻璃效果）
        * 和一个响应式照片网格（2/3/4 列自适应）
        */}
-      {groupedPhotos.map(([dateStr, photos]) => (
+      {groupedPhotos.map(({ dateStr, photos, tagSummary, locationSummary }) => (
         <section key={dateStr}>
           {/*
            * 日期分组标题
@@ -437,8 +564,24 @@ export default function Timeline() {
            * backdrop-blur-sm：半透明毛玻璃效果
            * z-10：确保标题在照片卡片之上
            */}
-          <h2 className="sticky top-0 z-10 mb-4 bg-gray-50/90 py-2 text-lg font-semibold text-gray-800 backdrop-blur-sm">
-            {formatDateLabel(dateStr)}
+          <h2 className="sticky top-0 z-10 mb-4 bg-gray-50/90 px-2 py-2 backdrop-blur-sm">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="text-lg font-semibold text-gray-800">{formatDateLabel(dateStr)}</span>
+              {locationSummary?.locations.map((loc) => (
+                <span key={loc.label} className="inline-flex items-center gap-0.5 rounded bg-indigo-50 px-1.5 py-0.5 text-xs font-normal text-indigo-600">
+                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  {loc.label}
+                </span>
+              ))}
+              {tagSummary.map(({ tag }) => (
+                <span key={tag} className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${tagColor(tag)}`}>
+                  {tag}
+                </span>
+              ))}
+            </div>
           </h2>
           {/*
            * 响应式照片网格：
