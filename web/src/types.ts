@@ -1,19 +1,4 @@
 /**
- * 前端类型定义文件
- *
- * 定义了应用中所有 TypeScript 接口和类型，
- * 与后端 API 返回的 JSON 数据结构一一对应。
- * 包含照片元数据、EXIF 信息、AI 分析结果、
- * 地理位置、搜索请求/响应等核心数据模型。
- */
-
-/**
- * 照片基础信息接口
- *
- * 描述一张照片的基本元数据，对应后端 ES 中的文档结构。
- * 包含文件标识、路径、修改时间、大小和处理状态。
- */
-/**
  * 前端 TypeScript 类型定义
  *
  * 本文件定义了前端应用中所有的数据类型接口，对应后端 REST API 的 JSON 响应结构。
@@ -39,20 +24,6 @@
  * @property analyzed_at - AI 分析完成时间的 Unix 时间戳（秒），仅分析完成后存在
  * @property created_at - 照片首次被监控发现的时间戳（秒）
  */
-/**
- * 前端 TypeScript 类型定义文件
- *
- * 定义与后端 API 交互所需的所有数据结构。
- * 类型与后端 internal/types/types.go 保持一致，
- * 确保前后端数据契约的类型安全。
- */
-
-/**
- * 照片基础信息接口
- *
- * 包含照片的元数据信息，对应后端 API 返回的 PhotoDocument 基础字段。
- * 每张照片由文件路径的 SHA-256 哈希作为唯一标识。
- */
 export interface Photo {
   /** 照片唯一标识符（文件路径的 SHA-256 哈希） */
   id: string;
@@ -68,226 +39,6 @@ export interface Photo {
   analyzed_at?: number;
   /** 照片拍摄/创建时间（Unix 时间戳，秒） */
   created_at: number;
-}
-
-/**
- * EXIF 元数据信息接口
- *
- * 从照片文件中提取的 EXIF 信息，包含相机参数和 GPS 坐标。
- * 并非所有照片都包含完整的 EXIF 数据，字段均为可选。
- */
-export interface EXIFInfo {
-  /** 拍摄时间（ISO 8601 格式，如 "2024-01-01T10:30:00Z"） */
-  date_time_original?: string;
-  /** 相机型号（如 "iPhone 15 Pro"、"Canon EOS R5"） */
-  camera_model?: string;
-  /** 镜头型号 */
-  lens_model?: string;
-  /** 焦距（如 "6.9mm"） */
-  focal_length?: string;
-  /** 光圈值（如 "f/1.8"） */
-  aperture?: string;
-  /** 快门速度（如 "1/250"） */
-  shutter_speed?: string;
-  /** ISO 感光度 */
-  iso?: number;
-  /** GPS 纬度（十进制度数） */
-  gps_lat?: number;
-  /** GPS 经度（十进制度数） */
-  gps_lon?: number;
-}
-
-/**
- * 颜色信息接口
- *
- * AI 分析结果中提取的主要颜色，用于前端展示颜色标签。
- */
-export interface ColorInfo {
-  /** 颜色中文名称（如 "绿色"、"蓝色"） */
-  name: string;
-  /** 颜色十六进制值（如 "#228B22"），用于前端背景色渲染 */
-  hex: string;
-}
-
-/**
- * AI 分析结果接口
- *
- * 多模态 LLM（Ollama/OpenAI）对照片内容的结构化分析输出。
- * 包含描述、标签、物体检测、场景分类、颜色等信息。
- */
-export interface AnalysisResult {
-  /** 照片内容的自然语言描述 */
-  description: string;
-  /** 语义标签列表（如 ["公园", "野餐", "阳光"]） */
-  tags: string[];
-  /** 检测到的物体列表（如 ["人", "草地", "树木"]） */
-  objects: string[];
-  /** 场景类型：indoor（室内）/ outdoor（室外）/ unknown（未知） */
-  scene_type: string;
-  /** 主要颜色信息列表（含名称和十六进制值） */
-  colors: ColorInfo[];
-  /** 检测到的人数 */
-  people_count: number;
-  /** 照片中是否包含文字 */
-  has_text: boolean;
-  /** 照片中识别到的文字内容（has_text 为 true 时有值） */
-  text: string;
-  /** AI 分析置信度（0~1），值越高表示分析结果越可靠 */
-  confidence?: number;
-}
-
-/**
- * 地理位置信息接口
- *
- * 通过逆地理编码（高德 API）将 GPS 坐标转换为可读的地址信息。
- * 存储在 Elasticsearch 中，支持按地理位置筛选。
- */
-export interface GeoInfo {
-  /** 国家名称 */
-  country?: string;
-  /** 省/州名称 */
-  province?: string;
-  /** 城市名称 */
-  city?: string;
-  /** 区/县名称 */
-  district?: string;
-  /** 乡镇/街道名称 */
-  township?: string;
-  /** 商圈名称 */
-  business_area?: string;
-  /** 街道名称 */
-  street?: string;
-  /** 门牌号 */
-  street_number?: string;
-  /** 详细地址 */
-  address?: string;
-  /** 格式化的完整地址（高德 API 返回的 formatted_address） */
-  formatted_address?: string;
-}
-
-/**
- * 照片完整文档接口（继承 Photo + AnalysisResult）
- *
- * 前端渲染照片详情时使用的完整数据结构。
- * 合并了基础信息、AI 分析结果、EXIF 元数据和地理位置信息。
- */
-export interface PhotoDocument extends Photo, AnalysisResult {
-  /** EXIF 元数据（相机参数、GPS 坐标等） */
-  exif?: EXIFInfo;
-  /** 国家名称（逆地理编码结果） */
-  country?: string;
-  /** 省/州名称 */
-  province?: string;
-  /** 城市名称 */
-  city?: string;
-  /** 区/县名称 */
-  district?: string;
-  /** 乡镇/街道名称 */
-  township?: string;
-  /** 商圈名称 */
-  business_area?: string;
-  /** 街道名称 */
-  street?: string;
-  /** 门牌号 */
-  street_number?: string;
-  /** 详细地址 */
-  address?: string;
-  /** 格式化的完整地址 */
-  formatted_address?: string;
-  /** 地理坐标 */
-  location?: GeoPoint;
-}
-
-/**
- * 搜索请求接口
- *
- * 对应 POST /api/search 的请求体。
- * 支持关键词搜索和多种筛选条件的组合查询。
- */
-export interface SearchRequest {
-  /** 全文搜索关键词，匹配描述、标签和检测到的物体 */
-  query?: string;
-  /** 起始拍摄日期（格式 "YYYY-MM-DD"） */
-  date_from?: string;
-  /** 结束拍摄日期（格式 "YYYY-MM-DD"） */
-  date_to?: string;
-  /** 按标签过滤 */
-  tags?: string[];
-  /** 按检测到的物体过滤 */
-  objects?: string[];
-  /** 按场景类型过滤：indoor / outdoor / unknown */
-  scene_type?: string;
-  /** 按国家过滤 */
-  country?: string;
-  /** 按省份过滤 */
-  province?: string;
-  /** 按城市过滤 */
-  city?: string;
-  /** 按区/县过滤 */
-  district?: string;
-  /** 按处理状态过滤 */
-  status?: string;
-  /** 页码（从 1 开始） */
-  page: number;
-  /** 每页数量（最大 100） */
-  page_size: number;
-}
-
-/**
- * 搜索响应接口
- *
- * 对应 POST /api/search 的响应体。
- * 包含分页后的照片列表和分页元数据。
- */
-export interface SearchResponse {
-  /** 匹配的照片文档列表 */
-  hits: PhotoDocument[];
-  /** 符合条件的照片总数 */
-  total: number;
-  /** 当前页码 */
-  page: number;
-  /** 每页数量 */
-  page_size: number;
-  /** 总页数 */
-  total_pages: number;
-}
-
-/**
- * 统计信息响应接口
- *
- * 对应 GET /api/stats 的响应体。
- * 提供照片总数和按状态分组的统计数据。
- */
-export interface StatsResponse {
-  /** 照片总数 */
-  total: number;
-  /** 按处理状态分组的数量统计（键为状态名，值为数量） */
-  by_status: Record<string, number>;
-  /** 最近新增的照片数量（最近 24 小时内） */
-  recent_count: number;
-}
-
-/**
- * 筛选选项响应接口
- *
- * 对应 GET /api/filters 的响应体。
- * 返回所有可用的筛选选项，用于前端搜索页面的下拉菜单。
- */
-export interface FiltersResponse {
-  /** 所有可用标签列表（按热度排序的前 50 个） */
-  tags: string[];
-  /** 场景类型列表 */
-  scene_types: string[];
-  /** 国家列表 */
-  countries: string[];
-  /** 省份列表 */
-  provinces: string[];
-  /** 城市列表 */
-  cities: string[];
-  /** 区/县列表 */
-  districts: string[];
-  /** 状态列表 */
-  statuses: string[];
 }
 
 /**
@@ -393,6 +144,10 @@ export interface AnalysisResult {
  * @property province - 省/自治区/直辖市
  * @property city - 城市名称
  * @property district - 区/县名称
+ * @property township - 乡镇/街道名称
+ * @property business_area - 商圈名称
+ * @property street - 街道名称
+ * @property street_number - 门牌号
  * @property address - 详细地址
  * @property formatted_address - 格式化的完整地址字符串
  */
@@ -405,10 +160,28 @@ export interface GeoInfo {
   city?: string;
   /** 区/县名称（如 "海淀区"、"天河区"） */
   district?: string;
+  /** 乡镇/街道名称 */
+  township?: string;
+  /** 商圈名称 */
+  business_area?: string;
+  /** 街道名称 */
+  street?: string;
+  /** 门牌号 */
+  street_number?: string;
   /** 详细地址信息 */
   address?: string;
   /** 格式化的完整地址字符串，由高德 API 返回 */
   formatted_address?: string;
+}
+
+/**
+ * 地理坐标点接口（WGS84 坐标系）
+ */
+export interface GeoPoint {
+  /** 纬度（十进制度数） */
+  lat: number;
+  /** 经度（十进制度数） */
+  lon: number;
 }
 
 /**
@@ -420,21 +193,11 @@ export interface GeoInfo {
  * - 额外字段：EXIF 元数据和地理位置信息
  *
  * 对应后端 Elasticsearch 索引中的文档结构，后端 API 返回的搜索结果
- * 直接映射为此类型。其中 country/province/city/district/address/formatted_address
+ * 直接映射为此类型。其中 country/province/city/district/township/business_area/street/street_number/address/formatted_address
  * 字段与 GeoInfo 接口重复，是为了在 Elasticsearch 索引中扁平化存储。
  *
  * @property exif - EXIF 元数据（可选，取决于照片是否包含 EXIF 信息）
  */
-/**
- * 地理坐标点接口（WGS84 坐标系）
- */
-export interface GeoPoint {
-  /** 纬度（十进制度数） */
-  lat: number;
-  /** 经度（十进制度数） */
-  lon: number;
-}
-
 export interface PhotoDocument extends Photo, AnalysisResult {
   /** EXIF 元数据信息（相机型号、镜头、光圈、GPS 等），可选 */
   exif?: EXIFInfo;
@@ -448,6 +211,14 @@ export interface PhotoDocument extends Photo, AnalysisResult {
   city?: string;
   /** 区/县名称 */
   district?: string;
+  /** 乡镇/街道名称 */
+  township?: string;
+  /** 商圈名称 */
+  business_area?: string;
+  /** 街道名称 */
+  street?: string;
+  /** 门牌号 */
+  street_number?: string;
   /** 详细地址 */
   address?: string;
   /** 格式化的完整地址字符串 */
@@ -590,5 +361,3 @@ export interface RecommendationResponse {
   /** 推荐结果总数 */
   total: number;
 }
-
-
