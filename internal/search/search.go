@@ -830,6 +830,13 @@ func (s *SearchService) FindSimilar(ctx context.Context, indexName string, photo
 					"bool": map[string]any{
 						"filter": []any{
 							buildEmailFilter(userEmail),
+							map[string]any{
+								"bool": map[string]any{
+									"must_not": map[string]any{
+										"term": map[string]any{"_id": photoID},
+									},
+								},
+							},
 						},
 					},
 				},
