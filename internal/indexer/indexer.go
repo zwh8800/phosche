@@ -385,6 +385,60 @@ func (s *IndexerService) ListAnalyzed(ctx context.Context, indexName string) (ma
 	return result, nil
 }
 
+// ListByStatuses 查询指定状态的文档列表，返回 path 列表。
+//
+// 用途：流水线启动时调用，优先获取失败或待重试的照片路径。
+// 这些照片应优先于文件系统扫描进行处理。
+// 最大返回 10000 条记录，仅获取 path 字段以节省带宽。
+func (s *IndexerService) ListByStatuses(ctx context.Context, indexName string, statuses []types.JobStatus) ([]string, error) {
+	if len(statuses) == 0 {
+		return nil, nil
+	}
+
+	statusValues := make([]string, len(statuses))
+	for i, st := range statuses {
+		statusValues[i] = string(st)
+	}
+
+	query := map[string]any{
+		"query": map[string]any{
+			"terms": map[string]any{"status": statusValues},
+		},
+		"size":    10000,
+		"_source": []string{"path"},
+	}
+
+	bodyBytes, err := json.Marshal(query)
+	if err != nil {
+		return nil, fmt.Errorf("marshal query: %w", err)
+	}
+
+	resp, err := s.client.Client().Search(ctx, &opensearchapi.SearchReq{
+		Indices: []string{indexName},
+		Body:    bytes.NewReader(bodyBytes),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list by statuses: %w", err)
+	}
+
+	paths := make([]string, 0, len(resp.Hits.Hits))
+	for _, hit := range resp.Hits.Hits {
+		var src struct {
+			Path string `json:"path"`
+		}
+		if err := json.Unmarshal(hit.Source, &src); err != nil {
+			s.logger.Warn("ListByStatuses: unmarshal failed, skipping", "id", hit.ID, "error", err)
+			continue
+		}
+		if src.Path != "" {
+			paths = append(paths, src.Path)
+		}
+	}
+
+	s.logger.Debug("ListByStatuses", "statuses", statusValues, "count", len(paths), "index", indexName)
+	return paths, nil
+}
+
 // --------------------------------------------------------------------------
 // 内部方法：直接 ES 操作（不走断路器，供重试/排空队列时使用）
 // --------------------------------------------------------------------------

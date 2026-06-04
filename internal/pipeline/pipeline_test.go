@@ -160,6 +160,10 @@ func (m *mockIndexer) GetPhoto(_ context.Context, _ string, _ string) (*types.Ph
 	return nil, nil
 }
 
+func (m *mockIndexer) ListByStatuses(_ context.Context, _ string, _ []types.JobStatus) ([]string, error) {
+	return nil, nil
+}
+
 func (m *mockIndexer) LastStatusFor(path string) (types.JobStatus, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

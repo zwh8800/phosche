@@ -52,6 +52,7 @@ type Indexer interface {
 	IndexPhoto(ctx context.Context, doc *types.PhotoDocument, indexName string) error
 	UpdateStatus(ctx context.Context, path string, status types.JobStatus, indexName string) error
 	GetPhoto(ctx context.Context, path string, indexName string) (*types.PhotoDocument, error)
+	ListByStatuses(ctx context.Context, indexName string, statuses []types.JobStatus) ([]string, error)
 	Stop()
 }
 
@@ -184,10 +185,30 @@ func (p *Pipeline) Run(ctx context.Context) error {
 	return nil
 }
 
-// scanExisting 扫描监控目录中已有的照片文件，将新增/变更的文件流式入队处理。
-// 使用 Scanner.Scan 返回的 channel，边扫描边处理，无需等待全量扫描完成。
 func (p *Pipeline) scanExisting(ctx context.Context) error {
 	slog.Info("pipeline: starting initial scan", "dirs", p.cfg.Dirs, "recursive", p.cfg.Recursive)
+
+	priorityPaths := make(map[string]struct{})
+	retryStatuses := []types.JobStatus{types.StatusFailed, types.StatusPendingAnalysis}
+	paths, err := p.cfg.Indexer.ListByStatuses(ctx, p.cfg.IndexName, retryStatuses)
+	if err != nil {
+		slog.Warn("pipeline: failed to query retry-eligible photos, continuing with filesystem scan", "error", err)
+	} else {
+		for _, path := range paths {
+			if p.isExcluded(path) {
+				continue
+			}
+			select {
+			case p.inputCh <- path:
+				priorityPaths[path] = struct{}{}
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+		if len(priorityPaths) > 0 {
+			slog.Info("pipeline: priority re-scan complete", "count", len(priorityPaths))
+		}
+	}
 
 	pathCh, err := p.cfg.Scanner.Scan(ctx, p.cfg.Dirs, nil)
 	if err != nil {
@@ -196,6 +217,9 @@ func (p *Pipeline) scanExisting(ctx context.Context) error {
 
 	queued := 0
 	for path := range pathCh {
+		if _, alreadyQueued := priorityPaths[path]; alreadyQueued {
+			continue
+		}
 		if p.isExcluded(path) {
 			continue
 		}
@@ -210,10 +234,10 @@ func (p *Pipeline) scanExisting(ctx context.Context) error {
 		}
 	}
 
-	if queued == 0 {
+	if queued == 0 && len(priorityPaths) == 0 {
 		slog.Warn("pipeline: no photos found in watched directories, waiting for new files")
 	} else {
-		slog.Info("pipeline: initial scan complete", "queued", queued)
+		slog.Info("pipeline: initial scan complete", "queued", queued, "priority_rescanned", len(priorityPaths))
 	}
 	return nil
 }
