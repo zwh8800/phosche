@@ -30,6 +30,9 @@ type WatchConfig struct {
 	PrivateDirs    map[string][]string `yaml:"private_dirs"`    // 私有目录及其授权用户邮箱列表
 }
 
+// OwnerEmail 返回目录所有者的邮箱地址，用于权限校验。
+// path 为照片文件的完整路径，方法会遍历配置的私有目录列表，
+// 匹配最长前缀的目录所有者。
 func (w WatchConfig) OwnerEmail(path string) string {
 	for dir, emails := range w.PrivateDirs {
 		if strings.HasPrefix(path, dir) {
@@ -41,6 +44,9 @@ func (w WatchConfig) OwnerEmail(path string) string {
 	return ""
 }
 
+// IsAuthorized 判断给定用户邮箱是否有权访问指定路径的照片。
+// 如果路径不在任何私有目录下，或用户是目录所有者，则返回 true。
+// 如果用户不是目录所有者且无授权访问，则返回 false。
 func (w WatchConfig) IsAuthorized(path string, userEmail string) bool {
 	for dir, emails := range w.PrivateDirs {
 		if strings.HasPrefix(path, dir) {
@@ -112,6 +118,8 @@ type EmbeddingConfig struct {
 	Hybrid         HybridConfig          `yaml:"hybrid"`
 }
 
+// EmbeddingOpenAIConfig 定义 OpenAI 兼容 Embedding 服务的连接参数。
+// 支持 OpenAI 官方 API 和兼容接口（如本地 Ollama）。
 type EmbeddingOpenAIConfig struct {
 	APIKey     string `yaml:"api_key"`
 	BaseURL    string `yaml:"base_url"`
