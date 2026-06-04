@@ -8,17 +8,17 @@ RUN npm run build
 
 # Stage 2: Build Go binary (needs web/dist for //go:embed)
 FROM golang:1.26-alpine AS go-builder
-RUN apk add --no-cache gcc musl-dev
+RUN apk add --no-cache gcc musl-dev libheif-dev
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=frontend-builder /app/web/dist ./web/dist
-RUN CGO_ENABLED=0 go build -o phosche .
+RUN CGO_ENABLED=1 go build -o phosche .
 
 # Stage 3: Runtime
 FROM alpine:latest
-RUN apk add --no-cache ca-certificates tzdata
+RUN apk add --no-cache ca-certificates tzdata libheif
 WORKDIR /app
 COPY --from=go-builder /app/phosche .
 COPY config.example.yaml ./config.yaml
