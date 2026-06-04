@@ -510,10 +510,8 @@ func (s *SearchService) buildQuery(req *types.SearchRequest, userEmail string) m
 	}
 
 	var must []any
-	var filter []any
 
-	// Email 访问过滤：始终添加，限制文档可见范围
-	filter = append(filter, buildEmailFilter(userEmail))
+	filter := s.buildFilters(req, userEmail)
 
 	// 全文搜索：multi_match 跨 description/tags/objects/text/formatted_address 六个字段
 	if req.Query != "" {
@@ -521,94 +519,6 @@ func (s *SearchService) buildQuery(req *types.SearchRequest, userEmail string) m
 			"multi_match": map[string]any{
 				"query":  req.Query,
 				"fields": []string{"description", "tags", "objects", "text", "address", "formatted_address"},
-			},
-		})
-	}
-
-	// 日期范围过滤（gte: date_from, lte: date_to）
-	dateRange := map[string]any{}
-	if req.DateFrom != "" {
-		dateRange["gte"] = req.DateFrom
-	}
-	if req.DateTo != "" {
-		dateRange["lte"] = req.DateTo
-	}
-	if len(dateRange) > 0 {
-		filter = append(filter, map[string]any{
-			"range": map[string]any{
-				"exif.date_time_original": dateRange,
-			},
-		})
-	}
-
-	// 标签过滤（terms 查询 tags.keyword 实现多选）
-	if len(req.Tags) > 0 {
-		filter = append(filter, map[string]any{
-			"terms": map[string]any{
-				"tags.keyword": req.Tags,
-			},
-		})
-	}
-
-	// 物体过滤（terms 查询 objects.keyword）
-	if len(req.Objects) > 0 {
-		filter = append(filter, map[string]any{
-			"terms": map[string]any{
-				"objects.keyword": req.Objects,
-			},
-		})
-	}
-
-	// 场景类型过滤（term 精确匹配）
-	if req.SceneType != "" {
-		filter = append(filter, map[string]any{
-			"term": map[string]any{
-				"scene_type": req.SceneType,
-			},
-		})
-	}
-
-	// 状态过滤（term 精确匹配）
-	if req.Status != "" {
-		filter = append(filter, map[string]any{
-			"term": map[string]any{
-				"status": req.Status,
-			},
-		})
-	}
-
-	// 国家过滤（term 精确匹配）
-	if req.Country != "" {
-		filter = append(filter, map[string]any{
-			"term": map[string]any{
-				"country": req.Country,
-			},
-		})
-	}
-
-	// 省份过滤（term 精确匹配）
-	if req.Province != "" {
-		filter = append(filter, map[string]any{
-			"term": map[string]any{
-				"province": req.Province,
-			},
-		})
-	}
-
-	// 城市过滤（term 精确匹配）
-	if req.City != "" {
-		filter = append(filter, map[string]any{
-			"term": map[string]any{
-				"city": req.City,
-			},
-		})
-	}
-
-	// 区/县过滤（term 精确匹配）
-	if req.District != "" {
-		filter = append(filter, map[string]any{
-			"term": map[string]any{
-				"district": req.District,
 			},
 		})
 	}
