@@ -80,7 +80,21 @@ function PhotoDetail() {
   // ── 分支 3：成功加载状态 ────────────────────────────────────
   // 将照片数据传递给 PhotoDetailModal 组件渲染为模态弹窗
   // onClose 回调使用 navigate(-1) 实现"返回"语义（保持浏览器历史栈）
-  return <PhotoDetailModal photo={data} onClose={() => navigate(-1)} />;
+  return (
+    <PhotoDetailModal
+      photo={data}
+      onClose={() => navigate(-1)}
+      onTagClick={(tag) => navigate(`/search?tags=${encodeURIComponent(tag)}`)}
+      onLocationClick={(_text, params) => {
+        const p = new URLSearchParams();
+        if (params.city) p.set('city', params.city);
+        if (params.district) p.set('district', params.district);
+        if (params.province) p.set('province', params.province);
+        if (params.country) p.set('country', params.country);
+        navigate(`/search?${p.toString()}`);
+      }}
+    />
+  );
 }
 
 export default PhotoDetail;

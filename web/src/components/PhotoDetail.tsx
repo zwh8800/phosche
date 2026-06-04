@@ -29,6 +29,8 @@ import type { PhotoDocument } from '../types';
  * @property onNext - 切换到下一张照片的回调函数，可选；不提供时隐藏下一张按钮
  * @property hasPrev - 是否存在上一张照片，控制上一张按钮的显示/隐藏
  * @property hasNext - 是否存在下一张照片，控制下一张按钮的显示/隐藏
+ * @property onTagClick - 点击标签时的回调，可选；不提供时标签不可点击
+ * @property onLocationClick - 点击地理位置时的回调，可选；不提供时位置不可点击
  */
 interface PhotoDetailModalProps {
   photo: PhotoDocument;
@@ -37,6 +39,8 @@ interface PhotoDetailModalProps {
   onNext?: () => void;
   hasPrev?: boolean;
   hasNext?: boolean;
+  onTagClick?: (tag: string) => void;
+  onLocationClick?: (text: string, params: { city?: string; district?: string; province?: string; country?: string }) => void;
 }
 
 /**
@@ -330,6 +334,8 @@ function PhotoDetailModal({
   onNext,
   hasPrev,
   hasNext,
+  onTagClick,
+  onLocationClick,
 }: PhotoDetailModalProps) {
   // 键盘导航处理：Escape 键关闭弹窗，←/→ 键切换照片
   /**
@@ -623,20 +629,33 @@ function PhotoDetailModal({
                       </div>
                     )}
 
-                    {/*
-                     * 标签列表：使用 tagColor 哈希函数为每个标签分配确定性的颜色，
-                     * 以圆角 pill 样式展示，视觉上区分不同类别的标签。
-                     */}
-                    {photo.tags?.length > 0 && (
+                     {/*
+                      * 标签列表：使用 tagColor 哈希函数为每个标签分配确定性的颜色，
+                      * 以圆角 pill 样式展示，视觉上区分不同类别的标签。
+                      * 提供 onTagClick 时标签可点击，触发搜索该标签。
+                      */}
+                     {photo.tags?.length > 0 && (
                       <div className="flex flex-wrap gap-2 mb-4">
-                        {photo.tags.map((t) => (
-                          <span
-                            key={t}
-                            className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${tagColor(t)}`}
-                          >
-                            {t}
-                          </span>
-                        ))}
+                        {photo.tags.map((t) => {
+                          const tagCls = `inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${tagColor(t)}`;
+                          if (onTagClick) {
+                            return (
+                              <button
+                                key={t}
+                                type="button"
+                                onClick={() => onTagClick(t)}
+                                className={`${tagCls} hover:opacity-80 cursor-pointer transition-opacity`}
+                              >
+                                {t}
+                              </button>
+                            );
+                          }
+                          return (
+                            <span key={t} className={tagCls}>
+                              {t}
+                            </span>
+                          );
+                        })}
                       </div>
                     )}
 
@@ -804,17 +823,34 @@ function PhotoDetailModal({
                      */}
                     {(photo.formatted_address || photo.city || (photo.exif?.gps_lat != null && photo.exif?.gps_lon != null)) && (
                       <div className="mt-2 space-y-0.5">
-                        {(photo.formatted_address || photo.city) && (
-                          <>
-                            <div className="flex items-start gap-2">
-                              <svg className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
-                              </svg>
-                              <span className="text-sm text-gray-600">
-                                {photo.formatted_address || [photo.province, photo.city, photo.district].filter(Boolean).join(' ')}
-                              </span>
-                            </div>
+                        {(photo.formatted_address || photo.city) && (() => {
+                          const locationText = photo.formatted_address || [photo.province, photo.city, photo.district].filter(Boolean).join(' ');
+                          return (
+                            <>
+                              <div className="flex items-start gap-2">
+                                <svg className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+                                </svg>
+                                {onLocationClick ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => onLocationClick(locationText, {
+                                      city: photo.city,
+                                      district: photo.district,
+                                      province: photo.province,
+                                      country: photo.country,
+                                    })}
+                                    className="text-sm text-gray-600 hover:text-gray-900 hover:underline cursor-pointer transition-colors"
+                                  >
+                                    {locationText}
+                                  </button>
+                                ) : (
+                                  <span className="text-sm text-gray-600">
+                                    {locationText}
+                                  </span>
+                                )}
+                              </div>
                             {[
                               [photo.country, photo.province, photo.city, photo.district].filter(Boolean).join(' '),
                               [photo.township, photo.business_area, photo.street, photo.street_number].filter(Boolean).join(' '),
@@ -826,8 +862,9 @@ function PhotoDetailModal({
                                 ].filter(Boolean).join(' · ')}
                               </p>
                             )}
-                          </>
-                        )}
+                            </>
+                          );
+                        })()}
                         {photo.exif?.gps_lat != null && photo.exif?.gps_lon != null && (
                           <p className={`text-xs text-gray-400 font-mono ${(photo.formatted_address || photo.city) ? 'pl-6' : ''}`}>
                             {photo.exif.gps_lat.toFixed(6)}, {photo.exif.gps_lon.toFixed(6)}

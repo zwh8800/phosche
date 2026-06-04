@@ -28,7 +28,7 @@
  * - Timeline：主页面组件，管理无限滚动和分组逻辑
  */
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useRef, useEffect, useMemo } from 'react';
 import { fetchPhotos } from '../api/photos';
 import type { PhotoDocument } from '../types';
@@ -65,7 +65,7 @@ type LocationHierarchyLevel = 'cityDistrict' | 'provinceCity' | 'countryProvince
 /** 地点聚合结果 */
 interface LocationSummary {
   level: LocationHierarchyLevel;
-  locations: { label: string; count: number }[];
+  locations: { label: string; count: number; city?: string; district?: string; province?: string; country?: string }[];
 }
 
 /** 标签聚合结果 */
@@ -117,16 +117,34 @@ function computeLocationSummary(photos: PhotoDocument[]): LocationSummary | null
     const [city, district] = key.split('|');
     switch (level) {
       case 'cityDistrict':
-        return { label: district ? `${city}·${district}` : city, count: freq.get(key)! };
+        return { 
+          label: district ? `${city}·${district}` : city, 
+          count: freq.get(key)!,
+          city,
+          district: district || undefined,
+        };
       case 'provinceCity': {
         const sample = photos.find((p) => p.city === city);
         const prov = sample?.province;
-        return { label: prov ? `${prov}·${city}` : city, count: freq.get(key)! };
+        return { 
+          label: prov ? `${prov}·${city}` : city, 
+          count: freq.get(key)!,
+          city,
+          district: district || undefined,
+          province: prov,
+        };
       }
       case 'countryProvince': {
         const sample = photos.find((p) => p.city === city);
         const parts = [sample?.country, sample?.province, city].filter(Boolean);
-        return { label: parts.join('·'), count: freq.get(key)! };
+        return { 
+          label: parts.join('·'), 
+          count: freq.get(key)!,
+          city,
+          district: district || undefined,
+          province: sample?.province,
+          country: sample?.country,
+        };
       }
     }
   });
@@ -567,19 +585,34 @@ export default function Timeline() {
           <h2 className="sticky top-0 z-10 mb-4 bg-gray-50/90 px-2 py-2 backdrop-blur-sm">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <span className="text-lg font-semibold text-gray-800">{formatDateLabel(dateStr)}</span>
-              {locationSummary?.locations.map((loc) => (
-                <span key={loc.label} className="inline-flex items-center gap-0.5 rounded bg-indigo-50 px-1.5 py-0.5 text-xs font-normal text-indigo-600">
-                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                  {loc.label}
-                </span>
-              ))}
+              {locationSummary?.locations.map((loc) => {
+                const locParams = new URLSearchParams();
+                if (loc.city) locParams.set('city', loc.city);
+                if (loc.district) locParams.set('district', loc.district);
+                if (loc.province) locParams.set('province', loc.province);
+                if (loc.country) locParams.set('country', loc.country);
+                return (
+                  <Link
+                    key={loc.label}
+                    to={`/search?${locParams.toString()}`}
+                    className="inline-flex items-center gap-0.5 rounded bg-indigo-50 px-1.5 py-0.5 text-xs font-normal text-indigo-600 hover:bg-indigo-100 cursor-pointer transition-colors"
+                  >
+                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    {loc.label}
+                  </Link>
+                );
+              })}
               {tagSummary.map(({ tag }) => (
-                <span key={tag} className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${tagColor(tag)}`}>
+                <Link
+                  key={tag}
+                  to={`/search?tags=${encodeURIComponent(tag)}`}
+                  className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium hover:opacity-80 cursor-pointer transition-opacity ${tagColor(tag)}`}
+                >
                   {tag}
-                </span>
+                </Link>
               ))}
             </div>
           </h2>
