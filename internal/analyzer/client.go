@@ -1,5 +1,5 @@
-// Package analyzer provides multimodal LLM-based image content analysis
-// using the OpenAI-compatible protocol.
+// Package analyzer 提供图片内容分析能力。
+// 通过多模态 LLM（如 GPT-4V、Ollama）分析图片内容，生成结构化的描述和标签。
 package analyzer
 
 import (

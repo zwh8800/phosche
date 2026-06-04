@@ -14,7 +14,8 @@ import (
 	"github.com/zwh8800/phosche/internal/types"
 )
 
-// OpenAIClient wraps the go-openai library to implement LLMClient.
+// OpenAIClient 是基于 go-openai 库的 LLM 客户端实现。
+// 支持 OpenAI 官方 API 和兼容接口（如本地 Ollama）。
 type OpenAIClient struct {
 	client              *openai.Client
 	model               string
@@ -23,7 +24,7 @@ type OpenAIClient struct {
 	maxCompletionTokens int
 }
 
-// NewOpenAIClient creates an OpenAIClient.
+// NewOpenAIClient 创建一个新的 OpenAI 兼容客户端。
 // responseFormatType 支持 json_object / json_schema / text，空字符串默认为 json_object。
 // maxTokens 控制可见输出 token 数（兼容 LMStudio/Ollama），0 表示不设置。
 // maxCompletionTokens 控制总生成 token 数（含 reasoning，兼容 OpenAI 新 API），0 表示不设置。
@@ -75,7 +76,9 @@ func buildResponseFormat(responseFormatType string) (*openai.ChatCompletionRespo
 	}
 }
 
-// AnalyzeImage sends the image and prompt to the OpenAI-compatible API and returns a structured result.
+// AnalyzeImage 使用多模态 LLM 分析图片内容。
+// 返回结构化的分析结果，包含描述、标签、场景类型等。
+// 如果 API 调用失败或响应格式无效，返回错误。
 func (c *OpenAIClient) AnalyzeImage(ctx context.Context, imageData []byte, prompt string) (*types.AnalysisResult, error) {
 	encodedImage := "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(imageData)
 

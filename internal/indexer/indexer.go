@@ -261,9 +261,9 @@ func (s *IndexerService) GetPhoto(ctx context.Context, path string, indexName st
 	return &doc, nil
 }
 
-// GetPhotoByID retrieves a photo document directly by its ID (SHA-256 hash).
-// Unlike GetPhoto which takes a file path and computes the hash, this method
-// uses the ID directly as the Elasticsearch document ID.
+// GetPhotoByID 根据照片 ID 从 OpenSearch 获取照片文档。
+// 返回完整的 PhotoDocument，包含 EXIF、分析结果、地理位置等信息。
+// 如果文档不存在，返回 AppError（code=NOT_FOUND）。
 func (s *IndexerService) GetPhotoByID(ctx context.Context, id string, indexName string) (*types.PhotoDocument, error) {
 	s.logger.Debug("GetPhotoByID", "id", id, "index", indexName)
 

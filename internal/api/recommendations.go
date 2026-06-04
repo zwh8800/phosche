@@ -9,8 +9,8 @@ import (
 	apperrors "github.com/zwh8800/phosche/internal/errors"
 )
 
-// similarPhotosHandler handles GET /api/photos/{id}/similar
-// Returns up to 3 photos with similar embedding vectors.
+// similarPhotosHandler 处理相似照片推荐请求。
+// 基于 embedding 向量相似度查找与指定照片相似的其他照片。
 func (s *Server) similarPhotosHandler(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
@@ -49,8 +49,8 @@ func (s *Server) similarPhotosHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-// nearbyPhotosHandler handles GET /api/photos/{id}/nearby
-// Returns up to 3 photos geographically close to the source photo.
+// nearbyPhotosHandler 处理附近照片推荐请求。
+// 基于 GPS 坐标距离查找与指定照片位置相近的其他照片。
 func (s *Server) nearbyPhotosHandler(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if id == "" {
