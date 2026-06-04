@@ -101,31 +101,22 @@ type EnvConfig struct {
 
 // EmbeddingConfig 是文本向量化配置，控制 embedding 服务的选择和混合检索参数。
 type EmbeddingConfig struct {
-	Enabled        bool                  `yaml:"enabled"`         // 是否启用 embedding
-	Provider       string                `yaml:"provider"`        // embedding 提供商，可选 "ollama" 或 "openai"
-	Ollama         EmbeddingOllamaConfig `yaml:"ollama"`          // Ollama embedding 配置
-	OpenAI         EmbeddingOpenAIConfig `yaml:"openai"`          // OpenAI embedding 配置
-	SourceTemplate string                `yaml:"source_template"` // embedding 输入文本模板
-	QueryCache     QueryCacheConfig      `yaml:"query_cache"`     // 查询 embedding 缓存配置
-	Required       bool                  `yaml:"required"`        // embedding 失败是否阻塞文档落库
-	MaxRetries     int                   `yaml:"max_retries"`     // 最大重试次数
-	TimeoutSeconds int                   `yaml:"timeout_seconds"` // 单次请求超时时间（秒）
-	Hybrid         HybridConfig          `yaml:"hybrid"`          // 混合检索参数
+	Enabled        bool                  `yaml:"enabled"`
+	Provider       string                `yaml:"provider"`
+	OpenAI         EmbeddingOpenAIConfig `yaml:"openai"`
+	SourceTemplate string                `yaml:"source_template"`
+	QueryCache     QueryCacheConfig      `yaml:"query_cache"`
+	Required       bool                  `yaml:"required"`
+	MaxRetries     int                   `yaml:"max_retries"`
+	TimeoutSeconds int                   `yaml:"timeout_seconds"`
+	Hybrid         HybridConfig          `yaml:"hybrid"`
 }
 
-// EmbeddingOllamaConfig 是 Ollama embedding 配置。
-type EmbeddingOllamaConfig struct {
-	BaseURL    string `yaml:"base_url"`   // Ollama 服务地址
-	Model      string `yaml:"model"`      // embedding 模型名称
-	Dimensions int    `yaml:"dimensions"` // 向量维度
-}
-
-// EmbeddingOpenAIConfig 是 OpenAI embedding 配置。
 type EmbeddingOpenAIConfig struct {
-	APIKey     string `yaml:"api_key"`    // OpenAI API 密钥
-	BaseURL    string `yaml:"base_url"`   // API 地址
-	Model      string `yaml:"model"`      // 模型名称
-	Dimensions int    `yaml:"dimensions"` // 向量维度（支持 Matryoshka 截断）
+	APIKey     string `yaml:"api_key"`
+	BaseURL    string `yaml:"base_url"`
+	Model      string `yaml:"model"`
+	Dimensions int    `yaml:"dimensions"`
 }
 
 // QueryCacheConfig 是查询 embedding 缓存配置。
@@ -199,15 +190,6 @@ func applyDefaults(cfg *Config) {
 	}
 
 	// Embedding defaults
-	if cfg.Embedding.Ollama.BaseURL == "" {
-		cfg.Embedding.Ollama.BaseURL = "http://localhost:11434"
-	}
-	if cfg.Embedding.Ollama.Model == "" {
-		cfg.Embedding.Ollama.Model = "bge-m3"
-	}
-	if cfg.Embedding.Ollama.Dimensions == 0 {
-		cfg.Embedding.Ollama.Dimensions = 1024
-	}
 	if cfg.Embedding.OpenAI.BaseURL == "" {
 		cfg.Embedding.OpenAI.BaseURL = "https://api.openai.com/v1"
 	}
@@ -264,11 +246,16 @@ func validate(cfg *Config) error {
 	// Embedding validation (only when enabled)
 	if cfg.Embedding.Enabled {
 		switch cfg.Embedding.Provider {
-		case "ollama", "openai":
+		case "openai":
 		default:
-			return fmt.Errorf("embedding.provider: must be one of [ollama, openai], got %q", cfg.Embedding.Provider)
+			return fmt.Errorf("embedding.provider: must be \"openai\", got %q", cfg.Embedding.Provider)
 		}
-
+		if cfg.Embedding.OpenAI.BaseURL == "" {
+			return fmt.Errorf("embedding.openai.base_url: must not be empty when embedding is enabled")
+		}
+		if cfg.Embedding.OpenAI.Model == "" {
+			return fmt.Errorf("embedding.openai.model: must not be empty when embedding is enabled")
+		}
 	}
 
 	return nil

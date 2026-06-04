@@ -292,12 +292,11 @@ func (c *OpenAIEmbedder) SetHTTPClient(client *http.Client) {
 func isOpenAIRetryable(statusCode int, errType string) bool {
 	switch statusCode {
 	case 429:
-		return true // 限流，可重试
+		return true
 	case 500, 502, 503:
-		return true // 服务端临时错误
+		return true
 	}
 
-	// 根据错误类型判断
 	switch errType {
 	case "rate_limit_error":
 		return true
@@ -306,4 +305,11 @@ func isOpenAIRetryable(statusCode int, errType string) bool {
 	}
 
 	return false
+}
+
+func optionalInt(v int) *int {
+	if v > 0 {
+		return &v
+	}
+	return nil
 }

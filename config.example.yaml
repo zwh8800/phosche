@@ -100,27 +100,13 @@ env:
 # 文本向量化配置（用于混合检索：BM25 + 语义搜索）
 # =============================================================================
 embedding:
-  # 是否启用 embedding。false 时完全跳过向量化，只用 BM25 搜索
   enabled: false
-  # 向量化后端，可选 "ollama" 或 "openai"
-  provider: ollama
-  ollama:
-    # Ollama 服务地址
-    base_url: http://localhost:11434
-    # embedding 模型名称（如 bge-m3、qwen3-embedding:4b）
-    model: bge-m3
-    # 向量维度，必须与模型实际输出一致
-    dimensions: 1024
+  provider: openai
   openai:
-    # OpenAI API 密钥
     api_key: ""
-    # API 地址
     base_url: https://api.openai.com/v1
-    # 模型名称（如 text-embedding-3-small）
     model: text-embedding-3-small
-    # 向量维度（OpenAI 支持 Matryoshka 截断，可设小于模型原始维度）
     dimensions: 1024
-  # embedding 输入文本的 Go 模板。空字符串使用默认模板（description + 标签 + 物体 + 地点 + 地址 + 文字）
   source_template: ""
   query_cache:
     # 查询 embedding 的 LRU 缓存条目数

@@ -60,12 +60,7 @@ func Run(distFS fs.FS, configPath string) {
 	// 提前计算 embedding 维度，用于创建 OpenSearch 索引映射
 	embeddingDims := 0
 	if cfg.Embedding.Enabled {
-		switch cfg.Embedding.Provider {
-		case "ollama":
-			embeddingDims = cfg.Embedding.Ollama.Dimensions
-		case "openai":
-			embeddingDims = cfg.Embedding.OpenAI.Dimensions
-		}
+		embeddingDims = cfg.Embedding.OpenAI.Dimensions
 	}
 
 	ctx, osCancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -112,10 +107,6 @@ func Run(distFS fs.FS, configPath string) {
 	if cfg.Embedding.Enabled {
 		embClient, err := embedder.NewEmbeddingClient(embedder.EmbeddingClientConfig{
 			Provider: cfg.Embedding.Provider,
-			Ollama: embedder.OllamaEmbeddingConfig{
-				BaseURL: cfg.Embedding.Ollama.BaseURL,
-				Model:   cfg.Embedding.Ollama.Model,
-			},
 			OpenAI: embedder.OpenAIEmbeddingConfig{
 				APIKey:  cfg.Embedding.OpenAI.APIKey,
 				BaseURL: cfg.Embedding.OpenAI.BaseURL,
@@ -142,13 +133,7 @@ func Run(distFS fs.FS, configPath string) {
 			)
 		}
 
-		var modelName string
-		switch cfg.Embedding.Provider {
-		case "ollama":
-			modelName = cfg.Embedding.Ollama.Model
-		case "openai":
-			modelName = cfg.Embedding.OpenAI.Model
-		}
+		modelName := cfg.Embedding.OpenAI.Model
 		embeddingVersion = fmt.Sprintf("%s@%d", modelName, embeddingDims)
 
 		slog.Info("embedding enabled",

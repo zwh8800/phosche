@@ -16,172 +16,6 @@ import (
 var testVector = []float32{0.1, 0.2, 0.3, 0.4, 0.5}
 var testVector2 = []float32{0.6, 0.7, 0.8, 0.9, 1.0}
 
-// --- Ollama Tests ---
-
-func TestOllamaEmbedder_RequestFormat(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("expected POST, got %s", r.Method)
-		}
-		if r.URL.Path != "/api/embed" {
-			t.Errorf("expected /api/embed, got %s", r.URL.Path)
-		}
-		if ct := r.Header.Get("Content-Type"); ct != "application/json" {
-			t.Errorf("expected Content-Type application/json, got %s", ct)
-		}
-
-		var body map[string]interface{}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Fatalf("failed to decode body: %v", err)
-		}
-		if model, ok := body["model"].(string); !ok || model != "mxbai-embed-large" {
-			t.Errorf("expected model 'mxbai-embed-large', got %v", body["model"])
-		}
-		input, ok := body["input"].([]interface{})
-		if !ok {
-			t.Fatal("expected input to be an array")
-		}
-		if len(input) != 2 {
-			t.Errorf("expected 2 inputs, got %d", len(input))
-		}
-
-		resp := ollamaEmbedResponse{
-			Model:         "mxbai-embed-large",
-			Embeddings:    [][]float32{testVector, testVector2},
-			TotalDuration: 1000000,
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
-	}))
-	defer server.Close()
-
-	cfg := DefaultConfig()
-	cfg.Ollama.BaseURL = server.URL
-	client := NewOllamaEmbedder(cfg)
-	embeddings, err := client.EmbedBatch(context.Background(), []string{"hello", "world"})
-	if err != nil {
-		t.Fatalf("EmbedBatch failed: %v", err)
-	}
-	if len(embeddings) != 2 {
-		t.Fatalf("expected 2 embeddings, got %d", len(embeddings))
-	}
-}
-
-func TestOllamaEmbedder_SingleText(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		resp := ollamaEmbedResponse{
-			Model:      "mxbai-embed-large",
-			Embeddings: [][]float32{testVector},
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
-	}))
-	defer server.Close()
-
-	cfg := DefaultConfig()
-	cfg.Ollama.BaseURL = server.URL
-	client := NewOllamaEmbedder(cfg)
-	vec, err := client.EmbedText(context.Background(), "hello")
-	if err != nil {
-		t.Fatalf("EmbedText failed: %v", err)
-	}
-	if len(vec) != len(testVector) {
-		t.Errorf("expected vector length %d, got %d", len(testVector), len(vec))
-	}
-}
-
-func TestOllamaEmbedder_WithDimensions(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var body map[string]interface{}
-		json.NewDecoder(r.Body).Decode(&body)
-
-		if dims, ok := body["dimensions"].(float64); !ok || dims != 128 {
-			t.Errorf("expected dimensions 128, got %v", body["dimensions"])
-		}
-
-		shortVec := make([]float32, 128)
-		resp := ollamaEmbedResponse{
-			Model:      "bge-m3",
-			Embeddings: [][]float32{shortVec},
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
-	}))
-	defer server.Close()
-
-	cfg := DefaultConfig()
-	cfg.Ollama.BaseURL = server.URL
-	cfg.Model = "bge-m3"
-	cfg.Dimensions = 128
-	client := NewOllamaEmbedder(cfg)
-	vec, err := client.EmbedText(context.Background(), "test")
-	if err != nil {
-		t.Fatalf("EmbedText failed: %v", err)
-	}
-	if len(vec) != 128 {
-		t.Errorf("expected 128-dim vector, got %d", len(vec))
-	}
-}
-
-func TestOllamaEmbedder_EmptyInput(t *testing.T) {
-	cfg := DefaultConfig()
-	client := NewOllamaEmbedder(cfg)
-	embeddings, err := client.EmbedBatch(context.Background(), []string{})
-	if err != nil {
-		t.Fatalf("EmbedBatch with empty input should succeed: %v", err)
-	}
-	if len(embeddings) != 0 {
-		t.Errorf("expected empty result, got %d", len(embeddings))
-	}
-}
-
-func TestOllamaEmbedder_HTTPError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"error":"internal server error"}`))
-	}))
-	defer server.Close()
-
-	cfg := DefaultConfig()
-	cfg.Ollama.BaseURL = server.URL
-	client := NewOllamaEmbedder(cfg)
-	_, err := client.EmbedText(context.Background(), "hello")
-
-	var eei *EmbeddingError
-	if !IsEmbeddingError(err) {
-		t.Fatal("expected EmbeddingError")
-	}
-	if !errors.As(err, &eei) {
-		t.Fatal("expected EmbeddingError via errors.As")
-	}
-	if eei.StatusCode != 500 {
-		t.Errorf("expected status 500, got %d", eei.StatusCode)
-	}
-	if !eei.Retryable {
-		t.Error("expected 500 error to be retryable")
-	}
-	if !IsRetryable(err) {
-		t.Error("expected IsRetryable true for 500")
-	}
-}
-
-func TestOllamaEmbedder_BadRequest(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte(`{"error":"bad request"}`))
-	}))
-	defer server.Close()
-
-	cfg := DefaultConfig()
-	cfg.Ollama.BaseURL = server.URL
-	client := NewOllamaEmbedder(cfg)
-	_, err := client.EmbedText(context.Background(), "hello")
-
-	if IsRetryable(err) {
-		t.Error("expected 400 error to be non-retryable")
-	}
-}
-
 // --- OpenAI Tests ---
 
 func TestOpenAIEmbedder_RequestFormat(t *testing.T) {
@@ -222,7 +56,6 @@ func TestOpenAIEmbedder_RequestFormat(t *testing.T) {
 	defer server.Close()
 
 	cfg := DefaultConfig()
-	cfg.Provider = ProviderOpenAI
 	cfg.OpenAI.APIKey = "sk-test"
 	cfg.OpenAI.BaseURL = server.URL
 	cfg.Model = "text-embedding-3-small"
@@ -234,6 +67,38 @@ func TestOpenAIEmbedder_RequestFormat(t *testing.T) {
 	}
 	if len(embeddings) != 2 {
 		t.Fatalf("expected 2 embeddings, got %d", len(embeddings))
+	}
+}
+
+func TestOpenAIEmbedder_SingleText(t *testing.T) {
+	embSingle := []float32{0.11, 0.22, 0.33, 0.44}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := openAIEmbedResponse{
+			Object: "list",
+			Data: []openAIEmbedData{
+				{Object: "embedding", Index: 0, Embedding: embSingle},
+			},
+			Model: "text-embedding-3-small",
+			Usage: openAIUsage{PromptTokens: 5, TotalTokens: 5},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	cfg := DefaultConfig()
+	cfg.OpenAI.APIKey = "sk-test"
+	cfg.OpenAI.BaseURL = server.URL
+	cfg.Model = "text-embedding-3-small"
+	client := NewOpenAIEmbedder(cfg)
+
+	vec, err := client.EmbedText(context.Background(), "test")
+	if err != nil {
+		t.Fatalf("EmbedText failed: %v", err)
+	}
+	if len(vec) != len(embSingle) {
+		t.Errorf("expected vector length %d, got %d", len(embSingle), len(vec))
 	}
 }
 
@@ -259,7 +124,6 @@ func TestOpenAIEmbedder_WithDimensions(t *testing.T) {
 	defer server.Close()
 
 	cfg := DefaultConfig()
-	cfg.Provider = ProviderOpenAI
 	cfg.OpenAI.APIKey = "sk-test"
 	cfg.OpenAI.BaseURL = server.URL
 	cfg.Model = "text-embedding-3-small"
@@ -275,6 +139,18 @@ func TestOpenAIEmbedder_WithDimensions(t *testing.T) {
 	}
 }
 
+func TestOpenAIEmbedder_EmptyInput(t *testing.T) {
+	cfg := DefaultConfig()
+	client := NewOpenAIEmbedder(cfg)
+	embeddings, err := client.EmbedBatch(context.Background(), []string{})
+	if err != nil {
+		t.Fatalf("EmbedBatch with empty input should succeed: %v", err)
+	}
+	if len(embeddings) != 0 {
+		t.Errorf("expected empty result, got %d", len(embeddings))
+	}
+}
+
 func TestOpenAIEmbedder_StandardErrorFormat(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
@@ -283,7 +159,6 @@ func TestOpenAIEmbedder_StandardErrorFormat(t *testing.T) {
 	defer server.Close()
 
 	cfg := DefaultConfig()
-	cfg.Provider = ProviderOpenAI
 	cfg.OpenAI.APIKey = "sk-wrong"
 	cfg.OpenAI.BaseURL = server.URL
 	cfg.Model = "text-embedding-3-small"
@@ -317,7 +192,6 @@ func TestOpenAIEmbedder_RateLimitError(t *testing.T) {
 	defer server.Close()
 
 	cfg := DefaultConfig()
-	cfg.Provider = ProviderOpenAI
 	cfg.OpenAI.APIKey = "sk-test"
 	cfg.OpenAI.BaseURL = server.URL
 	cfg.Model = "text-embedding-3-small"
@@ -366,7 +240,6 @@ func TestOpenAIEmbedder_BatchSplit(t *testing.T) {
 	defer server.Close()
 
 	cfg := DefaultConfig()
-	cfg.Provider = ProviderOpenAI
 	cfg.OpenAI.APIKey = "sk-test"
 	cfg.OpenAI.BaseURL = server.URL
 	cfg.Model = "text-embedding-3-small"
@@ -441,25 +314,6 @@ func TestGetEmbeddingError(t *testing.T) {
 
 // --- Factory Tests ---
 
-func TestNewEmbedder_UnsupportedProvider(t *testing.T) {
-	cfg := Config{Provider: "anthropic"}
-	_, err := NewEmbedder(cfg)
-	if err == nil {
-		t.Error("expected error for unsupported provider")
-	}
-}
-
-func TestNewEmbedder_Ollama(t *testing.T) {
-	cfg := DefaultConfig()
-	client, err := NewEmbedder(cfg)
-	if err != nil {
-		t.Fatalf("NewEmbedder failed: %v", err)
-	}
-	if _, ok := client.(*OllamaEmbedder); !ok {
-		t.Errorf("expected *OllamaEmbedder, got %T", client)
-	}
-}
-
 func TestNewEmbedder_OpenAI(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Provider = ProviderOpenAI
@@ -491,9 +345,14 @@ func TestBatchProcessor_EmptyInput(t *testing.T) {
 
 func TestBatchProcessor_WithProgress(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		resp := ollamaEmbedResponse{
-			Model:      "mxbai-embed-large",
-			Embeddings: [][]float32{testVector},
+		resp := openAIEmbedResponse{
+			Object: "list",
+			Data: []openAIEmbedData{
+				{Object: "embedding", Index: 0, Embedding: testVector},
+				{Object: "embedding", Index: 1, Embedding: testVector2},
+			},
+			Model: "text-embedding-3-small",
+			Usage: openAIUsage{PromptTokens: 10, TotalTokens: 10},
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(resp)
@@ -501,8 +360,10 @@ func TestBatchProcessor_WithProgress(t *testing.T) {
 	defer server.Close()
 
 	cfg := DefaultConfig()
-	cfg.Ollama.BaseURL = server.URL
-	client := NewOllamaEmbedder(cfg)
+	cfg.OpenAI.APIKey = "sk-test"
+	cfg.OpenAI.BaseURL = server.URL
+	cfg.Model = "text-embedding-3-small"
+	client := NewOpenAIEmbedder(cfg)
 
 	var progressCalls int
 	processor := NewBatchProcessor(client, BatchProcessorConfig{
@@ -529,9 +390,11 @@ func TestBatchProcessor_RetrySuccess(t *testing.T) {
 			w.Write([]byte(`{"error":"service unavailable"}`))
 			return
 		}
-		resp := ollamaEmbedResponse{
-			Model:      "mxbai-embed-large",
-			Embeddings: [][]float32{testVector},
+		resp := openAIEmbedResponse{
+			Object: "list",
+			Data:   []openAIEmbedData{{Object: "embedding", Index: 0, Embedding: testVector}},
+			Model:  "text-embedding-3-small",
+			Usage:  openAIUsage{PromptTokens: 5, TotalTokens: 5},
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(resp)
@@ -539,8 +402,10 @@ func TestBatchProcessor_RetrySuccess(t *testing.T) {
 	defer server.Close()
 
 	cfg := DefaultConfig()
-	cfg.Ollama.BaseURL = server.URL
-	client := NewOllamaEmbedder(cfg)
+	cfg.OpenAI.APIKey = "sk-test"
+	cfg.OpenAI.BaseURL = server.URL
+	cfg.Model = "text-embedding-3-small"
+	client := NewOpenAIEmbedder(cfg)
 
 	processor := NewBatchProcessor(client, BatchProcessorConfig{
 		MaxRetries:       3,
@@ -567,9 +432,11 @@ func TestBatchProcessor_RetrySuccess(t *testing.T) {
 
 func TestEmbedTextWithRetry_Success(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		resp := ollamaEmbedResponse{
-			Model:      "mxbai-embed-large",
-			Embeddings: [][]float32{testVector},
+		resp := openAIEmbedResponse{
+			Object: "list",
+			Data:   []openAIEmbedData{{Object: "embedding", Index: 0, Embedding: testVector}},
+			Model:  "text-embedding-3-small",
+			Usage:  openAIUsage{PromptTokens: 5, TotalTokens: 5},
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(resp)
@@ -577,8 +444,10 @@ func TestEmbedTextWithRetry_Success(t *testing.T) {
 	defer server.Close()
 
 	cfg := DefaultConfig()
-	cfg.Ollama.BaseURL = server.URL
-	client := NewOllamaEmbedder(cfg)
+	cfg.OpenAI.APIKey = "sk-test"
+	cfg.OpenAI.BaseURL = server.URL
+	cfg.Model = "text-embedding-3-small"
+	client := NewOpenAIEmbedder(cfg)
 
 	vec, err := EmbedTextWithRetry(context.Background(), client, "test", 2)
 	if err != nil {
@@ -598,9 +467,11 @@ func TestEmbedBatchWithRetry_AfterRetry(t *testing.T) {
 			w.Write([]byte(`{"error":"service unavailable"}`))
 			return
 		}
-		resp := ollamaEmbedResponse{
-			Model:      "mxbai-embed-large",
-			Embeddings: [][]float32{testVector},
+		resp := openAIEmbedResponse{
+			Object: "list",
+			Data:   []openAIEmbedData{{Object: "embedding", Index: 0, Embedding: testVector}},
+			Model:  "text-embedding-3-small",
+			Usage:  openAIUsage{PromptTokens: 5, TotalTokens: 5},
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(resp)
@@ -608,8 +479,10 @@ func TestEmbedBatchWithRetry_AfterRetry(t *testing.T) {
 	defer server.Close()
 
 	cfg := DefaultConfig()
-	cfg.Ollama.BaseURL = server.URL
-	client := NewOllamaEmbedder(cfg)
+	cfg.OpenAI.APIKey = "sk-test"
+	cfg.OpenAI.BaseURL = server.URL
+	cfg.Model = "text-embedding-3-small"
+	client := NewOpenAIEmbedder(cfg)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
