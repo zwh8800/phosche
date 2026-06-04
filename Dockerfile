@@ -8,7 +8,6 @@ RUN npm run build
 
 # Stage 2: Build Go binary (needs web/dist for //go:embed)
 FROM golang:1.26-alpine AS go-builder
-RUN apk add --no-cache gcc musl-dev
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
