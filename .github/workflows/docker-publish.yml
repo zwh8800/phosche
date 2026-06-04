@@ -1,53 +1,71 @@
+# GitHub Actions CI/CD 配置
+# 当推送 v* 格式的 tag 时触发，构建 Docker 镜像并推送到 Docker Hub
+# 触发示例：git tag v1.0.0 && git push origin v1.0.0
+#
+# 所需 GitHub Secrets（在仓库 Settings → Secrets → Actions 中配置）：
+#   DOCKER_USERNAME — Docker Hub 用户名
+#   DOCKER_PASSWORD — Docker Hub 密码或 Access Token（推荐使用 Token）
+#   创建 Token：https://hub.docker.com/settings/security
+
 name: Docker Build & Publish
 
 on:
   push:
     tags:
-      - "v*"
+      - "v*"  # 仅在推送 v 开头的标签时触发（如 v1.0.0、v2.1.0-beta.1）
 
 env:
-  REGISTRY: docker.io
-  IMAGE_NAME: zwh8800/phosche
+  REGISTRY: docker.io              # 镜像仓库地址
+  IMAGE_NAME: zwh8800/phosche      # 镜像名称（Docker Hub 完整路径）
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-      packages: write
+      contents: read   # 读取仓库代码
+      packages: write  # 推送镜像到仓库
 
     steps:
+      # 检出代码（默认检出 tag 对应的 commit）
       - name: Checkout code
         uses: actions/checkout@v6
 
+      # 设置 Docker Buildx（支持多架构构建和高级缓存）
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
+      # 登录 Docker Hub（使用 GitHub Secrets 中存储的凭证）
       - name: Login to Docker Hub
         uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
+      # 提取标签和元数据
+      # 根据 git tag 自动生成 Docker 镜像标签，tag 策略如下：
+      #   v1.2.3        → 1.2.3, 1.2, 1, latest
+      #   v1.2.3-beta.1 → 1.2.3-beta.1（预发布版本不标记 latest）
       - name: Extract metadata (tags, labels)
         id: meta
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.IMAGE_NAME }}
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=raw,value=latest,enable=${{ !contains(github.ref, '-') }}
+            type=semver,pattern={{version}}           # 完整版本号（如 1.2.3）
+            type=semver,pattern={{major}}.{{minor}}    # 主版本.次版本（如 1.2）
+            type=semver,pattern={{major}}              # 仅主版本（如 1）
+            type=raw,value=latest,enable=${{ !contains(github.ref, '-') }}  # 非预发布版本时标记为 latest
 
+      # 构建并推送镜像到 Docker Hub
+      # 使用 GitHub Actions 缓存加速后续构建（缓存 Docker 层）
       - name: Build and push Docker image
         uses: docker/build-push-action@v7
         with:
-          context: .
-          file: ./Dockerfile
-          platforms: linux/amd64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          context: .                     # 构建上下文（项目根目录）
+          file: ./Dockerfile             # Dockerfile 路径
+          platforms: linux/amd64         # 目标架构（目前仅支持 amd64）
+          push: true                     # 构建后自动推送到仓库
+          tags: ${{ steps.meta.outputs.tags }}     # 由 metadata-action 生成的标签
+          labels: ${{ steps.meta.outputs.labels }} # 由 metadata-action 生成的 OCI 标签
+          cache-from: type=gha           # 从 GitHub Actions 缓存读取 Docker 层
+          cache-to: type=gha,mode=max    # 将 Docker 层写入 GitHub Actions 缓存（max 模式缓存所有层）

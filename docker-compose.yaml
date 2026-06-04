@@ -1,46 +1,73 @@
+# Phosche Docker Compose 编排文件
+# 包含三个服务：OpenSearch、Phosche、Ollama（可选）
+# 用法：
+#   docker compose up -d                       # 启动 OpenSearch + Phosche
+#   docker compose --profile ollama up -d       # 启动全部（含 Ollama）
+
 services:
+  # -----------------------------------------------------------
+  # OpenSearch 搜索引擎服务
+  # 使用自定义 Dockerfile.opensearch 构建（预装 IK 中文分词插件）
+  # 单节点模式运行，禁用安全插件以简化开发环境配置
+  # -----------------------------------------------------------
   opensearch:
     build:
       context: .
-      dockerfile: Dockerfile.opensearch
+      dockerfile: Dockerfile.opensearch  # 自定义 Dockerfile，包含 IK 分词插件安装
     container_name: opensearch
     environment:
-      - discovery.type=single-node
-      - DISABLE_SECURITY_PLUGIN=true
-      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+      - discovery.type=single-node              # 单节点模式（无需集群发现）
+      - DISABLE_SECURITY_PLUGIN=true            # 禁用安全插件（开发环境）
+      - "OPENSEARCH_JAVA_OPTS=-Xms511m -Xmx512m"  # JVM 堆内存限制（512MB）
     ports:
-      - "9200:9200"
+      - "9200:9200"  # REST API 端口
+      - "9300:9300"  # 节点间通信端口（单节点下非必需，但保留兼容性）
     volumes:
-      - osdata:/usr/share/opensearch/data
+      - osdata:/usr/share/opensearch/data  # 持久化索引数据，防止容器重启丢失
     healthcheck:
+      # 健康检查：尝试 HTTPS 和 HTTP 两种方式访问集群健康接口
+      # 自定义镜像可能启用 HTTPS，官方镜像则使用 HTTP
       test: ["CMD-SHELL", "curl -sk https://localhost:9200 || curl -s http://localhost:9200"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
+      interval: 10s   # 每 10 秒检查一次
+      timeout: 5s     # 单次检查超时时间
+      retries: 10     # 最多重试 10 次（总计约 100 秒内必须就绪）
 
+  # -----------------------------------------------------------
+  # Phosche 应用服务
+  # 依赖 OpenSearch 健康检查通过后才启动
+  # 挂载配置文件和照片目录（只读）
+  # -----------------------------------------------------------
   phosche:
-    build: .
+    build: .  # 使用根目录 Dockerfile（多阶段构建：前端 + Go 后端）
     ports:
-      - "8080:8080"
+      - "8080:8080"  # Web 服务端口
     depends_on:
       opensearch:
-        condition: service_healthy
+        condition: service_healthy  # 等待 OpenSearch 健康检查通过后才启动
     volumes:
-      - ./config.yaml:/app/config.yaml:ro
-      - ./photos:/photos:ro
+      - ./config.yaml:/app/config.yaml:ro  # 挂载配置文件（只读）
+      - ./photos:/photos:ro                 # 挂载照片目录（只读），路径需与 config.yaml 中 watch.directories 一致
     environment:
-      - CONFIG_PATH=/app/config.yaml
+      - CONFIG_PATH=/app/config.yaml  # 指定容器内配置文件路径
 
-  # Optional: local Ollama for AI analysis
+  # -----------------------------------------------------------
+  # Ollama 本地 LLM 服务（可选）
+  # 通过 profile 机制按需启动，避免默认占用资源
+  # 使用：docker compose --profile ollama up -d
+  # -----------------------------------------------------------
   ollama:
     image: ollama/ollama:latest
     ports:
-      - "11434:11434"
+      - "11434:11434"  # Ollama API 端口
     volumes:
-      - ollama_data:/root/.ollama
+      - ollama_data:/root/.ollama  # 持久化模型数据，避免每次重新下载
     profiles:
-      - ollama
+      - ollama  # 仅在指定 --profile ollama 时启动
 
+# -----------------------------------------------------------
+# 命名卷定义
+# Docker 管理的持久化存储，容器删除后数据仍保留
+# -----------------------------------------------------------
 volumes:
-  osdata:
-  ollama_data:
+  osdata:       # OpenSearch 索引数据
+  ollama_data:  # Ollama 模型文件
