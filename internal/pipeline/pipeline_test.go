@@ -197,6 +197,8 @@ func runPipeline(t *testing.T, p *pipeline.Pipeline) (cancel context.CancelFunc,
 	}
 }
 
+// --- 流水线基本功能测试 ---
+
 func TestPipeline_E2E(t *testing.T) {
 	dir := t.TempDir()
 	photoPath := createTestJPEG(t, dir, "photo1.jpg")
@@ -282,6 +284,8 @@ func TestPipeline_Failure(t *testing.T) {
 	require.Equal(t, types.StatusFailed, status)
 }
 
+// --- LLM 不可用处理测试 ---
+
 func TestPipeline_LLMUnavailable(t *testing.T) {
 	dir := t.TempDir()
 	photoPath := createTestJPEG(t, dir, "photo.jpg")
@@ -322,6 +326,8 @@ func TestPipeline_LLMUnavailable(t *testing.T) {
 	cancel()
 	require.NoError(t, wait())
 }
+
+// --- 并发控制测试 ---
 
 func TestPipeline_Concurrency(t *testing.T) {
 	dir := t.TempDir()
@@ -365,6 +371,8 @@ func TestPipeline_Concurrency(t *testing.T) {
 	require.NoError(t, wait())
 	require.Equal(t, 8, indexer.IndexedCount())
 }
+
+// --- 优雅关闭测试 ---
 
 func TestPipeline_GracefulShutdown(t *testing.T) {
 	dir := t.TempDir()
@@ -448,6 +456,8 @@ func TestPipeline_Backpressure(t *testing.T) {
 	require.Equal(t, 6, indexer.IndexedCount())
 }
 
+// --- Watcher 事件处理测试 ---
+
 func TestPipeline_WatcherEvent(t *testing.T) {
 	dir := t.TempDir()
 	photoPath := createTestJPEG(t, dir, "new_photo.jpg")
@@ -493,6 +503,8 @@ func TestPipeline_WatcherEvent(t *testing.T) {
 	require.Equal(t, "watcher event", lastDoc.Description)
 }
 
+// --- 状态更新测试 ---
+
 func TestPipeline_StatusUpdate(t *testing.T) {
 	dir := t.TempDir()
 	photoPath := createTestJPEG(t, dir, "photo.jpg")
@@ -529,6 +541,8 @@ func TestPipeline_StatusUpdate(t *testing.T) {
 	require.Equal(t, 2, indexer.IndexedCount())
 	require.Equal(t, types.StatusAnalyzed, lastDoc.Status)
 }
+
+// --- 辅助函数测试 ---
 
 func TestIsLLMConnectionError(t *testing.T) {
 	tests := []struct {

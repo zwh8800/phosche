@@ -81,6 +81,8 @@ func generateTestPNG(t *testing.T) string {
 	return path
 }
 
+// --- 图片格式解码测试 ---
+
 func TestDecodeJPEG(t *testing.T) {
 	path := generateTestJPEG(t)
 
@@ -157,6 +159,8 @@ func TestDecodeHEIC(t *testing.T) {
 	}
 }
 
+// --- 错误处理测试 ---
+
 func TestDecodeFormatMismatch_JPEGasHEIC(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "actually_jpeg.heic")
@@ -205,6 +209,8 @@ func TestDecodeNonExistent(t *testing.T) {
 		t.Fatal("expected error for nonexistent file, got nil")
 	}
 }
+
+// --- EXIF 提取测试 ---
 
 func TestEXIFExtraction_NoEXIF(t *testing.T) {
 	// Programmatically generated JPEG has no EXIF data.

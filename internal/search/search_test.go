@@ -163,6 +163,8 @@ func collectIDs(hits []types.PhotoDocument) []string {
 	return ids
 }
 
+// --- 全文搜索测试 ---
+
 func TestSearch_FullText(t *testing.T) {
 	svc, cleanup := setupSearchTest(t)
 	defer cleanup()
@@ -177,6 +179,8 @@ func TestSearch_FullText(t *testing.T) {
 	assert.Contains(t, collectIDs(resp.Hits), "1", "doc 1 has mountain")
 	assert.Contains(t, collectIDs(resp.Hits), "4", "doc 4 has mountain")
 }
+
+// --- 日期范围过滤测试 ---
 
 func TestSearch_DateRange(t *testing.T) {
 	svc, cleanup := setupSearchTest(t)
@@ -196,6 +200,8 @@ func TestSearch_DateRange(t *testing.T) {
 	assert.Contains(t, ids, "2", "doc 2 is in June")
 }
 
+// --- 组合过滤测试 ---
+
 func TestSearch_CombinedFilters(t *testing.T) {
 	svc, cleanup := setupSearchTest(t)
 	defer cleanup()
@@ -214,6 +220,8 @@ func TestSearch_CombinedFilters(t *testing.T) {
 	assert.Contains(t, ids, "2", "doc 2 is the sunset outdoor doc")
 }
 
+// --- 分页测试 ---
+
 func TestSearch_Pagination(t *testing.T) {
 	svc, cleanup := setupSearchTest(t)
 	defer cleanup()
@@ -230,6 +238,8 @@ func TestSearch_Pagination(t *testing.T) {
 	assert.Equal(t, 3, resp.TotalPages, "ceil(5/2)=3")
 }
 
+// --- 空结果处理测试 ---
+
 func TestSearch_EmptyResults(t *testing.T) {
 	svc, cleanup := setupSearchTest(t)
 	defer cleanup()
@@ -243,6 +253,8 @@ func TestSearch_EmptyResults(t *testing.T) {
 	assert.Equal(t, int64(0), resp.Total, "should find no docs")
 	assert.Empty(t, resp.Hits)
 }
+
+// --- 聚合统计测试 ---
 
 func TestGetFilters(t *testing.T) {
 	svc, cleanup := setupSearchTest(t)
@@ -273,6 +285,8 @@ func TestGetFilters(t *testing.T) {
 		"should have analyzed status, got: %v", filters.Statuses)
 }
 
+// --- 默认参数处理测试 ---
+
 func TestSearch_DefaultsHandling(t *testing.T) {
 	svc, cleanup := setupSearchTest(t)
 	defer cleanup()
@@ -284,6 +298,8 @@ func TestSearch_DefaultsHandling(t *testing.T) {
 	assert.Equal(t, 20, resp.PageSize, "default page size should be 20")
 	assert.Len(t, resp.Hits, 5, "all 5 docs should be returned")
 }
+
+// --- 无效索引处理测试 ---
 
 func TestSearch_InvalidIndex(t *testing.T) {
 	svc, cleanup := setupSearchTest(t)
@@ -297,6 +313,8 @@ func TestSearch_InvalidIndex(t *testing.T) {
 	assert.True(t, strings.Contains(err.Error(), "search returned"),
 		"should return ES error, got: %v", err)
 }
+
+// --- 标签过滤测试 ---
 
 func TestSearch_TagsFilter(t *testing.T) {
 	svc, cleanup := setupSearchTest(t)
@@ -314,6 +332,8 @@ func TestSearch_TagsFilter(t *testing.T) {
 	assert.Contains(t, ids, "1")
 	assert.Contains(t, ids, "4")
 }
+
+// --- 状态过滤测试 ---
 
 func TestSearch_StatusFilter(t *testing.T) {
 	svc, cleanup := setupSearchTest(t)

@@ -16,6 +16,8 @@ func writeTempYAML(t *testing.T, content string) string {
 	return path
 }
 
+// --- 配置加载测试 ---
+
 func TestLoadConfig_Valid(t *testing.T) {
 	yaml := `
 watch:
@@ -97,6 +99,8 @@ func TestLoadConfig_InvalidYAML(t *testing.T) {
 		t.Fatal("expected error for invalid YAML, got nil")
 	}
 }
+
+// --- 必填项校验测试 ---
 
 func TestLoadConfig_MissingRequired(t *testing.T) {
 	t.Run("missing watch.directories", func(t *testing.T) {
@@ -209,6 +213,8 @@ opensearch:
 	})
 }
 
+// --- 枚举值校验测试 ---
+
 func TestLoadConfig_ResponseFormats(t *testing.T) {
 	for _, format := range []string{"", "json_object", "json_schema", "text"} {
 		t.Run(format, func(t *testing.T) {
@@ -238,6 +244,8 @@ opensearch:
 		})
 	}
 }
+
+// --- 默认值测试 ---
 
 func TestLoadConfig_Defaults(t *testing.T) {
 	yaml := `
@@ -288,6 +296,8 @@ opensearch:
 		t.Errorf("Server.Port = %d, want 8080 (default)", cfg.Server.Port)
 	}
 }
+
+// --- 数值配置测试 ---
 
 func TestLoadConfig_MaxTokens(t *testing.T) {
 	t.Run("parse both token limits", func(t *testing.T) {
@@ -349,12 +359,16 @@ opensearch:
 	})
 }
 
+// --- 文件不存在测试 ---
+
 func TestLoadConfig_FileNotFound(t *testing.T) {
 	_, err := LoadConfig("/nonexistent/path/config.yaml")
 	if err == nil {
 		t.Fatal("expected error for non-existent file, got nil")
 	}
 }
+
+// --- API Key 配置测试 ---
 
 func TestLoadConfig_WithAPIKey(t *testing.T) {
 	yaml := `
