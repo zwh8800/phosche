@@ -396,64 +396,6 @@ func (s *SearchService) searchBM25(ctx context.Context, indexName string, req *t
 	return s.buildSearchResponse(resp, req)
 }
 
-// GetFilters 执行词项聚合（terms aggregation），获取前端筛选面板所需的可选项列表。
-//
-// GetFilters 返回筛选 UI 所需的聚合数据（标签、场景类型、国家、省、市、区、状态）。
-//   - tags: 最多 50 个热门标签
-//   - scene_types: 最多 20 个场景类型
-//   - countries/provinces/cities/districts: 最多 50 个地理选项
-//   - statuses: 最多 10 个状态选项
-//
-// 返回的 FiltersResponse 用于填充搜索页面的下拉筛选器。
-func (s *SearchService) GetFilters(ctx context.Context, indexName string, userEmail string) (*types.FiltersResponse, error) {
-	slog.Debug("get filters", "index", indexName)
-	query := map[string]any{
-		"size":  0,
-		"query": buildEmailFilter(userEmail),
-		"aggs": map[string]any{
-			"tags": map[string]any{
-				"terms": map[string]any{"field": "tags.keyword", "size": 50},
-			},
-			"scene_types": map[string]any{
-				"terms": map[string]any{"field": "scene_type", "size": 20},
-			},
-			"countries": map[string]any{
-				"terms": map[string]any{"field": "country", "size": 50},
-			},
-			"provinces": map[string]any{
-				"terms": map[string]any{"field": "province", "size": 50},
-			},
-			"cities": map[string]any{
-				"terms": map[string]any{"field": "city", "size": 50},
-			},
-			"districts": map[string]any{
-				"terms": map[string]any{"field": "district", "size": 50},
-			},
-			"statuses": map[string]any{
-				"terms": map[string]any{"field": "status", "size": 10},
-			},
-		},
-	}
-
-	bodyBytes, err := json.Marshal(query)
-	if err != nil {
-		return nil, fmt.Errorf("marshal filters query: %w", err)
-	}
-
-	resp, err := s.client.Client().Search(ctx, &opensearchapi.SearchReq{
-		Indices: []string{indexName},
-		Body:    bytes.NewReader(bodyBytes),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("filters request: %w", err)
-	}
-
-	if len(resp.Aggregations) == 0 {
-		return &types.FiltersResponse{}, nil
-	}
-	return s.parseFiltersResponse(resp.Aggregations)
-}
-
 // buildQuery 是核心查询构造器，将 SearchRequest 转换为 OpenSearch 查询 DSL。
 // 仅用于纯 BM25 模式（searchBM25），混合检索模式使用 searchHybrid 独立构建查询。
 //
@@ -608,33 +550,6 @@ func (s *SearchService) buildFilters(req *types.SearchRequest, userEmail string)
 	return filter
 }
 
-// aggResult 是聚合结果的通用结构，包含 buckets 列表。
-type aggResult struct {
-	Buckets []aggBucket `json:"buckets"`
-}
-
-// aggBucket 表示词项聚合（terms aggregation）中的一个桶，Key 为聚合值。
-type aggBucket struct {
-	Key string `json:"key"`
-}
-
-// aggBucketWithCount 表示带文档计数的词项聚合桶（Key + DocCount）。
-type aggBucketWithCount struct {
-	Key      string `json:"key"`
-	DocCount int64  `json:"doc_count"`
-}
-
-// collectNonEmptyKeys 从词项聚合结果中过滤掉空字符串桶。
-func collectNonEmptyKeys(buckets []aggBucket) []string {
-	keys := make([]string, 0, len(buckets))
-	for _, b := range buckets {
-		if b.Key != "" {
-			keys = append(keys, b.Key)
-		}
-	}
-	return keys
-}
-
 // buildSearchResponse 将 OpenSearch 类型化响应转换为标准搜索响应格式。
 func (s *SearchService) buildSearchResponse(resp *opensearchapi.SearchResp, req *types.SearchRequest) (*types.SearchResponse, error) {
 	total := int64(resp.Hits.Total.Value)
@@ -674,6 +589,127 @@ func (s *SearchService) buildSearchResponse(resp *opensearchapi.SearchResp, req 
 		Page:       page,
 		PageSize:   pageSize,
 		TotalPages: totalPages,
+	}, nil
+}
+
+// GetFilters 执行词项聚合（terms aggregation），获取前端筛选面板所需的可选项列表。
+//
+// GetFilters 返回筛选 UI 所需的聚合数据（标签、场景类型、国家、省、市、区、状态）。
+//   - tags: 最多 50 个热门标签
+//   - scene_types: 最多 20 个场景类型
+//   - countries/provinces/cities/districts: 最多 50 个地理选项
+//   - statuses: 最多 10 个状态选项
+//
+// 返回的 FiltersResponse 用于填充搜索页面的下拉筛选器。
+func (s *SearchService) GetFilters(ctx context.Context, indexName string, userEmail string) (*types.FiltersResponse, error) {
+	slog.Debug("get filters", "index", indexName)
+	query := map[string]any{
+		"size":  0,
+		"query": buildEmailFilter(userEmail),
+		"aggs": map[string]any{
+			"tags": map[string]any{
+				"terms": map[string]any{"field": "tags.keyword", "size": 50},
+			},
+			"scene_types": map[string]any{
+				"terms": map[string]any{"field": "scene_type", "size": 20},
+			},
+			"countries": map[string]any{
+				"terms": map[string]any{"field": "country", "size": 50},
+			},
+			"provinces": map[string]any{
+				"terms": map[string]any{"field": "province", "size": 50},
+			},
+			"cities": map[string]any{
+				"terms": map[string]any{"field": "city", "size": 50},
+			},
+			"districts": map[string]any{
+				"terms": map[string]any{"field": "district", "size": 50},
+			},
+			"statuses": map[string]any{
+				"terms": map[string]any{"field": "status", "size": 10},
+			},
+		},
+	}
+
+	bodyBytes, err := json.Marshal(query)
+	if err != nil {
+		return nil, fmt.Errorf("marshal filters query: %w", err)
+	}
+
+	resp, err := s.client.Client().Search(ctx, &opensearchapi.SearchReq{
+		Indices: []string{indexName},
+		Body:    bytes.NewReader(bodyBytes),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("filters request: %w", err)
+	}
+
+	if len(resp.Aggregations) == 0 {
+		return &types.FiltersResponse{}, nil
+	}
+	return s.parseFiltersResponse(resp.Aggregations)
+}
+
+// aggResult 是聚合结果的通用结构，包含 buckets 列表。
+type aggResult struct {
+	Buckets []aggBucket `json:"buckets"`
+}
+
+// aggBucket 表示词项聚合（terms aggregation）中的一个桶，Key 为聚合值。
+type aggBucket struct {
+	Key string `json:"key"`
+}
+
+// aggBucketWithCount 表示带文档计数的词项聚合桶（Key + DocCount）。
+type aggBucketWithCount struct {
+	Key      string `json:"key"`
+	DocCount int64  `json:"doc_count"`
+}
+
+// collectNonEmptyKeys 从词项聚合结果中过滤掉空字符串桶。
+func collectNonEmptyKeys(buckets []aggBucket) []string {
+	keys := make([]string, 0, len(buckets))
+	for _, b := range buckets {
+		if b.Key != "" {
+			keys = append(keys, b.Key)
+		}
+	}
+	return keys
+}
+
+// parseFiltersResponse 解析 OpenSearch 聚合响应，提取 tags/scene_types/countries/provinces/cities/districts/statuses 的 bucket key 列表。
+// 返回的字符串切片按文档计数降序排列（OpenSearch terms aggregation 默认行为），
+// 前端可直接用于填充下拉筛选器的选项列表。
+func (s *SearchService) parseFiltersResponse(aggsRaw json.RawMessage) (*types.FiltersResponse, error) {
+	var result struct {
+		Tags       aggResult `json:"tags"`
+		SceneTypes aggResult `json:"scene_types"`
+		Countries  aggResult `json:"countries"`
+		Provinces  aggResult `json:"provinces"`
+		Cities     aggResult `json:"cities"`
+		Districts  aggResult `json:"districts"`
+		Statuses   aggResult `json:"statuses"`
+	}
+	if err := json.Unmarshal(aggsRaw, &result); err != nil {
+		return nil, fmt.Errorf("decode filters aggs: %w", err)
+	}
+
+	tags := collectNonEmptyKeys(result.Tags.Buckets)
+	scenes := collectNonEmptyKeys(result.SceneTypes.Buckets)
+	countries := collectNonEmptyKeys(result.Countries.Buckets)
+	provinces := collectNonEmptyKeys(result.Provinces.Buckets)
+	cities := collectNonEmptyKeys(result.Cities.Buckets)
+	districts := collectNonEmptyKeys(result.Districts.Buckets)
+	statuses := collectNonEmptyKeys(result.Statuses.Buckets)
+
+	return &types.FiltersResponse{
+		Tags:       tags,
+		SceneTypes: scenes,
+		Countries:  countries,
+		Provinces:  provinces,
+		Cities:     cities,
+		Districts:  districts,
+		Statuses:   statuses,
 	}, nil
 }
 
@@ -717,6 +753,46 @@ func (s *SearchService) GetStats(ctx context.Context, indexName string, userEmai
 	}
 
 	return s.parseStatsResponse(resp)
+}
+
+// parseStatsResponse 解析 OpenSearch 统计响应，构建按状态分组的计数映射。
+//
+// 处理逻辑：
+//   - 初始化所有 5 种状态为 0（确保未出现的状态也返回 0 而非缺失）
+//   - 遍历 by_status buckets 填充实际计数
+//   - 提取 recent filter 的 doc_count 作为最近新增数
+func (s *SearchService) parseStatsResponse(resp *opensearchapi.SearchResp) (*types.StatsResponse, error) {
+	total := int64(resp.Hits.Total.Value)
+
+	var aggs struct {
+		ByStatus struct {
+			Buckets []aggBucketWithCount `json:"buckets"`
+		} `json:"by_status"`
+		Recent struct {
+			DocCount int64 `json:"doc_count"`
+		} `json:"recent"`
+	}
+	if err := json.Unmarshal(resp.Aggregations, &aggs); err != nil {
+		return nil, fmt.Errorf("decode stats aggs: %w", err)
+	}
+
+	byStatus := map[types.JobStatus]int64{
+		types.StatusUnanalyzed:      0,
+		types.StatusAnalyzing:       0,
+		types.StatusAnalyzed:        0,
+		types.StatusFailed:          0,
+		types.StatusPendingAnalysis: 0,
+	}
+
+	for _, b := range aggs.ByStatus.Buckets {
+		byStatus[types.JobStatus(b.Key)] = b.DocCount
+	}
+
+	return &types.StatsResponse{
+		Total:       total,
+		ByStatus:    byStatus,
+		RecentCount: aggs.Recent.DocCount,
+	}, nil
 }
 
 // FindSimilar 查找与指定照片视觉相似的照片，基于 kNN 向量检索。
@@ -891,9 +967,9 @@ func (s *SearchService) FindNearby(ctx context.Context, indexName string, photoI
 		"sort": []any{
 			map[string]any{
 				"_script": map[string]any{
-					"type":  "number",
+					"type":   "number",
 					"script": haversineScript,
-					"order": "asc",
+					"order":  "asc",
 				},
 			},
 		},
@@ -961,82 +1037,6 @@ func (s *SearchService) buildRecommendationResponse(resp *opensearchapi.SearchRe
 		Photos: hits,
 		Total:  len(hits),
 	}
-}
-
-// parseStatsResponse 解析 OpenSearch 统计响应，构建按状态分组的计数映射。
-//
-// 处理逻辑：
-//   - 初始化所有 5 种状态为 0（确保未出现的状态也返回 0 而非缺失）
-//   - 遍历 by_status buckets 填充实际计数
-//   - 提取 recent filter 的 doc_count 作为最近新增数
-func (s *SearchService) parseStatsResponse(resp *opensearchapi.SearchResp) (*types.StatsResponse, error) {
-	total := int64(resp.Hits.Total.Value)
-
-	var aggs struct {
-		ByStatus struct {
-			Buckets []aggBucketWithCount `json:"buckets"`
-		} `json:"by_status"`
-		Recent struct {
-			DocCount int64 `json:"doc_count"`
-		} `json:"recent"`
-	}
-	if err := json.Unmarshal(resp.Aggregations, &aggs); err != nil {
-		return nil, fmt.Errorf("decode stats aggs: %w", err)
-	}
-
-	byStatus := map[types.JobStatus]int64{
-		types.StatusUnanalyzed:      0,
-		types.StatusAnalyzing:       0,
-		types.StatusAnalyzed:        0,
-		types.StatusFailed:          0,
-		types.StatusPendingAnalysis: 0,
-	}
-
-	for _, b := range aggs.ByStatus.Buckets {
-		byStatus[types.JobStatus(b.Key)] = b.DocCount
-	}
-
-	return &types.StatsResponse{
-		Total:       total,
-		ByStatus:    byStatus,
-		RecentCount: aggs.Recent.DocCount,
-	}, nil
-}
-
-// parseFiltersResponse 解析 OpenSearch 聚合响应，提取 tags/scene_types/countries/provinces/cities/districts/statuses 的 bucket key 列表。
-// 返回的字符串切片按文档计数降序排列（OpenSearch terms aggregation 默认行为），
-// 前端可直接用于填充下拉筛选器的选项列表。
-func (s *SearchService) parseFiltersResponse(aggsRaw json.RawMessage) (*types.FiltersResponse, error) {
-	var result struct {
-		Tags       aggResult `json:"tags"`
-		SceneTypes aggResult `json:"scene_types"`
-		Countries  aggResult `json:"countries"`
-		Provinces  aggResult `json:"provinces"`
-		Cities     aggResult `json:"cities"`
-		Districts  aggResult `json:"districts"`
-		Statuses   aggResult `json:"statuses"`
-	}
-	if err := json.Unmarshal(aggsRaw, &result); err != nil {
-		return nil, fmt.Errorf("decode filters aggs: %w", err)
-	}
-
-	tags := collectNonEmptyKeys(result.Tags.Buckets)
-	scenes := collectNonEmptyKeys(result.SceneTypes.Buckets)
-	countries := collectNonEmptyKeys(result.Countries.Buckets)
-	provinces := collectNonEmptyKeys(result.Provinces.Buckets)
-	cities := collectNonEmptyKeys(result.Cities.Buckets)
-	districts := collectNonEmptyKeys(result.Districts.Buckets)
-	statuses := collectNonEmptyKeys(result.Statuses.Buckets)
-
-	return &types.FiltersResponse{
-		Tags:       tags,
-		SceneTypes: scenes,
-		Countries:  countries,
-		Provinces:  provinces,
-		Cities:     cities,
-		Districts:  districts,
-		Statuses:   statuses,
-	}, nil
 }
 
 // truncateJSON 截断 JSON 字节数组用于日志输出，避免超长查询体淹没日志。
