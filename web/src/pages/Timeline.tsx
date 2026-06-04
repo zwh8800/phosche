@@ -317,10 +317,10 @@ function PhotoCard({ photo }: { photo: PhotoDocument }) {
         <div className="hidden absolute inset-0 flex items-center justify-center bg-gray-100 text-gray-400 text-sm">
           无法加载图片
         </div>
-        {/* 分析中状态：右上角显示"分析中"黄色标签 */}
-        {photo.status === 'analyzing' && (
-          <span className={`absolute top-2 right-2 text-[10px] px-1.5 py-0.5 rounded font-medium ${STATUS_COLORS.analyzing}`}>
-            {STATUS_LABELS.analyzing}
+        {/* 分析中/失败状态：右上角显示对应颜色标签 */}
+        {(photo.status === 'analyzing' || photo.status === 'failed') && (
+          <span className={`absolute top-2 right-2 text-[10px] px-1.5 py-0.5 rounded font-medium ${STATUS_COLORS[photo.status]}`}>
+            {STATUS_LABELS[photo.status]}
           </span>
         )}
       </div>
@@ -330,18 +330,18 @@ function PhotoCard({ photo }: { photo: PhotoDocument }) {
          * 分析中 → 显示骨架屏占位（模拟文字 + 标签形状）
          * 已分析  → 显示 AI 生成的真实描述和标签
          */}
-        {photo.status === 'analyzing' ? (
+        {(photo.status === 'analyzing' || photo.status === 'failed') ? (
           <>
-            {/* 分析中：骨架屏模拟两行文字描述 */}
+            {/* 分析中/失败：骨架屏模拟两行文字描述 */}
             <div className="animate-pulse space-y-1.5">
-              <div className="h-3 w-full rounded bg-gray-200" />
-              <div className="h-3 w-3/4 rounded bg-gray-200" />
+              <div className={`h-3 w-full rounded ${photo.status === 'failed' ? 'bg-red-200' : 'bg-gray-200'}`} />
+              <div className={`h-3 w-3/4 rounded ${photo.status === 'failed' ? 'bg-red-200' : 'bg-gray-200'}`} />
             </div>
-            {/* 分析中：骨架屏模拟三个标签 */}
+            {/* 分析中/失败：骨架屏模拟三个标签 */}
             <div className="animate-pulse flex flex-wrap gap-1">
-              <div className="h-5 w-10 rounded bg-gray-200" />
-              <div className="h-5 w-12 rounded bg-gray-200" />
-              <div className="h-5 w-8 rounded bg-gray-200" />
+              <div className={`h-5 w-10 rounded ${photo.status === 'failed' ? 'bg-red-200' : 'bg-gray-200'}`} />
+              <div className={`h-5 w-12 rounded ${photo.status === 'failed' ? 'bg-red-200' : 'bg-gray-200'}`} />
+              <div className={`h-5 w-8 rounded ${photo.status === 'failed' ? 'bg-red-200' : 'bg-gray-200'}`} />
             </div>
           </>
         ) : (

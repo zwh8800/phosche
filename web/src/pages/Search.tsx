@@ -193,20 +193,20 @@ const PhotoCard = memo(function PhotoCard({ photo }: { photo: PhotoDocument }) {
         {dateLabel && (
           <p className="text-xs text-gray-500">{dateLabel}</p>
         )}
-        {/* 分析中：显示骨架屏占位；已分析：显示描述、场景类型和标签 */}
-        {photo.status === 'analyzing' ? (
+        {/* 分析中/失败：显示骨架屏占位；已分析：显示描述、场景类型和标签 */}
+        {photo.status === 'analyzing' || photo.status === 'failed' ? (
           <>
             <div className="animate-pulse space-y-2">
-              <div className="h-3 w-full rounded bg-gray-200" />
-              <div className="h-3 w-3/4 rounded bg-gray-200" />
+              <div className={`h-3 w-full rounded ${photo.status === 'failed' ? 'bg-red-200' : 'bg-gray-200'}`} />
+              <div className={`h-3 w-3/4 rounded ${photo.status === 'failed' ? 'bg-red-200' : 'bg-gray-200'}`} />
             </div>
             <div className="animate-pulse">
-              <div className="inline-block h-5 w-12 rounded-full bg-gray-200" />
+              <div className={`inline-block h-5 w-12 rounded-full ${photo.status === 'failed' ? 'bg-red-200' : 'bg-gray-200'}`} />
             </div>
             <div className="animate-pulse flex gap-1">
-              <div className="h-4 w-10 rounded bg-gray-200" />
-              <div className="h-4 w-12 rounded bg-gray-200" />
-              <div className="h-4 w-8 rounded bg-gray-200" />
+              <div className={`h-4 w-10 rounded ${photo.status === 'failed' ? 'bg-red-200' : 'bg-gray-200'}`} />
+              <div className={`h-4 w-12 rounded ${photo.status === 'failed' ? 'bg-red-200' : 'bg-gray-200'}`} />
+              <div className={`h-4 w-8 rounded ${photo.status === 'failed' ? 'bg-red-200' : 'bg-gray-200'}`} />
             </div>
           </>
         ) : (

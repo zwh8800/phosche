@@ -728,15 +728,21 @@ function PhotoDetailModal({
                     )}
                   </>
                 ) : (
-                  <p className="text-sm text-gray-400 italic">
-                    {photo.status === 'analyzing'
-                      ? '正在分析中...'
-                      : photo.status === 'unanalyzed'
-                        ? '尚未分析'
-                        : photo.status === 'failed'
-                          ? '分析失败'
+                  <>
+                    {(photo.status === 'analyzing' || photo.status === 'failed') ? (
+                      <div className="animate-pulse space-y-3">
+                        <div className={`h-4 w-full rounded ${photo.status === 'failed' ? 'bg-red-200' : 'bg-gray-200'}`} />
+                        <div className={`h-4 w-3/4 rounded ${photo.status === 'failed' ? 'bg-red-200' : 'bg-gray-200'}`} />
+                        <div className={`h-4 w-1/2 rounded ${photo.status === 'failed' ? 'bg-red-200' : 'bg-gray-200'}`} />
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-400 italic">
+                        {photo.status === 'unanalyzed'
+                          ? '尚未分析'
                           : '暂无分析数据'}
-                  </p>
+                      </p>
+                    )}
+                  </>
                 )}
               </section>
 
