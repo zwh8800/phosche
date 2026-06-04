@@ -988,7 +988,7 @@ function PhotoDetailModal({
                 return (
                   <section>
                     <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
-                      推荐照片
+                      推荐
                     </h3>
 
                     {hasSimilar && (

@@ -902,13 +902,13 @@ func (s *SearchService) FindNearby(ctx context.Context, indexName string, photoI
 	}
 
 	haversineScript := map[string]any{
-		"source": "double R = 6371; double lat1 = doc['exif.gps_lat'].value * Math.PI / 180; double lat2 = params.lat * Math.PI / 180; double dLat = (params.lat - doc['exif.gps_lat'].value) * Math.PI / 180; double dLon = (params.lon - doc['exif.gps_lon'].value) * Math.PI / 180; double a = sin(dLat/2) * sin(dLat/2) + cos(lat1) * cos(lat2) * sin(dLon/2) * sin(dLon/2); double c = 2 * atan2(sqrt(a), sqrt(1-a)); return R * c;",
+		"source": "double R = 6371; double lat1 = doc['exif.gps_lat'].value * Math.PI / 180; double lat2 = params.lat * Math.PI / 180; double dLat = (params.lat - doc['exif.gps_lat'].value) * Math.PI / 180; double dLon = (params.lon - doc['exif.gps_lon'].value) * Math.PI / 180; double a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon/2) * Math.sin(dLon/2); double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); return R * c;",
 		"lang":   "painless",
 		"params": map[string]any{"lat": lat, "lon": lon},
 	}
 
 	distanceFilterScript := map[string]any{
-		"source": "double R = 6371; double lat1 = doc['exif.gps_lat'].value * Math.PI / 180; double lat2 = params.lat * Math.PI / 180; double dLat = (params.lat - doc['exif.gps_lat'].value) * Math.PI / 180; double dLon = (params.lon - doc['exif.gps_lon'].value) * Math.PI / 180; double a = sin(dLat/2) * sin(dLat/2) + cos(lat1) * cos(lat2) * sin(dLon/2) * sin(dLon/2); double c = 2 * atan2(sqrt(a), sqrt(1-a)); return R * c <= params.maxDist;",
+		"source": "double R = 6371; double lat1 = doc['exif.gps_lat'].value * Math.PI / 180; double lat2 = params.lat * Math.PI / 180; double dLat = (params.lat - doc['exif.gps_lat'].value) * Math.PI / 180; double dLon = (params.lon - doc['exif.gps_lon'].value) * Math.PI / 180; double a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon/2) * Math.sin(dLon/2); double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); return R * c <= params.maxDist;",
 		"lang":   "painless",
 		"params": map[string]any{"lat": lat, "lon": lon, "maxDist": 5.0},
 	}
