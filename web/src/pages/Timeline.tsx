@@ -89,6 +89,7 @@ function determineHierarchyLevel(
 /**
  * 计算日期组的地点聚合摘要
  * - 按 (city, district) 组合统计出现频次
+ * - 直辖市（city 为空）时 fallback 到 province 作为 effectiveCity
  * - 根据所有唯一城市/国家的分布决定展示层级
  * - 取频次最高的前 2 个地点
  */
@@ -98,10 +99,13 @@ function computeLocationSummary(photos: PhotoDocument[]): LocationSummary | null
   const uniqueCities = new Set<string>();
 
   for (const p of photos) {
-    if (!p.city) continue;
-    const key = `${p.city}|${p.district ?? ''}`;
+    // 直辖市场景下高德 API 的 city 字段为空，fallback 到 province
+    const effectiveCity = p.city || p.province || '';
+    const district = p.district || '';
+    if (!effectiveCity && !district) continue;
+    const key = `${effectiveCity}|${district}`;
     freq.set(key, (freq.get(key) ?? 0) + 1);
-    uniqueCities.add(p.city);
+    if (effectiveCity) uniqueCities.add(effectiveCity);
     if (p.country) uniqueCountries.add(p.country);
   }
 
@@ -113,38 +117,30 @@ function computeLocationSummary(photos: PhotoDocument[]): LocationSummary | null
     .sort((a, b) => b[1] - a[1])
     .slice(0, 2);
 
+  const findPhotoByKey = (cityPart: string, districtPart: string): PhotoDocument | undefined =>
+    photos.find((p) =>
+      (p.city || p.province || '') === cityPart && (p.district || '') === districtPart,
+    );
+
   const locations = top.map(([key]) => {
-    const [city, district] = key.split('|');
+    const [cityPart, districtPart] = key.split('|');
+    const sample = findPhotoByKey(cityPart, districtPart);
     switch (level) {
       case 'cityDistrict':
-        return { 
-          label: district ? `${city}·${district}` : city, 
+        return {
+          label: districtPart ? `${cityPart}·${districtPart}` : cityPart,
           count: freq.get(key)!,
-          city,
-          district: district || undefined,
         };
       case 'provinceCity': {
-        const sample = photos.find((p) => p.city === city);
+        // 直辖市 fallback 时 province === cityPart，避免重复显示
         const prov = sample?.province;
-        return { 
-          label: prov ? `${prov}·${city}` : city, 
-          count: freq.get(key)!,
-          city,
-          district: district || undefined,
-          province: prov,
-        };
+        const label = !prov || prov === cityPart ? cityPart : `${prov}·${cityPart}`;
+        return { label, count: freq.get(key)! };
       }
       case 'countryProvince': {
-        const sample = photos.find((p) => p.city === city);
-        const parts = [sample?.country, sample?.province, city].filter(Boolean);
-        return { 
-          label: parts.join('·'), 
-          count: freq.get(key)!,
-          city,
-          district: district || undefined,
-          province: sample?.province,
-          country: sample?.country,
-        };
+        // 用 Set 去重，避免 "中国·北京市·北京市" 这种重复
+        const parts = [sample?.country, sample?.province, cityPart].filter(Boolean);
+        return { label: [...new Set(parts)].join('·'), count: freq.get(key)! };
       }
     }
   });
