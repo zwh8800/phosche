@@ -157,3 +157,53 @@ func TestReverseGeocode_InvalidJSON(t *testing.T) {
 	assert.Contains(t, err.Error(), "decode response")
 	assert.Nil(t, info)
 }
+
+func TestReverseGeocode_OverseasEmptyArrays(t *testing.T) {
+	// 高德 API 对海外坐标返回 status="1" 但所有字段为空数组 []
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{
+			"status": "1",
+			"info": "OK",
+			"regeocode": {
+				"formatted_address": [],
+				"addressComponent": {
+					"country": [],
+					"province": [],
+					"city": [],
+					"district": [],
+					"township": [],
+					"streetNumber": {
+						"street": [],
+						"number": []
+					},
+					"businessAreas": []
+				}
+			}
+		}`))
+	}))
+	defer server.Close()
+
+	g := &AmapGeocoder{
+		apiKey:     "test-key",
+		httpClient: server.Client(),
+		baseURL:    server.URL,
+	}
+
+	info, err := g.ReverseGeocode(context.Background(), -8.7852, 115.1384)
+	require.NoError(t, err)
+	require.NotNil(t, info)
+
+	// 所有字段应为空字符串
+	assert.Equal(t, "", info.Country)
+	assert.Equal(t, "", info.Province)
+	assert.Equal(t, "", info.City)
+	assert.Equal(t, "", info.District)
+	assert.Equal(t, "", info.Township)
+	assert.Equal(t, "", info.Street)
+	assert.Equal(t, "", info.StreetNumber)
+	assert.Equal(t, "", info.BusinessArea)
+	assert.Equal(t, "", info.FormattedAddress)
+	assert.Equal(t, "", info.Address)
+}

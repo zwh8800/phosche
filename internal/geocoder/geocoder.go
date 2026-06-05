@@ -70,24 +70,24 @@ func (g *AmapGeocoder) ReverseGeocode(ctx context.Context, lat, lon float64) (*t
 		return nil, fmt.Errorf("unexpected status: %d", resp.StatusCode)
 	}
 
+	// 高德 API 特性：字段有值时返回 string，无值时返回空数组 []。
+	// 因此除 status/info 外，所有可能为空的字段统一用 any 接收，再通过类型断言提取。
 	var result struct {
 		Status    string `json:"status"`
 		Info      string `json:"info"`
 		Regeocode struct {
-			FormattedAddress string `json:"formatted_address"`
+			FormattedAddress any `json:"formatted_address"`
 			AddressComponent struct {
-				Country  string `json:"country"`
-				Province string `json:"province"`
-				City     any    `json:"city"`
-				District string `json:"district"`
-				Township string `json:"township"`
+				Country  any `json:"country"`
+				Province any `json:"province"`
+				City     any `json:"city"`
+				District any `json:"district"`
+				Township any `json:"township"`
 				StreetNumber struct {
-					Street string      `json:"street"`
+					Street any         `json:"street"`
 					Number interface{} `json:"number"`
 				} `json:"streetNumber"`
-				BusinessAreas []struct {
-					Name string `json:"name"`
-				} `json:"businessAreas"`
+				BusinessAreas any `json:"businessAreas"`
 			} `json:"addressComponent"`
 		} `json:"regeocode"`
 	}
@@ -100,35 +100,42 @@ func (g *AmapGeocoder) ReverseGeocode(ctx context.Context, lat, lon float64) (*t
 		return nil, fmt.Errorf("amap api error: %s", result.Info)
 	}
 
-	city := ""
-	if c, ok := result.Regeocode.AddressComponent.City.(string); ok {
-		city = c
+	toString := func(v any) string {
+		if s, ok := v.(string); ok {
+			return s
+		}
+		return ""
 	}
 
-	slog.Debug("geocoder: reverse geocode response",
-		"formatted_address", result.Regeocode.FormattedAddress,
-		"country", result.Regeocode.AddressComponent.Country,
-		"province", result.Regeocode.AddressComponent.Province,
-		"city", city,
-		"district", result.Regeocode.AddressComponent.District,
-		"township", result.Regeocode.AddressComponent.Township,
-	)
-
-	country := result.Regeocode.AddressComponent.Country
-	province := result.Regeocode.AddressComponent.Province
-	district := result.Regeocode.AddressComponent.District
-	township := result.Regeocode.AddressComponent.Township
-
-	street := result.Regeocode.AddressComponent.StreetNumber.Street
+	country := toString(result.Regeocode.AddressComponent.Country)
+	province := toString(result.Regeocode.AddressComponent.Province)
+	city := toString(result.Regeocode.AddressComponent.City)
+	district := toString(result.Regeocode.AddressComponent.District)
+	township := toString(result.Regeocode.AddressComponent.Township)
+	formattedAddress := toString(result.Regeocode.FormattedAddress)
+	street := toString(result.Regeocode.AddressComponent.StreetNumber.Street)
 	streetNumber := ""
 	if n, ok := result.Regeocode.AddressComponent.StreetNumber.Number.(string); ok {
 		streetNumber = n
 	}
 
 	businessArea := ""
-	if len(result.Regeocode.AddressComponent.BusinessAreas) > 0 {
-		businessArea = result.Regeocode.AddressComponent.BusinessAreas[0].Name
+	if arr, ok := result.Regeocode.AddressComponent.BusinessAreas.([]interface{}); ok && len(arr) > 0 {
+		if m, ok := arr[0].(map[string]interface{}); ok {
+			if name, ok := m["name"].(string); ok {
+				businessArea = name
+			}
+		}
 	}
+
+	slog.Debug("geocoder: reverse geocode response",
+		"formatted_address", formattedAddress,
+		"country", country,
+		"province", province,
+		"city", city,
+		"district", district,
+		"township", township,
+	)
 
 	address := country + province + city + district + township + businessArea + street + streetNumber
 
@@ -142,6 +149,6 @@ func (g *AmapGeocoder) ReverseGeocode(ctx context.Context, lat, lon float64) (*t
 		Street:           street,
 		StreetNumber:     streetNumber,
 		Address:          address,
-		FormattedAddress: result.Regeocode.FormattedAddress,
+		FormattedAddress: formattedAddress,
 	}, nil
 }
