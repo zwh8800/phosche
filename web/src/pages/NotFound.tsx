@@ -42,7 +42,7 @@ function NotFound() {
       {/* ── 装饰层：大号 404 数字 ────────────────────────────── 大号 404 错误码 ── */}
       {/* 使用 text-8xl 和 font-bold 放大突出显示，purple-200 淡紫色
           作为视觉装饰而非可读文本，营造品牌氛围 */}
-      <p className="text-8xl font-bold text-purple-200">404</p>
+      <p className="text-8xl font-bold text-red-200">404</p>
       {/* ── 信息层：主标题 + 副标题 ──────────────────────────── */}
       {/* 主标题：用户核心感知信息，深色粗体大字 */}
       <h1 className="mt-4 text-2xl font-semibold text-gray-800">
@@ -56,7 +56,7 @@ function NotFound() {
       {/* 品牌紫色按钮，hover 加深；gap-2 控制图标与文字间距 */}
       <Link
         to="/"
-        className="mt-8 inline-flex items-center gap-2 rounded-lg bg-purple-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-purple-700"
+        className="mt-8 inline-flex items-center gap-2 rounded-lg bg-red-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-red-700"
       >
         <svg
           className="h-4 w-4"

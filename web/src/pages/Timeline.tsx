@@ -261,7 +261,7 @@ function photoSrc(path: string): string {
  */
 function SkeletonCard() {
   return (
-    <div className="animate-pulse rounded-xl overflow-hidden bg-white border border-gray-200">
+    <div className="animate-pulse rounded-[18px] overflow-hidden bg-white border border-gray-100">
       <div className="aspect-square bg-gray-200" />
       <div className="p-3 space-y-2">
         <div className="h-3 w-3/4 rounded bg-gray-200" />
@@ -290,7 +290,7 @@ const PhotoCard = memo(function PhotoCard({ photo }: { photo: PhotoDocument }) {
     <button
       type="button"
       onClick={() => navigate(`/photo/${photo.id}`)}
-      className="group cursor-pointer text-left block rounded-xl overflow-hidden bg-white border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
+      className="group cursor-pointer text-left block rounded-[18px] overflow-hidden bg-white border border-gray-100 hover:shadow-[0_3px_30px_rgba(0,0,0,0.12)] transition-shadow"
     >
       {/* 缩略图区域：方形裁剪，悬停时有缩放动画 */}
       <div className="aspect-square overflow-hidden bg-gray-100 relative">
@@ -302,7 +302,7 @@ const PhotoCard = memo(function PhotoCard({ photo }: { photo: PhotoDocument }) {
         <img
           src={`${photoSrc(photo.path)}?thumb=1`}
           alt={photo.description || '照片'}
-          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
           loading="lazy"
           onError={(e) => {
             const el = e.currentTarget;
@@ -319,7 +319,7 @@ const PhotoCard = memo(function PhotoCard({ photo }: { photo: PhotoDocument }) {
         </div>
         {/* 分析中/失败状态：右上角显示对应颜色标签 */}
         {(photo.status === 'analyzing' || photo.status === 'failed') && (
-          <span className={`absolute top-2 right-2 text-[10px] px-1.5 py-0.5 rounded font-medium ${STATUS_COLORS[photo.status]}`}>
+          <span className={`absolute top-2 right-2 text-[11px] px-1.5 py-0.5 rounded-[5px] font-medium ${STATUS_COLORS[photo.status]}`}>
             {STATUS_LABELS[photo.status]}
           </span>
         )}
@@ -348,7 +348,7 @@ const PhotoCard = memo(function PhotoCard({ photo }: { photo: PhotoDocument }) {
           <>
             {/* AI 生成的照片描述，line-clamp-2 限制最多显示 2 行 */}
             {photo.description && (
-              <p className="line-clamp-2 text-sm leading-snug text-gray-700">
+              <p className="line-clamp-2 text-[14px] leading-normal text-gray-700">
                 {photo.description}
               </p>
             )}
@@ -358,7 +358,7 @@ const PhotoCard = memo(function PhotoCard({ photo }: { photo: PhotoDocument }) {
                 {photo.tags.slice(0, 3).map((tag) => (
                   <span
                     key={tag}
-                    className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${tagColor(tag)}`}
+                    className={`inline-block rounded-full px-2.5 py-0.5 text-[12px] font-medium ${tagColor(tag)}`}
                   >
                     {tag}
                   </span>
@@ -528,7 +528,7 @@ export default function Timeline() {
   // 首屏数据尚未加载完成，显示 6 个骨架屏卡片占位
   if (isLoading) {
     return (
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 items-start">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 items-start">
         {Array.from({ length: 6 }).map((_, i) => (
           <SkeletonCard key={i} />
         ))}
@@ -542,7 +542,7 @@ export default function Timeline() {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-gray-400">
         <svg
-          className="mb-6 h-24 w-24 text-gray-200"
+          className="mb-6 h-24 w-24 text-gray-300"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -578,7 +578,7 @@ export default function Timeline() {
            * backdrop-blur-sm：半透明毛玻璃效果
            * z-10：确保标题在照片卡片之上
            */}
-          <h2 className="sticky top-0 z-10 mb-4 bg-gray-50/90 px-2 py-2 backdrop-blur-sm">
+          <h2 className="sticky top-0 z-10 mb-4 bg-[#f5f5f7]/90 px-2 py-2 backdrop-blur-sm">
             {/*
              * 响应式布局：
              * - 移动端（< md）：flex-col，日期+标签第一行，地点第二行
@@ -588,7 +588,7 @@ export default function Timeline() {
             <div className="flex flex-col gap-1 md:flex-row md:flex-wrap md:items-center md:gap-x-2 md:gap-y-1">
               {/* 第一行：日期 + 标签 */}
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <span className="text-lg font-semibold text-gray-800">{formatDateLabel(dateStr)}</span>
+                <span className="text-[21px] font-semibold text-gray-900">{formatDateLabel(dateStr)}</span>
                 {tagSummary.map(({ tag }) => (
                   <Link
                     key={tag}
@@ -612,7 +612,7 @@ export default function Timeline() {
                       <Link
                         key={loc.label}
                         to={`/search?${locParams.toString()}`}
-                        className="inline-flex items-center gap-0.5 rounded bg-indigo-50 px-1.5 py-0.5 text-xs font-normal text-indigo-600 hover:bg-indigo-100 cursor-pointer transition-colors"
+                        className="inline-flex items-center gap-0.5 rounded bg-gray-100 px-1.5 py-0.5 text-xs font-normal text-gray-600 hover:bg-gray-200 cursor-pointer transition-colors"
                       >
                         <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -631,9 +631,9 @@ export default function Timeline() {
            * - 移动端：2 列
            * - md 断点（768px）：3 列
            * - lg 断点（1024px）：4 列
-           * gap-4 提供统一的卡片间距
+           * gap-3 提供统一的卡片间距
            */}
-           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 items-start">
+           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 items-start">
             {photos.map((photo) => (
               <PhotoCard key={photo.id} photo={photo} />
             ))}
@@ -655,7 +655,7 @@ export default function Timeline() {
        * 提示用户数据正在加载中。
        */}
       {isFetchingNextPage && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 items-start">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 items-start">
           {Array.from({ length: 4 }).map((_, i) => (
             <SkeletonCard key={`loading-${i}`} />
           ))}
@@ -668,7 +668,7 @@ export default function Timeline() {
        * "已加载全部照片" 的结束提示文字。
        */}
       {!hasNextPage && groupedPhotos.length > 0 && (
-        <p className="py-8 text-center text-sm text-gray-400">已加载全部照片</p>
+        <p className="py-8 text-center text-sm text-gray-500">已加载全部照片</p>
       )}
     </div>
   );

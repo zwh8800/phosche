@@ -79,7 +79,7 @@ class ErrorBoundary extends Component<Props, State> {
             使用紫色柔化视觉效果，避免红色引起焦虑
            */}
           <svg
-            className="mb-6 h-20 w-20 text-purple-300"
+            className="mb-6 h-20 w-20 text-red-300"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -123,7 +123,7 @@ class ErrorBoundary extends Component<Props, State> {
             <button
               type="button"
               onClick={this.handleRefresh}
-              className="inline-flex items-center gap-2 rounded-lg bg-purple-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-purple-700 cursor-pointer"
+              className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-red-700 cursor-pointer"
             >
               {/*
                 刷新图标（旋转箭头）

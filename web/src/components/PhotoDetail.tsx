@@ -215,7 +215,7 @@ function CopyButton({ text }: { text: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="flex-shrink-0 p-1 rounded hover:bg-gray-200 transition-colors cursor-pointer"
+      className="flex-shrink-0 p-1 rounded-[5px] hover:bg-gray-200 transition-colors cursor-pointer"
       title={copied ? '已复制' : '复制'}
       aria-label="复制"
     >
@@ -253,7 +253,7 @@ function SceneTypeBadge({ type }: { type: string }) {
   const label = SCENE_TYPE_LABELS[type] || type;
 
   return (
-    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-xs font-medium">
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[11px] bg-gray-100 text-gray-700 text-xs font-medium">
       {emoji[type] || '📷'} {label}
     </span>
   );
@@ -411,7 +411,7 @@ function PhotoDetailModal({
   return createPortal(
     <div className="fixed inset-0 z-50" role="dialog" aria-modal="true">
       <div
-        className="absolute inset-0 bg-black/75 backdrop-blur-xs"
+        className="absolute inset-0 bg-black/60 backdrop-blur-xl"
       />
 
       <div
@@ -419,13 +419,13 @@ function PhotoDetailModal({
         onClick={onClose}
       >
         <div
-          className="relative flex flex-col lg:flex-row w-full max-w-[1400px] max-h-[92vh] bg-white rounded-2xl shadow-2xl overflow-hidden animate-[fadeIn_0.2s_ease-out]"
+           className="relative flex flex-col lg:flex-row w-full max-w-[1400px] max-h-[92vh] bg-white rounded-[18px] shadow-2xl overflow-hidden animate-[fadeIn_0.2s_ease-out]"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
             <button
               onClick={handleDownload}
-              className="flex items-center justify-center w-9 h-9 rounded-full bg-black/20 hover:bg-black/40 text-white backdrop-blur-sm transition-colors cursor-pointer"
+              className="flex items-center justify-center w-11 h-11 rounded-full bg-black/20 hover:bg-black/40 text-white backdrop-blur-sm transition-colors cursor-pointer"
               title="下载原图"
               aria-label="下载原图"
             >
@@ -447,7 +447,7 @@ function PhotoDetailModal({
 
             <button
               onClick={onClose}
-              className="flex items-center justify-center w-9 h-9 rounded-full bg-black/20 hover:bg-black/40 text-white backdrop-blur-sm transition-colors cursor-pointer"
+              className="flex items-center justify-center w-11 h-11 rounded-full bg-black/20 hover:bg-black/40 text-white backdrop-blur-sm transition-colors cursor-pointer"
               aria-label="关闭"
             >
               <svg
@@ -467,7 +467,7 @@ function PhotoDetailModal({
           {hasPrev && (
             <button
               onClick={onPrev}
-              className="absolute top-1/2 -translate-y-1/2 left-3 z-20 flex items-center justify-center w-10 h-10 rounded-full bg-black/20 hover:bg-black/40 text-white backdrop-blur-sm transition-colors cursor-pointer"
+              className="absolute top-1/2 -translate-y-1/2 left-3 z-20 flex items-center justify-center w-11 h-11 rounded-full bg-black/20 hover:bg-black/40 text-white backdrop-blur-sm transition-colors cursor-pointer"
               aria-label="上一张"
             >
               <svg
@@ -487,7 +487,7 @@ function PhotoDetailModal({
           {hasNext && (
             <button
               onClick={onNext}
-              className="absolute top-1/2 -translate-y-1/2 right-3 z-20 flex items-center justify-center w-10 h-10 rounded-full bg-black/20 hover:bg-black/40 text-white backdrop-blur-sm transition-colors cursor-pointer"
+              className="absolute top-1/2 -translate-y-1/2 right-3 z-20 flex items-center justify-center w-11 h-11 rounded-full bg-black/20 hover:bg-black/40 text-white backdrop-blur-sm transition-colors cursor-pointer"
               aria-label="下一张"
             >
               <svg
@@ -506,7 +506,7 @@ function PhotoDetailModal({
           )}
 
           {/* ── Image area ── 照片显示区域 ── */}
-          <div className="relative flex items-center justify-center bg-gray-900 lg:w-[55%] min-h-[280px] lg:min-h-0 max-h-[50vh] lg:max-h-full overflow-hidden shrink-0">
+          <div className="relative flex items-center justify-center bg-black lg:w-[55%] min-h-[280px] lg:min-h-0 max-h-[50vh] lg:max-h-full overflow-hidden shrink-0">
             {/*
              * 图片加载失败时隐藏 <img> 元素，显示相邻的 "无法加载图片" 占位文字。
              * onError 触发后：1) 设置 img display:none；2) 显示相邻的 fallback div
@@ -530,7 +530,7 @@ function PhotoDetailModal({
 
           {/* ── Sidebar ── 右侧信息面板 ── */}
           <div className="flex flex-col lg:w-[45%] overflow-y-auto">
-            <div className="p-6 lg:p-8 space-y-6">
+            <div className="p-6 lg:p-8 space-y-8">
               {/* ── Section 1: AI 分析 ── AI 分析结果 ── */}
               {/*
                * AI 分析区域：条件渲染。
@@ -538,14 +538,14 @@ function PhotoDetailModal({
                * hasAnalysis 为 false 时根据 photo.status 显示不同的状态提示文案。
                */}
               <section>
-                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
+                <h3 className="text-[14px] font-semibold text-gray-500 mb-3 tracking-[-0.014em]">
                   AI 分析
                 </h3>
 
                 {hasAnalysis ? (
                   <>
                     {photo.description && (
-                      <p className="text-base lg:text-lg font-medium text-gray-900 leading-relaxed">
+                      <p className="text-[17px] lg:text-[19px] font-medium text-gray-900 leading-relaxed">
                         {photo.description}
                       </p>
                     )}
@@ -562,7 +562,7 @@ function PhotoDetailModal({
                           <SceneTypeBadge type={photo.scene_type} />
                         )}
                         {photo.people_count > 0 && (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-xs font-medium">
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[11px] bg-gray-100 text-gray-700 text-xs font-medium">
                             <svg
                               width="14"
                               height="14"
@@ -579,7 +579,7 @@ function PhotoDetailModal({
                           </span>
                         )}
                         {photo.has_text && (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 text-xs font-medium">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[11px] bg-blue-50 text-blue-700 text-xs font-medium">
                             <svg
                               width="14"
                               height="14"
@@ -604,7 +604,7 @@ function PhotoDetailModal({
                      {photo.tags?.length > 0 && (
                       <div className="flex flex-wrap gap-2 mb-4">
                         {photo.tags.map((t) => {
-                          const tagCls = `inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${tagColor(t)}`;
+                          const tagCls = `inline-flex items-center px-3 py-1.5 rounded-full text-[12px] font-medium ${tagColor(t)}`;
                           if (onTagClick) {
                             return (
                               <button
@@ -640,7 +640,7 @@ function PhotoDetailModal({
                                 className="w-5 h-5 rounded-full border border-gray-200 shadow-sm"
                                 style={{ backgroundColor: c.hex }}
                               />
-                              <span className="text-xs text-gray-500">{c.name}</span>
+                              <span className="text-[12px] text-gray-500">{c.name}</span>
                             </div>
                           ))}
                         </div>
@@ -658,7 +658,7 @@ function PhotoDetailModal({
                         </span>
                         <div className="flex flex-wrap gap-2">
                           {photo.objects.map((obj) => {
-                            const objCls = 'inline-flex items-center px-2.5 py-1 rounded-md bg-gray-50 text-gray-600 text-xs border border-gray-200';
+                            const objCls = 'inline-flex items-center px-2.5 py-1 rounded-[8px] bg-gray-50 text-gray-600 text-[12px] border border-gray-200';
                             if (onObjectClick) {
                               return (
                                 <button
@@ -686,7 +686,7 @@ function PhotoDetailModal({
                      * 仅在 has_text 为 true 且 text 字段非空时渲染。
                      */}
                     {photo.has_text && photo.text && (
-                      <div className="mb-4 p-3 rounded-lg border border-gray-200 bg-gray-50">
+                      <div className="mb-4 p-3 rounded-[11px] border border-gray-200 bg-gray-50">
                         <span className="text-xs text-gray-400 block mb-2">
                           提取文字
                         </span>
@@ -732,7 +732,7 @@ function PhotoDetailModal({
                */}
               {(dateStr || photo.formatted_address || photo.city || (photo.exif?.gps_lat != null && photo.exif?.gps_lon != null)) && (
                 <section>
-                  <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
+                  <h3 className="text-[14px] font-semibold text-gray-500 mb-3 tracking-[-0.014em]">
                     时间地点
                   </h3>
 
@@ -772,12 +772,12 @@ function PhotoDetailModal({
                                     province: photo.province,
                                     country: photo.country,
                                   })}
-                                  className="text-sm text-gray-600 hover:text-gray-900 hover:underline cursor-pointer transition-colors text-left"
+                                  className="text-[14px] text-gray-600 hover:text-gray-900 hover:underline cursor-pointer transition-colors text-left"
                                 >
                                   {locationText}
                                 </button>
                               ) : (
-                                <span className="text-sm text-gray-600 text-left">
+                                <span className="text-[14px] text-gray-600 text-left">
                                   {locationText}
                                 </span>
                               )}
@@ -814,7 +814,7 @@ function PhotoDetailModal({
                */}
               {hasExif && (photo.exif!.camera_model || photo.exif!.lens_model || photo.exif!.focal_length || photo.exif!.aperture || photo.exif!.shutter_speed || photo.exif!.iso != null) && (
                 <section>
-                  <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
+                  <h3 className="text-[14px] font-semibold text-gray-500 mb-3 tracking-[-0.014em]">
                     拍摄信息
                   </h3>
 
@@ -848,22 +848,22 @@ function PhotoDetailModal({
                     photo.exif!.iso != null) && (
                     <div className="flex flex-wrap gap-3">
                       {photo.exif!.focal_length && (
-                        <span className="inline-flex items-center px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-sm font-mono">
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-[11px] bg-gray-100 text-gray-700 text-sm font-mono">
                           {photo.exif!.focal_length}
                         </span>
                       )}
                       {photo.exif!.aperture && (
-                        <span className="inline-flex items-center px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-sm font-mono">
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-[11px] bg-gray-100 text-gray-700 text-sm font-mono">
                           {formatAperture(photo.exif!.aperture)}
                         </span>
                       )}
                       {photo.exif!.shutter_speed && (
-                        <span className="inline-flex items-center px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-sm font-mono">
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-[11px] bg-gray-100 text-gray-700 text-sm font-mono">
                           {photo.exif!.shutter_speed}
                         </span>
                       )}
                       {photo.exif!.iso != null && (
-                        <span className="inline-flex items-center px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-sm font-mono">
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-[11px] bg-gray-100 text-gray-700 text-sm font-mono">
                           ISO {photo.exif!.iso}
                         </span>
                       )}
@@ -880,7 +880,7 @@ function PhotoDetailModal({
                 if (!hasSimilar && !hasNearby) return null;
                 return (
                   <section>
-                    <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
+                    <h3 className="text-[14px] font-semibold text-gray-500 mb-3 tracking-[-0.014em]">
                       推荐
                     </h3>
 
@@ -892,7 +892,7 @@ function PhotoDetailModal({
                             <Link
                               key={p.id}
                               to={`/photo/${p.id}`}
-                              className="block w-1/3 aspect-square rounded-lg overflow-hidden bg-gray-100"
+                              className="block w-1/3 aspect-square rounded-[11px] overflow-hidden bg-gray-100"
                             >
                               <img
                                 src={`/photos/${p.path.replace(/^\/+/, '')}?thumb=1`}
@@ -918,7 +918,7 @@ function PhotoDetailModal({
                             <Link
                               key={p.id}
                               to={`/photo/${p.id}`}
-                              className="block w-1/3 aspect-square rounded-lg overflow-hidden bg-gray-100"
+                              className="block w-1/3 aspect-square rounded-[11px] overflow-hidden bg-gray-100"
                             >
                               <img
                                 src={`/photos/${p.path.replace(/^\/+/, '')}?thumb=1`}
@@ -945,17 +945,17 @@ function PhotoDetailModal({
                * 展示路径（带复制按钮）、大小、修改时间、创建时间、分析时间、处理状态。
                */}
               <section>
-                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
+                <h3 className="text-[14px] font-semibold text-gray-500 mb-3 tracking-[-0.014em]">
                   文件信息
                 </h3>
 
-                <div className="space-y-2.5 text-sm">
+                <div className="space-y-2 text-sm">
                   {/*
                    * 文件路径行：等宽字体 + 自动换行（break-all），
                    * 右侧附带 CopyButton 组件便于复制路径。
                    */}
                   <div className="flex items-start gap-2">
-                    <span className="text-gray-400 shrink-0">路径</span>
+                    <span className="text-gray-500 shrink-0">路径</span>
                     <span className="font-mono text-gray-600 break-all text-xs leading-relaxed flex-1">
                       {photo.path}
                     </span>
@@ -966,24 +966,24 @@ function PhotoDetailModal({
                    * 文件大小：通过 formatSize 自动选择合适的单位（MB/KB/B）展示。
                    */}
                   <div className="flex items-center gap-2">
-                    <span className="text-gray-400 shrink-0">大小</span>
-                    <span className="font-mono text-gray-700 text-sm">
+                    <span className="text-gray-500 shrink-0">大小</span>
+                    <span className="font-mono text-gray-700 text-[14px]">
                       {formatSize(photo.size)}
                     </span>
                   </div>
 
                   {/* 文件最后修改时间（Unix 时间戳格式化为中文日期） */}
                   <div className="flex items-center gap-2">
-                    <span className="text-gray-400 shrink-0">修改时间</span>
-                    <span className="font-mono text-gray-700 text-sm">
+                    <span className="text-gray-500 shrink-0">修改时间</span>
+                    <span className="font-mono text-gray-700 text-[14px]">
                       {formatTimestamp(photo.mtime)}
                     </span>
                   </div>
 
                   {/* 文件创建时间（即照片被索引到 ES 的时间） */}
                   <div className="flex items-center gap-2">
-                    <span className="text-gray-400 shrink-0">创建时间</span>
-                    <span className="font-mono text-gray-700 text-sm">
+                    <span className="text-gray-500 shrink-0">创建时间</span>
+                    <span className="font-mono text-gray-700 text-[14px]">
                       {formatTimestamp(photo.created_at)}
                     </span>
                   </div>
@@ -993,8 +993,8 @@ function PhotoDetailModal({
                    */}
                   {photo.analyzed_at != null && (
                     <div className="flex items-center gap-2">
-                      <span className="text-gray-400 shrink-0">分析时间</span>
-                      <span className="font-mono text-gray-700 text-sm">
+                      <span className="text-gray-500 shrink-0">分析时间</span>
+                      <span className="font-mono text-gray-700 text-[14px]">
                         {formatTimestamp(photo.analyzed_at)}
                       </span>
                     </div>
@@ -1005,7 +1005,7 @@ function PhotoDetailModal({
                    * 颜色兜底使用 unanalyzed 的灰色样式，文字兜底显示原始状态字符串。
                    */}
                   <div className="flex items-center gap-2">
-                    <span className="text-gray-400 shrink-0">状态</span>
+                    <span className="text-gray-500 shrink-0">状态</span>
                     <span
                       className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[photo.status] || STATUS_COLORS.unanalyzed}`}
                     >
@@ -1020,7 +1020,7 @@ function PhotoDetailModal({
       </div>
 
       {downloadToast && (
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 bg-green-600 text-white px-4 py-2.5 rounded-full shadow-lg animate-[fadeIn_0.2s_ease-out]">
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 bg-green-600 text-white px-5 py-3 rounded-[18px] shadow-lg animate-[fadeIn_0.2s_ease-out]">
           <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
           </svg>

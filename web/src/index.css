@@ -1,54 +1,57 @@
 @import 'tailwindcss';
 
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #ff2442;
-  --accent-bg: rgba(255, 36, 66, 0.1);
-  --accent-border: rgba(255, 36, 66, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+  /* Apple-inspired surface colors */
+  --parchment: #f5f5f7;
+  --canvas: #ffffff;
+  --hairline: #e0e0e0;
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
+  /* Apple ink palette — single near-black for all text */
+  --ink: #1d1d1f;
+  --ink-muted: #86868b;
 
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
+  /* Red accent (keeps current theme, not Apple blue) */
+  --accent: #dc2626;
+  --accent-hover: #b91c1c;
+  --accent-bg: rgba(220, 38, 38, 0.1);
+
+  /* SF Pro system font stack */
+  --sans: 'SF Pro Display', 'SF Pro Text', system-ui, -apple-system,
+    BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+  --heading: 'SF Pro Display', system-ui, -apple-system, BlinkMacSystemFont,
+    'Helvetica Neue', sans-serif;
+  --mono: 'SF Mono', ui-monospace, 'Menlo', 'Consolas', monospace;
+
+  /* Apple body — 17px (not 18px, not 16px), relaxed editorial leading */
+  font: 17px/1.47 var(--sans);
+  letter-spacing: -0.022em;
   color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
+  color: var(--ink);
+  background: var(--parchment);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-  @media (max-width: 1024px) {
+  @media (max-width: 834px) {
     font-size: 16px;
+  }
+  @media (max-width: 480px) {
+    font-size: 15px;
   }
 }
 
+/* Dark mode — subtle surface adjustment, red brightens slightly */
 @media (prefers-color-scheme: dark) {
   :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #ff5c72;
-    --accent-bg: rgba(255, 92, 114, 0.15);
-    --accent-border: rgba(255, 92, 114, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
-
-  #social .button-icon {
-    filter: invert(1) brightness(2);
+    --parchment: #16171d;
+    --canvas: #1d1d1f;
+    --hairline: #2e303a;
+    --ink: #f5f5f7;
+    --ink-muted: #98989d;
+    --accent: #f87171;
+    --accent-hover: #ef4444;
+    --accent-bg: rgba(248, 113, 113, 0.15);
   }
 }
 
@@ -57,29 +60,38 @@ body {
 }
 
 h1,
-h2 {
+h2,
+h3,
+h4,
+h5,
+h6 {
   font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
+  font-weight: 600; /* Apple uses 600 not 700 */
+  color: var(--ink);
+  letter-spacing: -0.022em;
 }
 
 h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
+  font-size: 3.5rem;
+  letter-spacing: -0.025em;
+  line-height: 1.07;
   margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
+  @media (max-width: 1068px) {
+    font-size: 2.5rem;
+  }
+  @media (max-width: 640px) {
+    font-size: 2.125rem;
     margin: 20px 0;
   }
 }
 
 h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
+  font-size: 1.5rem;
+  line-height: 1.18;
+  letter-spacing: -0.01em;
   margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
+  @media (max-width: 640px) {
+    font-size: 1.25rem;
   }
 }
 
@@ -90,10 +102,16 @@ p {
 code {
   font-family: var(--mono);
   display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
+  border-radius: 6px;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.35;
+  padding: 3px 8px;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+@media (prefers-color-scheme: dark) {
+  code {
+    background: rgba(255, 255, 255, 0.06);
+  }
 }

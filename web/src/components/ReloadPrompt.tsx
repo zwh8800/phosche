@@ -66,7 +66,7 @@ export default function ReloadPrompt() {
         {needRefresh && (
           <button
             onClick={() => updateServiceWorker(true)}
-            className="rounded-md bg-purple-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-purple-700"
+            className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700"
           >
             重新加载
           </button>

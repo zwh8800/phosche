@@ -89,7 +89,7 @@ function formatExifDate(raw?: string): string {
 function Spinner() {
   return (
     <div className="flex items-center justify-center py-12">
-      <div className="w-8 h-8 border-3 border-gray-200 border-t-red-500 rounded-full animate-spin" />
+      <div className="w-8 h-8 border-[3px] border-gray-200 border-t-red-500 rounded-full animate-spin" />
     </div>
   );
 }
@@ -103,7 +103,7 @@ function Spinner() {
 function SkeletonCard() {
   return (
     <div className="animate-pulse">
-      <div className="aspect-[4/3] rounded-xl bg-gray-200" />
+      <div className="aspect-[4/3] rounded-[18px] bg-gray-200" />
       <div className="mt-2 space-y-1.5 p-1">
         <div className="h-3 w-3/4 rounded bg-gray-200" />
         <div className="h-3 w-1/2 rounded bg-gray-200" />
@@ -164,7 +164,7 @@ const PhotoCard = memo(function PhotoCard({ photo }: { photo: PhotoDocument }) {
   return (
     <Link
       to={`/photo/${photo.id}`}
-      className="group block rounded-xl overflow-hidden bg-white border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
+      className="group block rounded-[18px] overflow-hidden bg-white border border-gray-100 hover:shadow-[0_3px_30px_rgba(0,0,0,0.12)] transition-shadow"
     >
       <div className="relative aspect-[4/3] bg-gray-100 overflow-hidden">
         {/* 照片缩略图，加载失败时隐藏并显示占位文字 */}
@@ -172,7 +172,7 @@ const PhotoCard = memo(function PhotoCard({ photo }: { photo: PhotoDocument }) {
           src={`/photos/${photo.path.replace(/^\/+/, '')}?thumb=1`}
           alt={photo.description || photo.path}
           loading="lazy"
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+          className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
           onError={(e) => {
             const el = e.currentTarget;
             el.style.display = 'none';
@@ -184,14 +184,14 @@ const PhotoCard = memo(function PhotoCard({ photo }: { photo: PhotoDocument }) {
         </div>
         {/* 右上角状态标签 */}
         <span
-          className={`absolute top-2 right-2 text-[10px] px-1.5 py-0.5 rounded font-medium ${STATUS_COLORS[photo.status] || STATUS_COLORS.unanalyzed}`}
+          className={`absolute top-2 right-2 text-[11px] px-1.5 py-0.5 rounded font-medium ${STATUS_COLORS[photo.status] || STATUS_COLORS.unanalyzed}`}
         >
           {STATUS_LABELS[photo.status] || STATUS_LABELS.unanalyzed}
         </span>
       </div>
       <div className="p-3 space-y-2">
         {dateLabel && (
-          <p className="text-xs text-gray-500">{dateLabel}</p>
+          <p className="text-[12px] text-gray-500">{dateLabel}</p>
         )}
         {/* 分析中/失败：显示骨架屏占位；已分析：显示描述、场景类型和标签 */}
         {photo.status === 'analyzing' || photo.status === 'failed' ? (
@@ -213,13 +213,13 @@ const PhotoCard = memo(function PhotoCard({ photo }: { photo: PhotoDocument }) {
           <>
             {/* AI 生成的照片描述 */}
             {photo.description && (
-              <p className="text-sm text-gray-800 line-clamp-2 leading-snug">
+              <p className="text-[14px] text-gray-800 line-clamp-2 leading-snug">
                 {photo.description}
               </p>
             )}
             {/* 场景类型标签 */}
             {photo.scene_type && (
-              <span className="inline-block text-[11px] px-2 py-0.5 bg-red-50 text-red-600 rounded-full font-medium">
+              <span className="inline-block text-[12px] px-2 py-0.5 bg-red-50 text-red-600 rounded-full font-medium">
                 {SCENE_TYPE_LABELS[photo.scene_type] || photo.scene_type}
               </span>
             )}
@@ -229,13 +229,13 @@ const PhotoCard = memo(function PhotoCard({ photo }: { photo: PhotoDocument }) {
                 {photo.tags.slice(0, 3).map((tag) => (
                   <span
                     key={tag}
-                    className="text-[10px] px-1.5 py-px bg-gray-100 text-gray-600 rounded"
+                    className="text-[11px] px-1.5 py-px bg-gray-100 text-gray-600 rounded-[5px]"
                   >
                     {tag}
                   </span>
                 ))}
                 {photo.tags.length > 3 && (
-                  <span className="text-[10px] text-gray-400">
+                  <span className="text-[11px] text-gray-400">
                     +{photo.tags.length - 3}
                   </span>
                 )}
@@ -480,10 +480,10 @@ export default function Search() {
   return (
     <div className="space-y-6">
       {/* 搜索输入框 + 提交按钮 */}
-      <form onSubmit={handleSearch} className="flex gap-2">
+      <form onSubmit={handleSearch} className="flex gap-3">
         <div className="relative flex-1">
           <svg
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none"
+            className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -500,13 +500,13 @@ export default function Search() {
             value={query}
             onChange={(e: ChangeEvent<HTMLInputElement>) => setQuery(e.target.value)}
             placeholder="输入关键词搜索照片…"
-            className="w-full pl-9 pr-4 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white placeholder-gray-400"
+            className="w-full pl-9 pr-4 py-2.5 text-[17px] border border-gray-200 rounded-full focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white placeholder-gray-400"
           />
         </div>
         <button
           type="submit"
           disabled={isLoading}
-          className="px-5 py-2.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 rounded-lg transition-colors"
+          className="px-6 py-2.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 rounded-full transition-colors transition-transform active:scale-[0.95]"
         >
           搜索
         </button>
@@ -536,7 +536,7 @@ export default function Search() {
           </svg>
           筛选条件
           {activeFilterCount > 0 && (
-            <span className="inline-flex items-center justify-center w-5 h-5 text-[11px] font-semibold text-white bg-red-500 rounded-full">
+            <span className="inline-flex items-center justify-center w-5 h-5 text-[12px] font-semibold text-white bg-red-600 rounded-full">
               {activeFilterCount}
             </span>
           )}
@@ -545,10 +545,10 @@ export default function Search() {
 
       {/* 筛选面板：日期范围、场景类型、相机型号、标签多选 */}
       {showFilters && (
-        <div className="p-4 bg-white border border-gray-200 rounded-xl space-y-4">
+        <div className="p-4 bg-white border border-gray-100 rounded-[18px] space-y-4">
           {/* 日期范围筛选：起始日期 → 结束日期 */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-2">
+            <label className="block text-[12px] font-medium text-gray-500 mb-2">
                拍摄日期
             </label>
             <div className="flex items-center gap-2">
@@ -556,14 +556,14 @@ export default function Search() {
                 type="date"
                 value={dateFrom}
                 onChange={(e: ChangeEvent<HTMLInputElement>) => setDateFrom(e.target.value)}
-                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
+                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-[11px] focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
               />
-              <span className="text-xs text-gray-400">至</span>
+              <span className="text-[12px] text-gray-400">至</span>
               <input
                 type="date"
                 value={dateTo}
                 onChange={(e: ChangeEvent<HTMLInputElement>) => setDateTo(e.target.value)}
-                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
+                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-[11px] focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
               />
             </div>
           </div>
@@ -572,14 +572,14 @@ export default function Search() {
           <div className="grid grid-cols-2 gap-4">
             {/* 场景类型 */}
             <div>
-              <label htmlFor="filter-scene" className="block text-xs font-medium text-gray-500 mb-1.5">
+              <label htmlFor="filter-scene" className="block text-[12px] font-medium text-gray-500 mb-1.5">
                 场景类型
               </label>
               <select
                 id="filter-scene"
                 value={sceneType}
                 onChange={(e: ChangeEvent<HTMLSelectElement>) => setSceneType(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-[11px] focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
               >
                 <option value="">全部</option>
                 {(filters?.scene_types || []).map((s) => (
@@ -590,14 +590,14 @@ export default function Search() {
 
             {/* 状态 */}
             <div>
-              <label htmlFor="filter-status" className="block text-xs font-medium text-gray-500 mb-1.5">
+              <label htmlFor="filter-status" className="block text-[12px] font-medium text-gray-500 mb-1.5">
                 状态
               </label>
               <select
                 id="filter-status"
                 value={status}
                 onChange={(e: ChangeEvent<HTMLSelectElement>) => setStatus(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-[11px] focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
               >
                 <option value="">全部</option>
                 {(filters?.statuses || []).map((s) => (
@@ -608,14 +608,14 @@ export default function Search() {
 
             {/* 国家 */}
             <div>
-              <label htmlFor="filter-country" className="block text-xs font-medium text-gray-500 mb-1.5">
+              <label htmlFor="filter-country" className="block text-[12px] font-medium text-gray-500 mb-1.5">
                 国家
               </label>
               <select
                 id="filter-country"
                 value={country}
                 onChange={(e: ChangeEvent<HTMLSelectElement>) => setCountry(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-[11px] focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
               >
                 <option value="">全部</option>
                 {(filters?.countries || []).map((c) => (
@@ -626,14 +626,14 @@ export default function Search() {
 
             {/* 省份 */}
             <div>
-              <label htmlFor="filter-province" className="block text-xs font-medium text-gray-500 mb-1.5">
+              <label htmlFor="filter-province" className="block text-[12px] font-medium text-gray-500 mb-1.5">
                 省份
               </label>
               <select
                 id="filter-province"
                 value={province}
                 onChange={(e: ChangeEvent<HTMLSelectElement>) => setProvince(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-[11px] focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
               >
                 <option value="">全部</option>
                 {(filters?.provinces || []).map((p) => (
@@ -644,14 +644,14 @@ export default function Search() {
 
             {/* 城市 */}
             <div>
-              <label htmlFor="filter-city" className="block text-xs font-medium text-gray-500 mb-1.5">
+              <label htmlFor="filter-city" className="block text-[12px] font-medium text-gray-500 mb-1.5">
                 城市
               </label>
               <select
                 id="filter-city"
                 value={city}
                 onChange={(e: ChangeEvent<HTMLSelectElement>) => setCity(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-[11px] focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
               >
                 <option value="">全部</option>
                 {(filters?.cities || []).map((c) => (
@@ -662,14 +662,14 @@ export default function Search() {
 
             {/* 区/县 */}
             <div>
-              <label htmlFor="filter-district" className="block text-xs font-medium text-gray-500 mb-1.5">
+              <label htmlFor="filter-district" className="block text-[12px] font-medium text-gray-500 mb-1.5">
                 区/县
               </label>
               <select
                 id="filter-district"
                 value={district}
                 onChange={(e: ChangeEvent<HTMLSelectElement>) => setDistrict(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-[11px] focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
               >
                 <option value="">全部</option>
                 {(filters?.districts || []).map((d) => (
@@ -681,7 +681,7 @@ export default function Search() {
 
           {/* 标签多选：从 filters 接口获取可选标签列表 */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-2">标签</label>
+            <label className="block text-[12px] font-medium text-gray-500 mb-2">标签</label>
             {filters?.tags && filters.tags.length > 0 ? (
               <div className="flex flex-wrap gap-1.5">
                 {filters.tags.map((tag) => {
@@ -691,7 +691,7 @@ export default function Search() {
                       key={tag}
                       type="button"
                       onClick={() => toggleTag(tag)}
-                      className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${
+                      className={`text-[12px] px-2.5 py-1 rounded-full font-medium transition-colors ${
                         active
                           ? 'bg-red-100 text-red-700 border border-red-300'
                           : 'bg-gray-100 text-gray-600 border border-transparent hover:bg-gray-200'
@@ -769,7 +769,7 @@ export default function Search() {
           </p>
 
           {/* 响应式照片网格 */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
             {allPhotos.map((photo) => (
               <PhotoCard key={photo.path} photo={photo} />
             ))}
@@ -780,7 +780,7 @@ export default function Search() {
 
           {/* 加载更多时的骨架屏 */}
           {isFetchingNextPage && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
               {Array.from({ length: 4 }).map((_, i) => (
                 <SkeletonCard key={`loading-${i}`} />
               ))}
