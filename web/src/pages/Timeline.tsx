@@ -579,37 +579,51 @@ export default function Timeline() {
            * z-10：确保标题在照片卡片之上
            */}
           <h2 className="sticky top-0 z-10 mb-4 bg-gray-50/90 px-2 py-2 backdrop-blur-sm">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <span className="text-lg font-semibold text-gray-800">{formatDateLabel(dateStr)}</span>
-              {locationSummary?.locations.map((loc) => {
-                const locParams = new URLSearchParams();
-                if (loc.city) locParams.set('city', loc.city);
-                if (loc.district) locParams.set('district', loc.district);
-                if (loc.province) locParams.set('province', loc.province);
-                if (loc.country) locParams.set('country', loc.country);
-                return (
+            {/*
+             * 响应式布局：
+             * - 移动端（< md）：flex-col，日期+标签第一行，地点第二行
+             * - PC端（>= md）：flex-row flex-wrap，所有元素同一行（md:contents 使地点容器透明溶解）
+             * - 无地点时：始终单行
+             */}
+            <div className="flex flex-col gap-1 md:flex-row md:flex-wrap md:items-center md:gap-x-2 md:gap-y-1">
+              {/* 第一行：日期 + 标签 */}
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className="text-lg font-semibold text-gray-800">{formatDateLabel(dateStr)}</span>
+                {tagSummary.map(({ tag }) => (
                   <Link
-                    key={loc.label}
-                    to={`/search?${locParams.toString()}`}
-                    className="inline-flex items-center gap-0.5 rounded bg-indigo-50 px-1.5 py-0.5 text-xs font-normal text-indigo-600 hover:bg-indigo-100 cursor-pointer transition-colors"
+                    key={tag}
+                    to={`/search?tags=${encodeURIComponent(tag)}`}
+                    className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium hover:opacity-80 cursor-pointer transition-opacity ${tagColor(tag)}`}
                   >
-                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    {loc.label}
+                    {tag}
                   </Link>
-                );
-              })}
-              {tagSummary.map(({ tag }) => (
-                <Link
-                  key={tag}
-                  to={`/search?tags=${encodeURIComponent(tag)}`}
-                  className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium hover:opacity-80 cursor-pointer transition-opacity ${tagColor(tag)}`}
-                >
-                  {tag}
-                </Link>
-              ))}
+                ))}
+              </div>
+              {/* 第二行（仅移动端）：地点。md:contents 在PC端使容器透明，地点标签溶解进父flex流 */}
+              {locationSummary?.locations.length > 0 && (
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 md:contents">
+                  {locationSummary.locations.map((loc) => {
+                    const locParams = new URLSearchParams();
+                    if (loc.city) locParams.set('city', loc.city);
+                    if (loc.district) locParams.set('district', loc.district);
+                    if (loc.province) locParams.set('province', loc.province);
+                    if (loc.country) locParams.set('country', loc.country);
+                    return (
+                      <Link
+                        key={loc.label}
+                        to={`/search?${locParams.toString()}`}
+                        className="inline-flex items-center gap-0.5 rounded bg-indigo-50 px-1.5 py-0.5 text-xs font-normal text-indigo-600 hover:bg-indigo-100 cursor-pointer transition-colors"
+                      >
+                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        {loc.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </h2>
           {/*

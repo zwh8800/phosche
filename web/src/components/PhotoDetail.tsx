@@ -7,7 +7,7 @@
  * 布局结构：
  * - 半透明黑色遮罩层，模糊背景（backdrop-blur）
  * - 居中弹窗卡片：左侧为照片显示区（55%），右侧为信息面板（45%）
- * - 信息面板分三个区域：AI 分析、拍摄信息（EXIF）、文件信息
+ * - 信息面板分五个区域：AI 分析、时间地点、拍摄信息（EXIF）、推荐、文件信息
  *
  * 技术要点：
  * - 使用 createPortal 将 DOM 渲染到 document.body 下，避免父容器层叠上下文限制
@@ -264,7 +264,7 @@ function SceneTypeBadge({ type }: { type: string }) {
  * 使用 React Portal 渲染到 document.body，展示照片大图及完整的元数据信息。
  * 布局分为左（55% 图片区）右（45% 信息面板）两部分：
  *   - 图片区：深色背景，图片自适应居中，覆盖下载/关闭/上一张/下一张按钮
- *   - 信息面板：三个信息区块——AI 分析、拍摄信息（EXIF）、文件信息
+ *   - 信息面板：五个信息区块——AI 分析、时间地点、拍摄信息（EXIF）、推荐、文件信息
  *
  * 键盘导航：
  *   - Escape：关闭弹窗
@@ -711,147 +711,221 @@ function PhotoDetailModal({
                 )}
               </section>
 
-              {/* ── Section 2: 拍摄信息 ── EXIF 拍摄信息 ── */}
+              {/* ── Section 2: 时间地点 ── 拍摄日期与地理位置 ── */}
+              {/*
+               * 时间地点区域：条件渲染。
+               * 展示拍摄日期和地理位置信息，优先展示 EXIF 拍摄时间和高德逆地理编码地址。
+               */}
+              {(dateStr || photo.formatted_address || photo.city || (photo.exif?.gps_lat != null && photo.exif?.gps_lon != null)) && (
+                <section>
+                  <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
+                    时间地点
+                  </h3>
+
+                  {/* 拍摄日期 */}
+                  {dateStr && (
+                    <div className="flex items-start gap-2 mb-2">
+                      <svg className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                      </svg>
+                      <p className="text-sm text-gray-500">{dateStr}</p>
+                    </div>
+                  )}
+
+                  {/*
+                   * 格式化地址：优先展示高德逆地理编码返回的完整地址，
+                   * 若无则拼接省/市/区三级行政区域名称。
+                   * 第二行补充展示更细粒度的地理层级（国家/省/市/区 + 街道/门牌）。
+                   * 第三行展示 GPS 十进制坐标（等宽字体）。
+                   */}
+                  {(photo.formatted_address || photo.city || (photo.exif?.gps_lat != null && photo.exif?.gps_lon != null)) && (
+                    <div className="mt-2 space-y-0.5">
+                      {(photo.formatted_address || photo.city) && (() => {
+                        const locationText = photo.formatted_address || [photo.province, photo.city, photo.district].filter(Boolean).join(' ');
+                        return (
+                          <>
+                            <div className="flex items-start gap-2 text-left">
+                              <svg className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+                              </svg>
+                              {onLocationClick ? (
+                                <button
+                                  type="button"
+                                  onClick={() => onLocationClick(locationText, {
+                                    city: photo.city,
+                                    district: photo.district,
+                                    province: photo.province,
+                                    country: photo.country,
+                                  })}
+                                  className="text-sm text-gray-600 hover:text-gray-900 hover:underline cursor-pointer transition-colors text-left"
+                                >
+                                  {locationText}
+                                </button>
+                              ) : (
+                                <span className="text-sm text-gray-600 text-left">
+                                  {locationText}
+                                </span>
+                              )}
+                            </div>
+                          {[
+                            [photo.country, photo.province, photo.city, photo.district].filter(Boolean).join(' '),
+                            [photo.township, photo.business_area, photo.street, photo.street_number].filter(Boolean).join(' '),
+                          ].filter(Boolean).join(' · ') && (
+                            <p className="text-xs text-gray-400 pl-6">
+                              {[
+                                [photo.country, photo.province, photo.city, photo.district].filter(Boolean).join(' '),
+                                [photo.township, photo.business_area, photo.street, photo.street_number].filter(Boolean).join(' '),
+                              ].filter(Boolean).join(' · ')}
+                            </p>
+                          )}
+                          </>
+                        );
+                      })()}
+                      {photo.exif?.gps_lat != null && photo.exif?.gps_lon != null && (
+                        <p className={`text-xs text-gray-400 font-mono ${(photo.formatted_address || photo.city) ? 'pl-6' : ''}`}>
+                          {photo.exif.gps_lat.toFixed(6)}, {photo.exif.gps_lon.toFixed(6)}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </section>
+              )}
+
+              {/* ── Section 3: 拍摄信息 ── EXIF 相机与拍摄参数 ── */}
               {/*
                * 拍摄信息区域：条件渲染。
-               * hasExif 为 true 时展示完整的 EXIF 元数据（相机型号、镜头、拍摄参数、GPS、地址）；
-               * hasExif 为 false 时显示 "暂无 EXIF 数据" 提示。
+               * hasExif 为 true 且存在相机/镜头/拍摄参数时展示；
+               * 无数据时不渲染此区域。
                */}
-              <section>
-                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
-                  拍摄信息
-                </h3>
+              {hasExif && (photo.exif!.camera_model || photo.exif!.lens_model || photo.exif!.focal_length || photo.exif!.aperture || photo.exif!.shutter_speed || photo.exif!.iso != null) && (
+                <section>
+                  <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
+                    拍摄信息
+                  </h3>
 
-                {hasExif ? (
-                  <>
-                    {/*
-                     * 相机 + 镜头型号组合：两者任一存在时整块渲染，
-                     * 相机型号加粗显示，镜头型号以次级文字展示。
-                     */}
-                    {(photo.exif!.camera_model ||
-                      photo.exif!.lens_model) && (
+                  {/*
+                   * 相机 + 镜头型号组合：两者任一存在时整块渲染，
+                   * 相机型号加粗显示，镜头型号以次级文字展示。
+                   */}
+                  {(photo.exif!.camera_model ||
+                    photo.exif!.lens_model) && (
+                    <div className="mb-4">
+                      {photo.exif!.camera_model && (
+                        <p className="text-sm font-semibold text-gray-900">
+                          {photo.exif!.camera_model}
+                        </p>
+                      )}
+                      {photo.exif!.lens_model && (
+                        <p className="text-sm text-gray-500">
+                          {photo.exif!.lens_model}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/*
+                   * 拍摄参数行：焦距 / 光圈（formatAperture 格式化）/ 快门速度 / ISO，
+                   * 以灰色等宽字体徽章排列显示。
+                   */}
+                  {(photo.exif!.focal_length ||
+                    photo.exif!.aperture ||
+                    photo.exif!.shutter_speed ||
+                    photo.exif!.iso != null) && (
+                    <div className="flex flex-wrap gap-3">
+                      {photo.exif!.focal_length && (
+                        <span className="inline-flex items-center px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-sm font-mono">
+                          {photo.exif!.focal_length}
+                        </span>
+                      )}
+                      {photo.exif!.aperture && (
+                        <span className="inline-flex items-center px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-sm font-mono">
+                          {formatAperture(photo.exif!.aperture)}
+                        </span>
+                      )}
+                      {photo.exif!.shutter_speed && (
+                        <span className="inline-flex items-center px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-sm font-mono">
+                          {photo.exif!.shutter_speed}
+                        </span>
+                      )}
+                      {photo.exif!.iso != null && (
+                        <span className="inline-flex items-center px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-sm font-mono">
+                          ISO {photo.exif!.iso}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </section>
+              )}
+
+              {(() => {
+                const similarPhotos = similarData?.photos;
+                const nearbyPhotos = nearbyData?.photos;
+                const hasSimilar = !!similarPhotos && similarPhotos.length > 0;
+                const hasNearby = !!nearbyPhotos && nearbyPhotos.length > 0;
+                if (!hasSimilar && !hasNearby) return null;
+                return (
+                  <section>
+                    <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
+                      推荐
+                    </h3>
+
+                    {hasSimilar && (
                       <div className="mb-4">
-                        {photo.exif!.camera_model && (
-                          <p className="text-sm font-semibold text-gray-900">
-                            {photo.exif!.camera_model}
-                          </p>
-                        )}
-                        {photo.exif!.lens_model && (
-                          <p className="text-sm text-gray-500">
-                            {photo.exif!.lens_model}
-                          </p>
-                        )}
+                        <p className="text-xs text-gray-400 mb-2">相似照片</p>
+                        <div className="flex gap-2">
+                          {similarPhotos!.map((p) => (
+                            <Link
+                              key={p.id}
+                              to={`/photo/${p.id}`}
+                              className="block w-1/3 aspect-square rounded-lg overflow-hidden bg-gray-100"
+                            >
+                              <img
+                                src={`/photos/${p.path.replace(/^\/+/, '')}?thumb=1`}
+                                alt={p.description || '照片'}
+                                className="w-full h-full object-cover hover:scale-105 transition-transform"
+                                loading="lazy"
+                                onError={(e) => {
+                                  const el = e.currentTarget;
+                                  el.style.display = 'none';
+                                }}
+                              />
+                            </Link>
+                          ))}
+                        </div>
                       </div>
                     )}
 
-                    {/*
-                     * 拍摄参数行：焦距 / 光圈（formatAperture 格式化）/ 快门速度 / ISO，
-                     * 以灰色等宽字体徽章排列显示。
-                     */}
-                    {(photo.exif!.focal_length ||
-                      photo.exif!.aperture ||
-                      photo.exif!.shutter_speed ||
-                      photo.exif!.iso != null) && (
-                      <div className="flex flex-wrap gap-3 mb-4">
-                        {photo.exif!.focal_length && (
-                          <span className="inline-flex items-center px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-sm font-mono">
-                            {photo.exif!.focal_length}
-                          </span>
-                        )}
-                        {photo.exif!.aperture && (
-                          <span className="inline-flex items-center px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-sm font-mono">
-                            {formatAperture(photo.exif!.aperture)}
-                          </span>
-                        )}
-                        {photo.exif!.shutter_speed && (
-                          <span className="inline-flex items-center px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-sm font-mono">
-                            {photo.exif!.shutter_speed}
-                          </span>
-                        )}
-                        {photo.exif!.iso != null && (
-                          <span className="inline-flex items-center px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-sm font-mono">
-                            ISO {photo.exif!.iso}
-                          </span>
-                        )}
+                    {hasNearby && (
+                      <div className="mb-4">
+                        <p className="text-xs text-gray-400 mb-2">附近照片</p>
+                        <div className="flex gap-2">
+                          {nearbyPhotos!.map((p) => (
+                            <Link
+                              key={p.id}
+                              to={`/photo/${p.id}`}
+                              className="block w-1/3 aspect-square rounded-lg overflow-hidden bg-gray-100"
+                            >
+                              <img
+                                src={`/photos/${p.path.replace(/^\/+/, '')}?thumb=1`}
+                                alt={p.description || '照片'}
+                                className="w-full h-full object-cover hover:scale-105 transition-transform"
+                                loading="lazy"
+                                onError={(e) => {
+                                  const el = e.currentTarget;
+                                  el.style.display = 'none';
+                                }}
+                              />
+                            </Link>
+                          ))}
+                        </div>
                       </div>
                     )}
+                  </section>
+                );
+              })()}
 
-                    {/* 拍摄日期 */}
-                    {dateStr && (
-                      <div className="flex items-start gap-2 mb-2">
-                        <svg className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
-                        </svg>
-                        <p className="text-sm text-gray-500">{dateStr}</p>
-                      </div>
-                    )}
-
-                    {/*
-                     * 格式化地址：优先展示高德逆地理编码返回的完整地址，
-                     * 若无则拼接省/市/区三级行政区域名称。
-                     * 第二行补充展示更细粒度的地理层级（国家/省/市/区 + 街道/门牌）。
-                     * 第三行展示 GPS 十进制坐标（等宽字体）。
-                     */}
-                    {(photo.formatted_address || photo.city || (photo.exif?.gps_lat != null && photo.exif?.gps_lon != null)) && (
-                      <div className="mt-2 space-y-0.5">
-                        {(photo.formatted_address || photo.city) && (() => {
-                          const locationText = photo.formatted_address || [photo.province, photo.city, photo.district].filter(Boolean).join(' ');
-                          return (
-                            <>
-                              <div className="flex items-start gap-2 text-left">
-                                <svg className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
-                                </svg>
-                                {onLocationClick ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => onLocationClick(locationText, {
-                                      city: photo.city,
-                                      district: photo.district,
-                                      province: photo.province,
-                                      country: photo.country,
-                                    })}
-                                    className="text-sm text-gray-600 hover:text-gray-900 hover:underline cursor-pointer transition-colors text-left"
-                                  >
-                                    {locationText}
-                                  </button>
-                                ) : (
-                                  <span className="text-sm text-gray-600 text-left">
-                                    {locationText}
-                                  </span>
-                                )}
-                              </div>
-                            {[
-                              [photo.country, photo.province, photo.city, photo.district].filter(Boolean).join(' '),
-                              [photo.township, photo.business_area, photo.street, photo.street_number].filter(Boolean).join(' '),
-                            ].filter(Boolean).join(' · ') && (
-                              <p className="text-xs text-gray-400 pl-6">
-                                {[
-                                  [photo.country, photo.province, photo.city, photo.district].filter(Boolean).join(' '),
-                                  [photo.township, photo.business_area, photo.street, photo.street_number].filter(Boolean).join(' '),
-                                ].filter(Boolean).join(' · ')}
-                              </p>
-                            )}
-                            </>
-                          );
-                        })()}
-                        {photo.exif?.gps_lat != null && photo.exif?.gps_lon != null && (
-                          <p className={`text-xs text-gray-400 font-mono ${(photo.formatted_address || photo.city) ? 'pl-6' : ''}`}>
-                            {photo.exif.gps_lat.toFixed(6)}, {photo.exif.gps_lon.toFixed(6)}
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <p className="text-sm text-gray-400 italic">
-                    暂无 EXIF 数据
-                  </p>
-                )}
-              </section>
-
-              {/* ── Section 3: 文件信息 ── */}
+              {/* ── Section 5: 文件信息 ── */}
               {/*
                * 文件信息区域：始终渲染（文件元数据必然存在）。
                * 展示路径（带复制按钮）、大小、修改时间、创建时间、分析时间、处理状态。
@@ -926,73 +1000,6 @@ function PhotoDetailModal({
                   </div>
                 </div>
               </section>
-
-              {(() => {
-                const similarPhotos = similarData?.photos;
-                const nearbyPhotos = nearbyData?.photos;
-                const hasSimilar = !!similarPhotos && similarPhotos.length > 0;
-                const hasNearby = !!nearbyPhotos && nearbyPhotos.length > 0;
-                if (!hasSimilar && !hasNearby) return null;
-                return (
-                  <section>
-                    <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
-                      推荐
-                    </h3>
-
-                    {hasSimilar && (
-                      <div className="mb-4">
-                        <p className="text-xs text-gray-400 mb-2">相似照片</p>
-                        <div className="flex gap-2">
-                          {similarPhotos!.map((p) => (
-                            <Link
-                              key={p.id}
-                              to={`/photo/${p.id}`}
-                              className="block w-1/3 aspect-square rounded-lg overflow-hidden bg-gray-100"
-                            >
-                              <img
-                                src={`/photos/${p.path.replace(/^\/+/, '')}?thumb=1`}
-                                alt={p.description || '照片'}
-                                className="w-full h-full object-cover hover:scale-105 transition-transform"
-                                loading="lazy"
-                                onError={(e) => {
-                                  const el = e.currentTarget;
-                                  el.style.display = 'none';
-                                }}
-                              />
-                            </Link>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {hasNearby && (
-                      <div className="mb-4">
-                        <p className="text-xs text-gray-400 mb-2">附近照片</p>
-                        <div className="flex gap-2">
-                          {nearbyPhotos!.map((p) => (
-                            <Link
-                              key={p.id}
-                              to={`/photo/${p.id}`}
-                              className="block w-1/3 aspect-square rounded-lg overflow-hidden bg-gray-100"
-                            >
-                              <img
-                                src={`/photos/${p.path.replace(/^\/+/, '')}?thumb=1`}
-                                alt={p.description || '照片'}
-                                className="w-full h-full object-cover hover:scale-105 transition-transform"
-                                loading="lazy"
-                                onError={(e) => {
-                                  const el = e.currentTarget;
-                                  el.style.display = 'none';
-                                }}
-                              />
-                            </Link>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </section>
-                );
-              })()}
             </div>
           </div>
         </div>
