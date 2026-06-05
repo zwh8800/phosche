@@ -34,8 +34,8 @@ func (s *Server) runGeocodeMigration() {
 			skipped++
 			return nil
 		}
-		// Skip if already has complete geocoding data (City 为可靠的完整性标志)
-		if doc.City != "" {
+		// 已有省份 + 至少城市或区县之一，视为完整地理编码数据，跳过
+		if doc.Province != "" && (doc.City != "" || doc.District != "") {
 			skipped++
 			return nil
 		}
