@@ -44,6 +44,7 @@ interface PhotoDetailModalProps {
   hasNext?: boolean;
   onTagClick?: (tag: string) => void;
   onLocationClick?: (text: string, params: { city?: string; district?: string; province?: string; country?: string }) => void;
+  onObjectClick?: (object: string) => void;
 }
 
 /**
@@ -287,6 +288,7 @@ function PhotoDetailModal({
   hasNext,
   onTagClick,
   onLocationClick,
+  onObjectClick,
 }: PhotoDetailModalProps) {
   // 键盘导航处理：Escape 键关闭弹窗，←/→ 键切换照片
   /**
@@ -655,14 +657,26 @@ function PhotoDetailModal({
                           画面物体
                         </span>
                         <div className="flex flex-wrap gap-2">
-                          {photo.objects.map((obj) => (
-                            <span
-                              key={obj}
-                              className="inline-flex items-center px-2.5 py-1 rounded-md bg-gray-50 text-gray-600 text-xs border border-gray-200"
-                            >
-                              {obj}
-                            </span>
-                          ))}
+                          {photo.objects.map((obj) => {
+                            const objCls = 'inline-flex items-center px-2.5 py-1 rounded-md bg-gray-50 text-gray-600 text-xs border border-gray-200';
+                            if (onObjectClick) {
+                              return (
+                                <button
+                                  key={obj}
+                                  type="button"
+                                  onClick={() => onObjectClick(obj)}
+                                  className={`${objCls} hover:bg-gray-100 hover:text-gray-900 cursor-pointer transition-colors`}
+                                >
+                                  {obj}
+                                </button>
+                              );
+                            }
+                            return (
+                              <span key={obj} className={objCls}>
+                                {obj}
+                              </span>
+                            );
+                          })}
                         </div>
                       </div>
                     )}

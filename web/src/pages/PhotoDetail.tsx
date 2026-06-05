@@ -91,6 +91,7 @@ function PhotoDetail() {
         if (params.country) p.set('country', params.country);
         navigate(`/search?${p.toString()}`);
       }}
+      onObjectClick={(obj) => navigate(`/search?query=${encodeURIComponent(obj)}`)}
     />
   );
 }
