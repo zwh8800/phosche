@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/zwh8800/phosche/internal/types"
 )
@@ -23,6 +24,10 @@ func (s *Server) runGeocodeMigration() {
 
 	slog.Info("geocode migration started")
 
+	// 10 QPS 限流，避免触发高德/Google API 配额
+	rateLimiter := time.NewTicker(100 * time.Millisecond)
+	defer rateLimiter.Stop()
+
 	err := s.Indexer.ScrollAll(ctx, s.IndexName, func(doc *types.PhotoDocument) error {
 		// Skip if no GPS coordinates
 		if doc.Location == nil || (doc.Location.Lat == 0 && doc.Location.Lon == 0) {
@@ -39,6 +44,8 @@ func (s *Server) runGeocodeMigration() {
 			skipped++
 			return nil
 		}
+
+		<-rateLimiter.C
 
 		geoInfo, geoErr := s.Geocoder.ReverseGeocode(ctx, doc.Location.Lat, doc.Location.Lon)
 		if geoErr != nil {
