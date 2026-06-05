@@ -109,12 +109,28 @@ func (g *GoogleGeocoder) ReverseGeocode(ctx context.Context, lat, lon float64) (
 				country = c.LongText
 			case "administrative_area_level_1":
 				province = c.LongText
+			// locality 是最精确的城市级类型，优先使用
+			// 海外地址通常没有 locality，改用 administrative_area_level_2
 			case "locality":
 				city = c.LongText
+			case "administrative_area_level_2":
+				if city == "" {
+					city = c.LongText
+				}
+			// sublocality 优先，海外地址退回到 administrative_area_level_3
 			case "sublocality":
 				district = c.LongText
+			case "administrative_area_level_3":
+				if district == "" {
+					district = c.LongText
+				}
+			// sublocality_level_2 优先，海外地址退回到 administrative_area_level_4
 			case "sublocality_level_2":
 				township = c.LongText
+			case "administrative_area_level_4":
+				if township == "" {
+					township = c.LongText
+				}
 			case "route":
 				street = c.LongText
 			case "street_number":

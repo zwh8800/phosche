@@ -66,6 +66,45 @@ func TestGoogleGeocode_Success(t *testing.T) {
 	assert.Equal(t, "中国广东省深圳市南山区粤海街道科技园路1号", info.Address)
 }
 
+func TestGoogleGeocode_Success_International(t *testing.T) {
+	// 海外地址使用 administrative_area_level_2/3/4 而非 locality/sublocality
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{
+			"results": [{
+				"formattedAddress": "80361印度尼西亚巴厘岛巴塘 South Kuta, \u91d1\u5df4\u862d647Q+V95",
+				"addressComponents": [
+					{"longText": "\u91d1\u5df4\u862d", "shortText": "\u91d1\u5df4\u862d", "types": ["administrative_area_level_4", "political"]},
+					{"longText": "South Kuta", "shortText": "South Kuta", "types": ["administrative_area_level_3", "political"]},
+					{"longText": "\u5df4\u5858", "shortText": "\u5df4\u5858", "types": ["administrative_area_level_2", "political"]},
+					{"longText": "\u5df4\u5398\u5c9b", "shortText": "\u5df4\u5398\u5c9b", "types": ["administrative_area_level_1", "political"]},
+					{"longText": "\u5370\u5ea6\u5c3c\u897f\u4e9a", "shortText": "ID", "types": ["country", "political"]}
+				]
+			}]
+		}`))
+	}))
+	defer server.Close()
+
+	g := &GoogleGeocoder{
+		apiKey:     "test-key",
+		httpClient: server.Client(),
+		baseURL:    server.URL,
+	}
+
+	info, err := g.ReverseGeocode(context.Background(), -8.7852, 115.1384)
+	require.NoError(t, err)
+	require.NotNil(t, info)
+
+	assert.Equal(t, "印度尼西亚", info.Country)
+	assert.Equal(t, "巴厘岛", info.Province)
+	assert.Equal(t, "巴塘", info.City)
+	assert.Equal(t, "South Kuta", info.District)
+	assert.Equal(t, "金巴蘭", info.Township)
+	assert.Equal(t, "", info.Street)
+	assert.Equal(t, "", info.StreetNumber)
+}
+
 func TestGoogleGeocode_ZeroResults(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
