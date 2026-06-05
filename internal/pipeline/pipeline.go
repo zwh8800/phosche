@@ -67,7 +67,7 @@ type PipelineConfig struct {
 	Watcher           watcher.Watcher    // 文件系统监控器（fsnotify 实现）
 	Scanner           watcher.Scanner    // 目录扫描器（启动时遍历已有文件）
 	Analyzer          Analyzer           // LLM 分析器
-	Geocoder          *geocoder.Geocoder // 逆地理编码器
+	Geocoder          geocoder.Geocoder  // 逆地理编码器（Amap + Google Maps 回退）
 	Indexer           Indexer            // ES 索引服务
 	Cache             *cache.Generator   // 照片缓存生成器（缩略图 + HEIC 转 JPEG）
 	IndexName         string             // ES 索引名称

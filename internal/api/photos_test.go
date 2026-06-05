@@ -34,6 +34,10 @@ func (m *mockCleaner) UpdateEXIF(_ context.Context, _ string, _ *types.EXIFInfo,
 	return nil
 }
 
+func (m *mockCleaner) UpdateGeo(_ context.Context, _ string, _ *types.GeoInfo, _ string) error {
+	return nil
+}
+
 func (m *mockCleaner) ScrollAll(_ context.Context, _ string, _ func(*types.PhotoDocument) error) error {
 	return nil
 }
@@ -53,7 +57,7 @@ func newSearchMock(result *types.SearchResponse, err error) *mockSearchService {
 }
 
 func newTestServer(svc *mockSearchService) *httptest.Server {
-	return httptest.NewServer(NewRouter(NewServer(svc, &mockCleaner{}, "photos")))
+	return httptest.NewServer(NewRouter(NewServer(svc, &mockCleaner{}, "photos", nil)))
 }
 
 func TestGetPhotos_Success(t *testing.T) {
@@ -106,7 +110,7 @@ func TestGetPhotos_Pagination(t *testing.T) {
 		},
 	}
 
-	ts := httptest.NewServer(NewRouter(NewServer(mock, &mockCleaner{}, "photos")))
+	ts := httptest.NewServer(NewRouter(NewServer(mock, &mockCleaner{}, "photos", nil)))
 	defer ts.Close()
 
 	resp, err := http.Get(ts.URL + "/api/photos?page=2&page_size=5")
@@ -174,7 +178,7 @@ func TestGetPhotos_DateFilter(t *testing.T) {
 		},
 	}
 
-	ts := httptest.NewServer(NewRouter(NewServer(mock, &mockCleaner{}, "photos")))
+	ts := httptest.NewServer(NewRouter(NewServer(mock, &mockCleaner{}, "photos", nil)))
 	defer ts.Close()
 
 	resp, err := http.Get(ts.URL + "/api/photos?date_from=2024-01-01&date_to=2024-12-31")
@@ -209,7 +213,7 @@ func TestGetPhotos_DefaultParams(t *testing.T) {
 		},
 	}
 
-	ts := httptest.NewServer(NewRouter(NewServer(mock, &mockCleaner{}, "photos")))
+	ts := httptest.NewServer(NewRouter(NewServer(mock, &mockCleaner{}, "photos", nil)))
 	defer ts.Close()
 
 	resp, err := http.Get(ts.URL + "/api/photos")

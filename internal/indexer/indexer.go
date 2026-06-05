@@ -210,6 +210,44 @@ func (s *IndexerService) UpdateEXIF(ctx context.Context, path string, exif *type
 	return nil
 }
 
+// UpdateGeo 仅更新照片文档的地理位置字段，使用 ES Update API 的 "doc" 部分更新。
+// GeoInfo 在 PhotoDocument 中是内嵌展平的，因此 geo 中的每个字段作为独立字段更新。
+// AI 分析结果、EXIF 等其他字段不受影响。
+func (s *IndexerService) UpdateGeo(ctx context.Context, path string, geo *types.GeoInfo, indexName string) error {
+	docID := sha256hex(path)
+
+	updateBody := map[string]any{
+		"doc": map[string]any{
+			"country":           geo.Country,
+			"province":          geo.Province,
+			"city":              geo.City,
+			"district":          geo.District,
+			"township":          geo.Township,
+			"business_area":     geo.BusinessArea,
+			"street":            geo.Street,
+			"street_number":     geo.StreetNumber,
+			"address":           geo.Address,
+			"formatted_address": geo.FormattedAddress,
+		},
+	}
+	bodyBytes, err := json.Marshal(updateBody)
+	if err != nil {
+		return fmt.Errorf("marshal update body: %w", err)
+	}
+
+	_, err = s.client.Client().Update(ctx, opensearchapi.UpdateReq{
+		Index:      indexName,
+		DocumentID: docID,
+		Body:       bytes.NewReader(bodyBytes),
+		Params:     opensearchapi.UpdateParams{Refresh: "true"},
+	})
+	if err != nil {
+		return fmt.Errorf("update geo: %w", err)
+	}
+
+	return nil
+}
+
 // DeletePhoto 根据文件路径删除对应的 ES 文档。
 // 文档 _id 为 path 的 SHA-256 哈希值。即使文档不存在（404）也不返回错误，
 // 因为删除一个不存在的文档在语义上是成功的。

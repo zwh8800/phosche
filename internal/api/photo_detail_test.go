@@ -37,6 +37,10 @@ func (m *mockIndexer) UpdateEXIF(_ context.Context, _ string, _ *types.EXIFInfo,
 	return nil
 }
 
+func (m *mockIndexer) UpdateGeo(_ context.Context, _ string, _ *types.GeoInfo, _ string) error {
+	return nil
+}
+
 func (m *mockIndexer) ScrollAll(_ context.Context, _ string, _ func(*types.PhotoDocument) error) error {
 	return nil
 }

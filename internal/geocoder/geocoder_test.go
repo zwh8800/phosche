@@ -11,7 +11,7 @@ import (
 )
 
 func TestReverseGeocode_EmptyAPIKey(t *testing.T) {
-	g := NewGeocoder("")
+	g := NewAmapGeocoder("")
 	info, err := g.ReverseGeocode(context.Background(), 39.9042, 116.4074)
 
 	assert.NoError(t, err)
@@ -42,7 +42,7 @@ func TestReverseGeocode_Success_ProvinceLevelCity(t *testing.T) {
 	}))
 	defer server.Close()
 
-	g := &Geocoder{
+	g := &AmapGeocoder{
 		apiKey:     "test-key",
 		httpClient: server.Client(),
 		baseURL:    server.URL,
@@ -79,7 +79,7 @@ func TestReverseGeocode_Success_NormalCity(t *testing.T) {
 	}))
 	defer server.Close()
 
-	g := &Geocoder{
+	g := &AmapGeocoder{
 		apiKey:     "test-key",
 		httpClient: server.Client(),
 		baseURL:    server.URL,
@@ -107,7 +107,7 @@ func TestReverseGeocode_APIError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	g := &Geocoder{
+	g := &AmapGeocoder{
 		apiKey:     "bad-key",
 		httpClient: server.Client(),
 		baseURL:    server.URL,
@@ -126,7 +126,7 @@ func TestReverseGeocode_HTTPError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	g := &Geocoder{
+	g := &AmapGeocoder{
 		apiKey:     "test-key",
 		httpClient: server.Client(),
 		baseURL:    server.URL,
@@ -146,7 +146,7 @@ func TestReverseGeocode_InvalidJSON(t *testing.T) {
 	}))
 	defer server.Close()
 
-	g := &Geocoder{
+	g := &AmapGeocoder{
 		apiKey:     "test-key",
 		httpClient: server.Client(),
 		baseURL:    server.URL,

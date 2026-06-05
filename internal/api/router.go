@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/zwh8800/phosche/internal/geocoder"
 	"github.com/zwh8800/phosche/internal/types"
 )
 
@@ -28,6 +29,7 @@ type Indexer interface {
 	GetPhotoByID(ctx context.Context, id string, indexName string) (*types.PhotoDocument, error)
 	DeletePhoto(ctx context.Context, path string, indexName string) error
 	UpdateEXIF(ctx context.Context, path string, exif *types.EXIFInfo, indexName string) error
+	UpdateGeo(ctx context.Context, path string, geo *types.GeoInfo, indexName string) error
 	ScrollAll(ctx context.Context, indexName string, callback func(*types.PhotoDocument) error) error
 }
 
@@ -36,14 +38,16 @@ type Server struct {
 	searchService PhotoSearcher
 	Indexer       Indexer
 	IndexName     string
+	Geocoder      geocoder.Geocoder
 }
 
-// NewServer 创建并初始化 Server 实例，注入搜索服务、索引服务和索引名称。
-func NewServer(svc PhotoSearcher, idx Indexer, indexName string) *Server {
+// NewServer 创建并初始化 Server 实例，注入搜索服务、索引服务、索引名称和逆地理编码器。
+func NewServer(svc PhotoSearcher, idx Indexer, indexName string, geocoder geocoder.Geocoder) *Server {
 	return &Server{
 		searchService: svc,
 		Indexer:       idx,
 		IndexName:     indexName,
+		Geocoder:      geocoder,
 	}
 }
 
@@ -94,6 +98,7 @@ func NewRouter(srv *Server) chi.Router {
 		r.Get("/photos/{id}/similar", srv.similarPhotosHandler)
 		r.Get("/photos/{id}/nearby", srv.nearbyPhotosHandler)
 		r.Post("/migrate-timezone", srv.handleMigrateTimezone)
+		r.Post("/migrate-geocode", srv.handleMigrateGeocode)
 	})
 
 	return r

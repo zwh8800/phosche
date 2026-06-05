@@ -102,7 +102,8 @@ type ServerConfig struct {
 
 // EnvConfig 是环境变量配置，包含外部服务的 API Key 等。
 type EnvConfig struct {
-	AMAPKey string `yaml:"amap_key"`
+	AMAPKey       string `yaml:"amap_key"`
+	GoogleMapsKey string `yaml:"google_maps_key"`
 }
 
 // EmbeddingConfig 是文本向量化配置，控制 embedding 服务的选择和混合检索参数。

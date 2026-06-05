@@ -94,9 +94,23 @@ func Run(distFS fs.FS, configPath string) {
 		time.Duration(cfg.LLM.TimeoutSeconds)*time.Second,
 	)
 
-	geoCoder := geocoder.NewGeocoder(cfg.Env.AMAPKey)
-	if cfg.Env.AMAPKey == "" {
-		slog.Info("geocoding disabled: no amap_key configured")
+	// 创建逆地理编码器（高德优先 + Google Maps 回退）
+	amapGeocoder := geocoder.NewAmapGeocoder(cfg.Env.AMAPKey)
+	googleGeocoder := geocoder.NewGoogleGeocoder(cfg.Env.GoogleMapsKey)
+
+	var geoCoder geocoder.Geocoder
+	if cfg.Env.AMAPKey == "" && cfg.Env.GoogleMapsKey == "" {
+		slog.Info("geocoding disabled: no amap_key or google_maps_key configured")
+		geoCoder = nil
+	} else {
+		geoCoder = geocoder.NewFallbackGeocoder(amapGeocoder, googleGeocoder)
+		if cfg.Env.AMAPKey == "" {
+			slog.Info("geocoding: using Google Maps only (no amap_key)")
+		} else if cfg.Env.GoogleMapsKey == "" {
+			slog.Info("geocoding: using Amap only (no google_maps_key)")
+		} else {
+			slog.Info("geocoding: using Amap with Google Maps fallback")
+		}
 	}
 
 	// 创建 embedding 客户端（可选，用于混合检索）
@@ -192,7 +206,7 @@ func Run(distFS fs.FS, configPath string) {
 	}
 	searchSvc := search.NewSearchService(osClient, searchOpts...)
 
-	apiSrv := api.NewServer(searchSvc, indexerSvc, cfg.OpenSearch.IndexName)
+	apiSrv := api.NewServer(searchSvc, indexerSvc, cfg.OpenSearch.IndexName, geoCoder)
 	router := api.NewRouter(apiSrv)
 
 	photoHandler := static.PhotoHandler(cfg.Watch.Directories, cacheGen)

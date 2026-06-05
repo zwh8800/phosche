@@ -127,6 +127,43 @@ func TestIndexer_UpdateStatus(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// UpdateGeo
+// ---------------------------------------------------------------------------
+
+func TestIndexer_UpdateGeo(t *testing.T) {
+	svc, indexName, cleanup := setupIndexerTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	doc := newTestDoc("/photos/beijing.jpg")
+	doc.Description = "A photo in Beijing"
+	doc.Status = types.StatusAnalyzed
+
+	err := svc.IndexPhoto(ctx, doc, indexName)
+	require.NoError(t, err)
+
+	geo := &types.GeoInfo{
+		Country:          "中国",
+		Province:         "浙江省",
+		City:             "杭州市",
+		FormattedAddress: "浙江省杭州市西湖区",
+	}
+	err = svc.UpdateGeo(ctx, "/photos/beijing.jpg", geo, indexName)
+	require.NoError(t, err)
+
+	got, err := svc.GetPhoto(ctx, "/photos/beijing.jpg", indexName)
+	require.NoError(t, err)
+	assert.Equal(t, "中国", got.Country)
+	assert.Equal(t, "浙江省", got.Province)
+	assert.Equal(t, "杭州市", got.City)
+	assert.Equal(t, "浙江省杭州市西湖区", got.FormattedAddress)
+	assert.Equal(t, types.StatusAnalyzed, got.Status, "status should be unchanged")
+	assert.Equal(t, "A photo in Beijing", got.Description, "description should be unchanged")
+	assert.Empty(t, got.District, "district should be empty (not set)")
+	assert.Empty(t, got.Township, "township should be empty (not set)")
+}
+
+// ---------------------------------------------------------------------------
 // BulkIndex
 // ---------------------------------------------------------------------------
 

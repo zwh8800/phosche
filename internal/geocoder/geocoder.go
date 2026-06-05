@@ -1,5 +1,6 @@
-// Package geocoder 提供基于高德 API 的逆地理编码能力。
-// 将 GPS 坐标转换为结构化地址信息（省、市、区、街道等）。
+// Package geocoder 提供逆地理编码能力（高德 + Google Maps 回退）。
+// 将 GPS 坐标转换为结构化地址信息（省、市、区、街道等），
+// 默认使用高德 API，海外坐标自动回退到 Google Maps。
 package geocoder
 
 import (
@@ -13,19 +14,25 @@ import (
 	"github.com/zwh8800/phosche/internal/types"
 )
 
-// Geocoder 封装高德逆地理编码 API 客户端。
+// Geocoder 定义逆地理编码接口。
+// 实现该接口的类型可以将 GPS 坐标转换为结构化地址信息。
+type Geocoder interface {
+	ReverseGeocode(ctx context.Context, lat, lon float64) (*types.GeoInfo, error)
+}
+
+// AmapGeocoder 封装高德逆地理编码 API 客户端。
 // 通过高德 Web 服务 API 将经纬度坐标转换为结构化地址。
-type Geocoder struct {
+type AmapGeocoder struct {
 	apiKey     string
 	httpClient *http.Client
 	baseURL    string
 }
 
-// NewGeocoder 创建一个新的 Geocoder 实例。
+// NewAmapGeocoder 创建一个新的 AmapGeocoder 实例。
 // apiKey 为高德开放平台的 Web 服务 API Key，
 // 用于身份验证和请求限流。
-func NewGeocoder(apiKey string) *Geocoder {
-	return &Geocoder{
+func NewAmapGeocoder(apiKey string) *AmapGeocoder {
+	return &AmapGeocoder{
 		apiKey: apiKey,
 		httpClient: &http.Client{Timeout: 5 * time.Second},
 		baseURL:   "https://restapi.amap.com/v3/geocode/regeo",
@@ -35,7 +42,7 @@ func NewGeocoder(apiKey string) *Geocoder {
 // ReverseGeocode 将经纬度坐标转换为结构化地址信息。
 // 返回的 GeoInfo 包含省、市、区、街道等地址层级信息。
 // 如果 API 调用失败或坐标无效，返回错误。
-func (g *Geocoder) ReverseGeocode(ctx context.Context, lat, lon float64) (*types.GeoInfo, error) {
+func (g *AmapGeocoder) ReverseGeocode(ctx context.Context, lat, lon float64) (*types.GeoInfo, error) {
 	if g.apiKey == "" {
 		return nil, nil
 	}
