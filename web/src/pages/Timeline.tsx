@@ -600,7 +600,7 @@ export default function Timeline() {
                 ))}
               </div>
               {/* 第二行（仅移动端）：地点。md:contents 在PC端使容器透明，地点标签溶解进父flex流 */}
-              {locationSummary?.locations.length > 0 && (
+              {locationSummary && locationSummary.locations.length > 0 && (
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 md:contents">
                   {locationSummary.locations.map((loc) => {
                     const locParams = new URLSearchParams();
