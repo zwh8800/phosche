@@ -251,7 +251,7 @@ func (s *SearchService) searchHybrid(ctx context.Context, indexName string, req 
 				map[string]any{
 					"multi_match": map[string]any{
 						"query":  req.Query,
-						"fields": []string{"description", "tags", "objects", "text", "address", "formatted_address"},
+						"fields": []string{"description^3", "tags^5", "objects^2", "formatted_address^1.5", "text", "address"},
 					},
 				},
 			},
@@ -461,7 +461,7 @@ func (s *SearchService) buildQuery(req *types.SearchRequest, userEmail string) m
 		must = append(must, map[string]any{
 			"multi_match": map[string]any{
 				"query":  req.Query,
-				"fields": []string{"description", "tags", "objects", "text", "address", "formatted_address"},
+				"fields": []string{"description^3", "tags^5", "objects^2", "formatted_address^1.5", "text", "address"},
 			},
 		})
 	}
@@ -911,14 +911,11 @@ func (s *SearchService) FindSimilar(ctx context.Context, indexName string, photo
 	return s.buildRecommendationResponse(resp), nil
 }
 
-// FindNearby 查找与指定照片地理位置相近的照片，基于 Haversine 脚本计算距离。
+// FindNearby 查找指定 GPS 坐标附近的照片。
 //
-// Haversine 公式：d = 2R·arcsin(√(sin²(Δlat/2) + cos(lat1)·cos(lat2)·sin²(Δlon/2)))
-// 其中 R=6371km 为地球半径，结果单位为公里。该公式在 OpenSearch 的 painless 脚本中执行。
-//
-// 搜索策略：
-//   - 使用 script filter 限制 5km 半径内的文档
-//   - 使用 script sort 按 Haversine 距离升序排列（最近的在前）
+// 查询策略：
+//   - 使用 geo_distance filter 限制 5km 半径内的文档（利用 location geo_point 索引）
+//   - 使用 _geo_distance sort 按距离升序排列（最近的在前）
 //   - 仅返回 status=analyzed 的照片（确保有 GPS 数据和完整分析结果）
 //
 // 参数：
@@ -932,18 +929,6 @@ func (s *SearchService) FindSimilar(ctx context.Context, indexName string, photo
 func (s *SearchService) FindNearby(ctx context.Context, indexName string, photoID string, lat, lon float64, userEmail string) (*types.RecommendationResponse, error) {
 	if lat == 0 && lon == 0 {
 		return &types.RecommendationResponse{Photos: []types.PhotoDocument{}, Total: 0}, nil
-	}
-
-	haversineScript := map[string]any{
-		"source": "double R = 6371; double lat1 = doc['exif.gps_lat'].value * Math.PI / 180; double lat2 = params.lat * Math.PI / 180; double dLat = (params.lat - doc['exif.gps_lat'].value) * Math.PI / 180; double dLon = (params.lon - doc['exif.gps_lon'].value) * Math.PI / 180; double a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon/2) * Math.sin(dLon/2); double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); return R * c;",
-		"lang":   "painless",
-		"params": map[string]any{"lat": lat, "lon": lon},
-	}
-
-	distanceFilterScript := map[string]any{
-		"source": "double R = 6371; double lat1 = doc['exif.gps_lat'].value * Math.PI / 180; double lat2 = params.lat * Math.PI / 180; double dLat = (params.lat - doc['exif.gps_lat'].value) * Math.PI / 180; double dLon = (params.lon - doc['exif.gps_lon'].value) * Math.PI / 180; double a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon/2) * Math.sin(dLon/2); double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); return R * c <= params.maxDist;",
-		"lang":   "painless",
-		"params": map[string]any{"lat": lat, "lon": lon, "maxDist": 5.0},
 	}
 
 	query := map[string]any{
@@ -960,17 +945,28 @@ func (s *SearchService) FindNearby(ctx context.Context, indexName string, photoI
 							},
 						},
 					},
-					map[string]any{"exists": map[string]any{"field": "exif.gps_lat"}},
-					map[string]any{"script": map[string]any{"script": distanceFilterScript}},
+					map[string]any{"exists": map[string]any{"field": "location"}},
+					map[string]any{
+						"geo_distance": map[string]any{
+							"distance": "5km",
+							"location": map[string]any{
+								"lat": lat,
+								"lon": lon,
+							},
+						},
+					},
 				},
 			},
 		},
 		"sort": []any{
 			map[string]any{
-				"_script": map[string]any{
-					"type":   "number",
-					"script": haversineScript,
-					"order":  "asc",
+				"_geo_distance": map[string]any{
+					"location": map[string]any{
+						"lat": lat,
+						"lon": lon,
+					},
+					"order": "asc",
+					"unit":  "km",
 				},
 			},
 		},
