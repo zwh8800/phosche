@@ -251,7 +251,7 @@ func (s *SearchService) searchHybrid(ctx context.Context, indexName string, req 
 				map[string]any{
 					"multi_match": map[string]any{
 						"query":  req.Query,
-						"fields": []string{"description^3", "tags^5", "objects^2", "formatted_address^1.5", "text", "address"},
+						"fields": []string{"description^4", "tags^2", "objects^2", "formatted_address^1", "text^1.5", "address"},
 					},
 				},
 			},

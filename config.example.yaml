@@ -123,4 +123,4 @@ embedding:
   timeout_seconds: 15
   hybrid:
     # RRF rank_constant，OpenSearch 原生 RRF 使用此值，控制排名差异的权重衰减速度
-    rrf_rank_constant: 60
+    rrf_rank_constant: 40
