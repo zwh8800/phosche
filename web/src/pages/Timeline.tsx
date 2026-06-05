@@ -29,7 +29,7 @@
  */
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useNavigate, Link } from 'react-router-dom';
-import { useRef, useEffect, useMemo } from 'react';
+import { useRef, useEffect, useMemo, memo } from 'react';
 import { fetchPhotos } from '../api/photos';
 import type { PhotoDocument } from '../types';
 
@@ -261,9 +261,9 @@ function photoSrc(path: string): string {
  */
 function SkeletonCard() {
   return (
-    <div className="animate-pulse">
-      <div className="aspect-square rounded-lg bg-gray-200" />
-      <div className="mt-2 space-y-1.5">
+    <div className="animate-pulse rounded-xl overflow-hidden bg-white border border-gray-200">
+      <div className="aspect-square bg-gray-200" />
+      <div className="p-3 space-y-2">
         <div className="h-3 w-3/4 rounded bg-gray-200" />
         <div className="h-3 w-1/2 rounded bg-gray-200" />
       </div>
@@ -283,17 +283,17 @@ function SkeletonCard() {
  *
  * @param photo - 照片文档对象，包含路径、描述、标签、状态等信息
  */
-function PhotoCard({ photo }: { photo: PhotoDocument }) {
+const PhotoCard = memo(function PhotoCard({ photo }: { photo: PhotoDocument }) {
   const navigate = useNavigate();
 
   return (
     <button
       type="button"
       onClick={() => navigate(`/photo/${photo.id}`)}
-      className="group cursor-pointer text-left"
+      className="group cursor-pointer text-left block rounded-xl overflow-hidden bg-white border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
     >
       {/* 缩略图区域：方形裁剪，悬停时有缩放动画 */}
-      <div className="aspect-square overflow-hidden rounded-lg bg-gray-100 relative">
+      <div className="aspect-square overflow-hidden bg-gray-100 relative">
         {/*
          * 照片缩略图，使用 ?thumb=1 参数请求后端缩略图服务
          * loading="lazy" 启用浏览器原生懒加载
@@ -325,7 +325,7 @@ function PhotoCard({ photo }: { photo: PhotoDocument }) {
         )}
       </div>
 
-      <div className="mt-2 space-y-1.5">
+      <div className="p-3 space-y-2">
         {/*
          * 分析中 → 显示骨架屏占位（模拟文字 + 标签形状）
          * 已分析  → 显示 AI 生成的真实描述和标签
@@ -358,7 +358,7 @@ function PhotoCard({ photo }: { photo: PhotoDocument }) {
                 {photo.tags.slice(0, 3).map((tag) => (
                   <span
                     key={tag}
-                    className="inline-block rounded bg-red-50 px-1.5 py-0.5 text-xs text-red-700"
+                    className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${tagColor(tag)}`}
                   >
                     {tag}
                   </span>
@@ -375,7 +375,7 @@ function PhotoCard({ photo }: { photo: PhotoDocument }) {
       </div>
     </button>
   );
-}
+})
 
 /**
  * 时间线主页面组件
@@ -528,7 +528,7 @@ export default function Timeline() {
   // 首屏数据尚未加载完成，显示 6 个骨架屏卡片占位
   if (isLoading) {
     return (
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 items-start">
         {Array.from({ length: 6 }).map((_, i) => (
           <SkeletonCard key={i} />
         ))}
@@ -633,7 +633,7 @@ export default function Timeline() {
            * - lg 断点（1024px）：4 列
            * gap-4 提供统一的卡片间距
            */}
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 items-start">
             {photos.map((photo) => (
               <PhotoCard key={photo.id} photo={photo} />
             ))}
@@ -655,7 +655,7 @@ export default function Timeline() {
        * 提示用户数据正在加载中。
        */}
       {isFetchingNextPage && (
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 items-start">
           {Array.from({ length: 4 }).map((_, i) => (
             <SkeletonCard key={`loading-${i}`} />
           ))}
