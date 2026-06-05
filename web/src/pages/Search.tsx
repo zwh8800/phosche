@@ -45,6 +45,15 @@ import type {
   FiltersResponse,
   PhotoDocument,
 } from '../types';
+import { STATUS_LABELS, SCENE_TYPE_LABELS } from '../constants';
+
+const THEME_STATUS_COLORS: Record<string, string> = {
+  analyzed: 'bg-status-success-bg text-status-success',
+  analyzing: 'bg-status-warning-bg text-status-warning',
+  failed: 'bg-status-error-bg text-status-error',
+  pending_analysis: 'bg-status-neutral-bg text-status-neutral',
+  unanalyzed: 'bg-status-neutral-bg text-status-neutral',
+};
 
 /** 每页搜索结果数量 */
 const PAGE_SIZE = 20;
@@ -89,7 +98,7 @@ function formatExifDate(raw?: string): string {
 function Spinner() {
   return (
     <div className="flex items-center justify-center py-12">
-      <div className="w-8 h-8 border-3 border-gray-200 border-t-red-500 rounded-full animate-spin" />
+      <div className="w-8 h-8 border-3 border-surface-elevated border-t-accent rounded-full animate-spin" />
     </div>
   );
 }
@@ -103,43 +112,16 @@ function Spinner() {
 function SkeletonCard() {
   return (
     <div className="animate-pulse">
-      <div className="aspect-[4/3] rounded-xl bg-gray-200" />
+      <div className="aspect-[4/3] rounded-xl bg-surface-elevated" />
       <div className="mt-2 space-y-1.5 p-1">
-        <div className="h-3 w-3/4 rounded bg-gray-200" />
-        <div className="h-3 w-1/2 rounded bg-gray-200" />
+        <div className="h-3 w-3/4 rounded bg-surface-elevated" />
+        <div className="h-3 w-1/2 rounded bg-surface-elevated" />
       </div>
     </div>
   );
 }
 
-/** 照片处理状态的中文标签映射，用于在卡片上显示状态徽章 */
-const STATUS_LABELS: Record<string, string> = {
-  analyzed: '已分析',
-  analyzing: '分析中',
-  failed: '失败',
-  pending_analysis: '待分析',
-  unanalyzed: '未分析',
-};
 
-/** 照片处理状态对应的 Tailwind 颜色类，用于状态徽章的背景色和文字色 */
-const STATUS_COLORS: Record<string, string> = {
-  analyzed: 'bg-green-100 text-green-700',
-  analyzing: 'bg-yellow-100 text-yellow-700',
-  failed: 'bg-red-100 text-red-700',
-  pending_analysis: 'bg-gray-100 text-gray-600',
-  unanalyzed: 'bg-gray-100 text-gray-600',
-};
-
-/** 场景类型的中文标签映射，用于在卡片和筛选器中显示场景名称 */
-const SCENE_TYPE_LABELS: Record<string, string> = {
-  outdoor: '室外',
-  indoor: '室内',
-  underwater: '水下',
-  aerial: '航拍',
-  studio: '影棚',
-  night: '夜景',
-  unknown: '未知',
-};
 
 /**
  * 照片卡片组件（使用 memo 优化渲染性能）
@@ -164,9 +146,9 @@ const PhotoCard = memo(function PhotoCard({ photo }: { photo: PhotoDocument }) {
   return (
     <Link
       to={`/photo/${photo.id}`}
-      className="group block rounded-xl overflow-hidden bg-white border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
+      className="group block rounded-xl overflow-hidden bg-surface-card border border-border-default shadow-theme-sm hover:shadow-theme-md transition-shadow"
     >
-      <div className="relative aspect-[4/3] bg-gray-100 overflow-hidden">
+      <div className="relative aspect-[4/3] bg-surface-elevated overflow-hidden">
         {/* 照片缩略图，加载失败时隐藏并显示占位文字 */}
         <img
           src={`/photos/${photo.path.replace(/^\/+/, '')}?thumb=1`}
@@ -179,47 +161,47 @@ const PhotoCard = memo(function PhotoCard({ photo }: { photo: PhotoDocument }) {
             el.nextElementSibling?.classList.remove('hidden');
           }}
         />
-        <div className="hidden absolute inset-0 flex items-center justify-center bg-gray-100 text-gray-400 text-sm">
+        <div className="hidden absolute inset-0 flex items-center justify-center bg-surface-elevated text-text-muted text-sm">
           无法加载图片
         </div>
         {/* 右上角状态标签 */}
         <span
-          className={`absolute top-2 right-2 text-[10px] px-1.5 py-0.5 rounded font-medium ${STATUS_COLORS[photo.status] || STATUS_COLORS.unanalyzed}`}
+          className={`absolute top-2 right-2 text-[10px] px-1.5 py-0.5 rounded font-medium ${THEME_STATUS_COLORS[photo.status] || THEME_STATUS_COLORS.unanalyzed}`}
         >
           {STATUS_LABELS[photo.status] || STATUS_LABELS.unanalyzed}
         </span>
       </div>
       <div className="p-3 space-y-2">
         {dateLabel && (
-          <p className="text-xs text-gray-500">{dateLabel}</p>
+          <p className="text-xs text-text-tertiary">{dateLabel}</p>
         )}
         {/* 分析中/失败：显示骨架屏占位；已分析：显示描述、场景类型和标签 */}
         {photo.status === 'analyzing' || photo.status === 'failed' ? (
           <>
             <div className="animate-pulse space-y-2">
-              <div className={`h-3 w-full rounded ${photo.status === 'failed' ? 'bg-red-200' : 'bg-gray-200'}`} />
-              <div className={`h-3 w-3/4 rounded ${photo.status === 'failed' ? 'bg-red-200' : 'bg-gray-200'}`} />
+              <div className={`h-3 w-full rounded ${photo.status === 'failed' ? 'bg-surface-elevated' : 'bg-surface-elevated'}`} />
+              <div className={`h-3 w-3/4 rounded ${photo.status === 'failed' ? 'bg-surface-elevated' : 'bg-surface-elevated'}`} />
             </div>
             <div className="animate-pulse">
-              <div className={`inline-block h-5 w-12 rounded-full ${photo.status === 'failed' ? 'bg-red-200' : 'bg-gray-200'}`} />
+              <div className={`inline-block h-5 w-12 rounded-full ${photo.status === 'failed' ? 'bg-surface-elevated' : 'bg-surface-elevated'}`} />
             </div>
             <div className="animate-pulse flex gap-1">
-              <div className={`h-4 w-10 rounded ${photo.status === 'failed' ? 'bg-red-200' : 'bg-gray-200'}`} />
-              <div className={`h-4 w-12 rounded ${photo.status === 'failed' ? 'bg-red-200' : 'bg-gray-200'}`} />
-              <div className={`h-4 w-8 rounded ${photo.status === 'failed' ? 'bg-red-200' : 'bg-gray-200'}`} />
+              <div className={`h-4 w-10 rounded ${photo.status === 'failed' ? 'bg-surface-elevated' : 'bg-surface-elevated'}`} />
+              <div className={`h-4 w-12 rounded ${photo.status === 'failed' ? 'bg-surface-elevated' : 'bg-surface-elevated'}`} />
+              <div className={`h-4 w-8 rounded ${photo.status === 'failed' ? 'bg-surface-elevated' : 'bg-surface-elevated'}`} />
             </div>
           </>
         ) : (
           <>
             {/* AI 生成的照片描述 */}
             {photo.description && (
-              <p className="text-sm text-gray-800 line-clamp-2 leading-snug">
+              <p className="text-sm text-text-primary line-clamp-2 leading-snug">
                 {photo.description}
               </p>
             )}
             {/* 场景类型标签 */}
             {photo.scene_type && (
-              <span className="inline-block text-[11px] px-2 py-0.5 bg-red-50 text-red-600 rounded-full font-medium">
+              <span className="inline-block text-[11px] px-2 py-0.5 bg-accent-subtle text-accent rounded-full font-medium">
                 {SCENE_TYPE_LABELS[photo.scene_type] || photo.scene_type}
               </span>
             )}
@@ -229,13 +211,13 @@ const PhotoCard = memo(function PhotoCard({ photo }: { photo: PhotoDocument }) {
                 {photo.tags.slice(0, 3).map((tag) => (
                   <span
                     key={tag}
-                    className="text-[10px] px-1.5 py-px bg-gray-100 text-gray-600 rounded"
+                    className="text-[10px] px-1.5 py-px bg-surface-elevated text-text-secondary rounded"
                   >
                     {tag}
                   </span>
                 ))}
                 {photo.tags.length > 3 && (
-                  <span className="text-[10px] text-gray-400">
+                  <span className="text-[10px] text-text-muted">
                     +{photo.tags.length - 3}
                   </span>
                 )}
@@ -483,7 +465,7 @@ export default function Search() {
       <form onSubmit={handleSearch} className="flex gap-2">
         <div className="relative flex-1">
           <svg
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none"
+            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -500,13 +482,13 @@ export default function Search() {
             value={query}
             onChange={(e: ChangeEvent<HTMLInputElement>) => setQuery(e.target.value)}
             placeholder="输入关键词搜索照片…"
-            className="w-full pl-9 pr-4 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white placeholder-gray-400"
+            className="w-full pl-9 pr-4 py-2.5 text-sm border border-border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-ring focus:border-transparent bg-surface-card placeholder-text-muted"
           />
         </div>
         <button
           type="submit"
           disabled={isLoading}
-          className="px-5 py-2.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 rounded-lg transition-colors"
+          className="px-5 py-2.5 text-sm font-medium text-text-on-accent bg-accent hover:bg-accent-hover disabled:opacity-50 rounded-lg transition-colors"
         >
           搜索
         </button>
@@ -518,7 +500,7 @@ export default function Search() {
           type="button"
           onClick={() => setShowFilters((v) => !v)}
           className={`inline-flex items-center gap-1.5 text-sm font-medium transition-colors ${
-            showFilters ? 'text-red-600' : 'text-gray-600 hover:text-gray-900'
+            showFilters ? 'text-accent' : 'text-text-secondary hover:text-text-primary'
           }`}
         >
           <svg
@@ -536,7 +518,7 @@ export default function Search() {
           </svg>
           筛选条件
           {activeFilterCount > 0 && (
-            <span className="inline-flex items-center justify-center w-5 h-5 text-[11px] font-semibold text-white bg-red-500 rounded-full">
+            <span className="inline-flex items-center justify-center w-5 h-5 text-[11px] font-semibold text-text-on-accent bg-accent rounded-full">
               {activeFilterCount}
             </span>
           )}
@@ -545,10 +527,10 @@ export default function Search() {
 
       {/* 筛选面板：日期范围、场景类型、相机型号、标签多选 */}
       {showFilters && (
-        <div className="p-4 bg-white border border-gray-200 rounded-xl space-y-4">
+        <div className="p-4 bg-surface-card border border-border-default rounded-xl space-y-4">
           {/* 日期范围筛选：起始日期 → 结束日期 */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-2">
+            <label className="block text-xs font-medium text-text-tertiary mb-2">
                拍摄日期
             </label>
             <div className="flex items-center gap-2">
@@ -556,14 +538,14 @@ export default function Search() {
                 type="date"
                 value={dateFrom}
                 onChange={(e: ChangeEvent<HTMLInputElement>) => setDateFrom(e.target.value)}
-                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
+                className="flex-1 px-3 py-2 text-sm border border-border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-ring focus:border-transparent bg-surface-card"
               />
-              <span className="text-xs text-gray-400">至</span>
+              <span className="text-xs text-text-muted">至</span>
               <input
                 type="date"
                 value={dateTo}
                 onChange={(e: ChangeEvent<HTMLInputElement>) => setDateTo(e.target.value)}
-                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
+                className="flex-1 px-3 py-2 text-sm border border-border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-ring focus:border-transparent bg-surface-card"
               />
             </div>
           </div>
@@ -572,14 +554,14 @@ export default function Search() {
           <div className="grid grid-cols-2 gap-4">
             {/* 场景类型 */}
             <div>
-              <label htmlFor="filter-scene" className="block text-xs font-medium text-gray-500 mb-1.5">
+              <label htmlFor="filter-scene" className="block text-xs font-medium text-text-tertiary mb-1.5">
                 场景类型
               </label>
               <select
                 id="filter-scene"
                 value={sceneType}
                 onChange={(e: ChangeEvent<HTMLSelectElement>) => setSceneType(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
+                className="w-full px-3 py-2 text-sm border border-border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-ring focus:border-transparent bg-surface-card"
               >
                 <option value="">全部</option>
                 {(filters?.scene_types || []).map((s) => (
@@ -590,14 +572,14 @@ export default function Search() {
 
             {/* 状态 */}
             <div>
-              <label htmlFor="filter-status" className="block text-xs font-medium text-gray-500 mb-1.5">
+              <label htmlFor="filter-status" className="block text-xs font-medium text-text-tertiary mb-1.5">
                 状态
               </label>
               <select
                 id="filter-status"
                 value={status}
                 onChange={(e: ChangeEvent<HTMLSelectElement>) => setStatus(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
+                className="w-full px-3 py-2 text-sm border border-border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-ring focus:border-transparent bg-surface-card"
               >
                 <option value="">全部</option>
                 {(filters?.statuses || []).map((s) => (
@@ -608,14 +590,14 @@ export default function Search() {
 
             {/* 国家 */}
             <div>
-              <label htmlFor="filter-country" className="block text-xs font-medium text-gray-500 mb-1.5">
+              <label htmlFor="filter-country" className="block text-xs font-medium text-text-tertiary mb-1.5">
                 国家
               </label>
               <select
                 id="filter-country"
                 value={country}
                 onChange={(e: ChangeEvent<HTMLSelectElement>) => setCountry(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
+                className="w-full px-3 py-2 text-sm border border-border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-ring focus:border-transparent bg-surface-card"
               >
                 <option value="">全部</option>
                 {(filters?.countries || []).map((c) => (
@@ -626,14 +608,14 @@ export default function Search() {
 
             {/* 省份 */}
             <div>
-              <label htmlFor="filter-province" className="block text-xs font-medium text-gray-500 mb-1.5">
+              <label htmlFor="filter-province" className="block text-xs font-medium text-text-tertiary mb-1.5">
                 省份
               </label>
               <select
                 id="filter-province"
                 value={province}
                 onChange={(e: ChangeEvent<HTMLSelectElement>) => setProvince(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
+                className="w-full px-3 py-2 text-sm border border-border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-ring focus:border-transparent bg-surface-card"
               >
                 <option value="">全部</option>
                 {(filters?.provinces || []).map((p) => (
@@ -644,14 +626,14 @@ export default function Search() {
 
             {/* 城市 */}
             <div>
-              <label htmlFor="filter-city" className="block text-xs font-medium text-gray-500 mb-1.5">
+              <label htmlFor="filter-city" className="block text-xs font-medium text-text-tertiary mb-1.5">
                 城市
               </label>
               <select
                 id="filter-city"
                 value={city}
                 onChange={(e: ChangeEvent<HTMLSelectElement>) => setCity(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
+                className="w-full px-3 py-2 text-sm border border-border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-ring focus:border-transparent bg-surface-card"
               >
                 <option value="">全部</option>
                 {(filters?.cities || []).map((c) => (
@@ -662,14 +644,14 @@ export default function Search() {
 
             {/* 区/县 */}
             <div>
-              <label htmlFor="filter-district" className="block text-xs font-medium text-gray-500 mb-1.5">
+              <label htmlFor="filter-district" className="block text-xs font-medium text-text-tertiary mb-1.5">
                 区/县
               </label>
               <select
                 id="filter-district"
                 value={district}
                 onChange={(e: ChangeEvent<HTMLSelectElement>) => setDistrict(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
+                className="w-full px-3 py-2 text-sm border border-border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-ring focus:border-transparent bg-surface-card"
               >
                 <option value="">全部</option>
                 {(filters?.districts || []).map((d) => (
@@ -681,7 +663,7 @@ export default function Search() {
 
           {/* 标签多选：从 filters 接口获取可选标签列表 */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-2">标签</label>
+            <label className="block text-xs font-medium text-text-tertiary mb-2">标签</label>
             {filters?.tags && filters.tags.length > 0 ? (
               <div className="flex flex-wrap gap-1.5">
                 {filters.tags.map((tag) => {
@@ -693,8 +675,8 @@ export default function Search() {
                       onClick={() => toggleTag(tag)}
                       className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${
                         active
-                          ? 'bg-red-100 text-red-700 border border-red-300'
-                          : 'bg-gray-100 text-gray-600 border border-transparent hover:bg-gray-200'
+                          ? 'bg-accent-subtle text-accent border border-accent'
+                          : 'bg-surface-elevated text-text-secondary border border-transparent hover:bg-surface-elevated'
                       }`}
                     >
                       {tag}
@@ -703,7 +685,7 @@ export default function Search() {
                 })}
               </div>
             ) : (
-              <p className="text-xs text-gray-400">暂无可用标签</p>
+              <p className="text-xs text-text-muted">暂无可用标签</p>
             )}
           </div>
 
@@ -713,7 +695,7 @@ export default function Search() {
               <button
                 type="button"
                 onClick={resetFilters}
-                className="text-xs text-gray-500 hover:text-gray-700 underline"
+                className="text-xs text-text-tertiary hover:text-text-secondary underline"
               >
                 重置所有筛选条件
               </button>
@@ -728,11 +710,11 @@ export default function Search() {
       {/* 错误状态：显示错误信息 + 重试按钮 */}
       {isError && (
         <div className="text-center py-12">
-          <p className="text-sm text-red-500">{(error as Error)?.message || '搜索失败'}</p>
+          <p className="text-sm text-status-error">{(error as Error)?.message || '搜索失败'}</p>
           <button
             type="button"
             onClick={() => refetch()}
-            className="mt-3 text-sm text-red-600 hover:text-red-700 font-medium"
+            className="mt-3 text-sm text-accent hover:text-accent-hover font-medium"
           >
             重试
           </button>
@@ -743,7 +725,7 @@ export default function Search() {
       {!isLoading && !isError && allPhotos.length === 0 && data && (
         <div className="text-center py-16">
           <svg
-            className="w-12 h-12 mx-auto text-gray-300 mb-4"
+            className="w-12 h-12 mx-auto text-text-muted mb-4"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -755,7 +737,7 @@ export default function Search() {
               d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
             />
           </svg>
-          <p className="text-sm text-gray-500">未找到匹配的照片，试试其他关键词</p>
+          <p className="text-sm text-text-tertiary">未找到匹配的照片，试试其他关键词</p>
         </div>
       )}
 
@@ -763,8 +745,8 @@ export default function Search() {
       {allPhotos.length > 0 && (
         <>
           {/* 结果统计：总数 + 分页信息 */}
-          <p className="text-xs text-gray-400">
-            共找到 <span className="font-medium text-gray-600">{total}</span> 张照片
+          <p className="text-xs text-text-muted">
+            共找到 <span className="font-medium text-text-secondary">{total}</span> 张照片
             {totalPages > 1 && <>，第 {data?.pages.length}/{totalPages} 页</>}
           </p>
 
@@ -789,7 +771,7 @@ export default function Search() {
 
           {/* 全部加载完成提示 */}
           {!hasNextPage && (
-            <p className="py-8 text-center text-sm text-gray-400">已加载全部照片</p>
+            <p className="py-8 text-center text-sm text-text-muted">已加载全部照片</p>
           )}
         </>
       )}

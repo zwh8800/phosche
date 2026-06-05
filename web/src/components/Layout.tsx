@@ -12,6 +12,7 @@
  */
 import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
+import ThemeSwitcher from './ThemeSwitcher';
 
 /**
  * Layout 组件 — 页面布局容器
@@ -28,9 +29,9 @@ function Layout() {
   /** 导航链接的基础 CSS 类名：内边距、圆角、字号、过渡动画 */
   const baseLinkClass = 'px-3 py-2 rounded text-sm font-medium transition-colors';
   /** 当前活动链接的高亮样式：白色文字 + 红色背景 */
-  const activeClass = 'text-white bg-red-600';
+  const activeClass = 'text-text-on-accent bg-accent';
   /** 非活动链接的默认样式：灰色文字 + 悬停效果 */
-  const inactiveClass = 'text-gray-700 hover:text-gray-900 hover:bg-gray-100';
+  const inactiveClass = 'text-text-secondary hover:text-text-primary hover:bg-surface-elevated';
 
   /**
    * 导航链接列表
@@ -62,17 +63,17 @@ function Layout() {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-surface-page">
       {/*
         顶部导航栏
         - 白色背景 + 底部浅灰色分隔线
         - 内容区域最大宽度 6xl，居中布局
         - 水平排列：品牌标识（左） + 导航链接（右）
        */}
-      <nav className="bg-white shadow-sm border-b border-gray-200">
+      <nav className="bg-surface-card shadow-theme-sm border-b border-border-default">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-14">
-            <NavLink to="/" className="flex items-center gap-2 text-lg font-bold text-gray-900 tracking-tight">
+            <NavLink to="/" className="flex items-center gap-2 text-lg font-bold text-ink tracking-tight">
               <img src="/favicon.svg" alt="Phosche" className="w-7 h-7" />
               Phosche
             </NavLink>
@@ -84,6 +85,9 @@ function Layout() {
             <div className="hidden md:flex items-center gap-1">
               {navLinks}
             </div>
+            <div className="hidden md:block">
+              <ThemeSwitcher />
+            </div>
 
             {/*
               移动端汉堡菜单按钮（md 以下屏幕显示）
@@ -94,7 +98,7 @@ function Layout() {
             <button
               type="button"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden inline-flex items-center justify-center p-2 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors cursor-pointer"
+              className="md:hidden inline-flex items-center justify-center p-2 rounded-md text-text-muted hover:text-text-secondary hover:bg-surface-elevated transition-colors cursor-pointer"
               aria-label="切换菜单"
             >
               {mobileMenuOpen ? (
@@ -138,9 +142,12 @@ function Layout() {
           垂直排列所有导航链接，覆盖在导航栏下方
         */}
         {mobileMenuOpen && (
-          <div className="md:hidden border-t border-gray-200 bg-white">
+          <div className="md:hidden border-t border-border-default bg-surface-card">
             <div className="max-w-6xl mx-auto px-4 py-2 flex flex-col gap-1">
               {navLinks}
+              <div className="pt-2 border-t border-border-default mt-2">
+                <ThemeSwitcher />
+              </div>
             </div>
           </div>
         )}

@@ -73,13 +73,13 @@ class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 px-4 text-center">
+        <div className="flex min-h-screen flex-col items-center justify-center bg-surface-page px-4 text-center">
           {/*
             警告三角形图标
             使用紫色柔化视觉效果，避免红色引起焦虑
            */}
           <svg
-            className="mb-6 h-20 w-20 text-purple-300"
+            className="mb-6 h-20 w-20 text-accent"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -92,11 +92,11 @@ class ErrorBoundary extends Component<Props, State> {
             />
           </svg>
           {/* 错误标题 — 简洁明了 */} 
-          <h1 className="text-2xl font-semibold text-gray-800">
+          <h1 className="text-2xl font-semibold text-ink">
             出错了
           </h1>
           {/* 错误描述 — 引导用户下一步操作 */} 
-          <p className="mt-2 max-w-md text-sm text-gray-500">
+          <p className="mt-2 max-w-md text-sm text-text-tertiary">
             页面渲染时发生错误，请尝试刷新页面。
           </p>
           {/*
@@ -105,7 +105,7 @@ class ErrorBoundary extends Component<Props, State> {
             使用 break-all 确保长错误信息不会溢出
            */}
           {this.state.error && (
-            <p className="mt-3 max-w-lg rounded-lg bg-red-50 px-4 py-3 text-xs text-red-700 break-all">
+            <p className="mt-3 max-w-lg rounded-lg bg-status-error-bg px-4 py-3 text-xs text-status-error break-all">
               {this.state.error.message}
             </p>
           )}
@@ -123,7 +123,7 @@ class ErrorBoundary extends Component<Props, State> {
             <button
               type="button"
               onClick={this.handleRefresh}
-              className="inline-flex items-center gap-2 rounded-lg bg-purple-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-purple-700 cursor-pointer"
+              className="inline-flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-accent-hover cursor-pointer"
             >
               {/*
                 刷新图标（旋转箭头）
@@ -151,7 +151,7 @@ class ErrorBoundary extends Component<Props, State> {
             */}
             <Link
               to="/"
-              className="rounded-lg bg-white px-5 py-2.5 text-sm font-medium text-gray-700 shadow-sm ring-1 ring-gray-200 transition-colors hover:bg-gray-50"
+              className="rounded-lg bg-surface-card px-5 py-2.5 text-sm font-medium text-text-secondary shadow-theme-sm ring-1 ring-border-default transition-colors hover:bg-surface-page"
             >
               返回首页
             </Link>

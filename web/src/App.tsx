@@ -16,6 +16,8 @@
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';  // 浏览器路由：基于 HTML5 History API 的声明式路由
 // ---- 数据请求 ----
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'; // TanStack Query：服务端状态管理、缓存、后台刷新
+// ---- 主题 ----
+import { ThemeProvider } from './contexts/ThemeContext';
 // ---- 布局与错误处理 ----
 import Layout from './components/Layout';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -66,12 +68,14 @@ const router = createBrowserRouter([
  */
 function App() {
   return (
-    <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        <RouterProvider router={router} />
-        <ReloadPrompt />
-      </QueryClientProvider>
-    </ErrorBoundary>
+    <ThemeProvider>
+      <ErrorBoundary>
+        <QueryClientProvider client={queryClient}>
+          <RouterProvider router={router} />
+          <ReloadPrompt />
+        </QueryClientProvider>
+      </ErrorBoundary>
+    </ThemeProvider>
   );
 }
 

@@ -54,7 +54,7 @@ function PhotoDetail() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-32">
-        <div className="animate-spin rounded-full h-10 w-10 border-[3px] border-purple-200 border-t-purple-600" />
+        <div className="animate-spin rounded-full h-10 w-10 border-[3px] border-skeleton border-t-accent" />
       </div>
     );
   }
@@ -64,10 +64,10 @@ function PhotoDetail() {
   if (error || !data) {
     return (
       <div className="flex flex-col items-center justify-center py-32 gap-4">
-        <p className="text-gray-500 text-lg">加载失败</p>
+        <p className="text-text-tertiary text-lg">加载失败</p>
         <button
           onClick={() => refetch()}
-          className="px-5 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium cursor-pointer"
+          className="px-5 py-2.5 bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors text-sm font-medium cursor-pointer"
         >
           重试
         </button>

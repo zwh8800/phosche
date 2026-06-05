@@ -42,21 +42,21 @@ function NotFound() {
       {/* ── 装饰层：大号 404 数字 ────────────────────────────── 大号 404 错误码 ── */}
       {/* 使用 text-8xl 和 font-bold 放大突出显示，purple-200 淡紫色
           作为视觉装饰而非可读文本，营造品牌氛围 */}
-      <p className="text-8xl font-bold text-purple-200">404</p>
+      <p className="text-8xl font-bold text-accent/20">404</p>
       {/* ── 信息层：主标题 + 副标题 ──────────────────────────── */}
       {/* 主标题：用户核心感知信息，深色粗体大字 */}
-      <h1 className="mt-4 text-2xl font-semibold text-gray-800">
+      <h1 className="mt-4 text-2xl font-semibold text-ink">
         页面未找到
       </h1>
       {/* 副标题：补充说明，灰色小字降低视觉权重 */}
-      <p className="mt-2 text-gray-500">
+      <p className="mt-2 text-text-tertiary">
         您访问的页面不存在或已被移除
       </p>
       {/* ── 操作层：返回首页引导按钮 ────────────────────────── 返回首页按钮 ── */}
       {/* 品牌紫色按钮，hover 加深；gap-2 控制图标与文字间距 */}
       <Link
         to="/"
-        className="mt-8 inline-flex items-center gap-2 rounded-lg bg-purple-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-purple-700"
+        className="mt-8 inline-flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-accent-hover"
       >
         <svg
           className="h-4 w-4"

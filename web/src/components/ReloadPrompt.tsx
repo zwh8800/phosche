@@ -54,8 +54,8 @@ export default function ReloadPrompt() {
   if (!offlineReady && !needRefresh) return null
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 max-w-sm rounded-lg border border-gray-200 bg-white p-4 shadow-lg">
-      <div className="mb-3 text-sm text-gray-700">
+    <div className="fixed bottom-4 right-4 z-50 max-w-sm rounded-lg border border-border-default bg-surface-card p-4 shadow-theme-lg">
+      <div className="mb-3 text-sm text-text-secondary">
         {offlineReady ? (
           <span>应用已就绪，可离线使用</span>
         ) : (
@@ -66,14 +66,14 @@ export default function ReloadPrompt() {
         {needRefresh && (
           <button
             onClick={() => updateServiceWorker(true)}
-            className="rounded-md bg-purple-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-purple-700"
+            className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-hover"
           >
             重新加载
           </button>
         )}
         <button
           onClick={close}
-          className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
+          className="rounded-md border border-border-default px-3 py-1.5 text-sm text-text-secondary hover:bg-surface-page"
         >
           关闭
         </button>

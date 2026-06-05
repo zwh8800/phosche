@@ -32,32 +32,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useRef, useEffect, useMemo, memo } from 'react';
 import { fetchPhotos } from '../api/photos';
 import type { PhotoDocument } from '../types';
-
-/**
- * 标签颜色调色板（8 色）
- * 复用自 PhotoDetail 组件，通过 DJB2 哈希确保同一标签始终同色
- */
-const TAG_COLORS = [
-  'bg-red-100 text-red-700',
-  'bg-amber-100 text-amber-700',
-  'bg-emerald-100 text-emerald-700',
-  'bg-sky-100 text-sky-700',
-  'bg-orange-100 text-orange-700',
-  'bg-rose-100 text-rose-700',
-  'bg-teal-100 text-teal-700',
-  'bg-pink-100 text-pink-700',
-];
-
-/**
- * DJB2 哈希 → 为标签分配确定性颜色
- */
-function tagColor(tag: string): string {
-  let hash = 0;
-  for (let i = 0; i < tag.length; i++) {
-    hash = tag.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return TAG_COLORS[Math.abs(hash) % TAG_COLORS.length];
-}
+import { TAG_COLORS, STATUS_LABELS, STATUS_COLORS, tagColor } from '../constants';
 
 /** 地点展示层级 */
 type LocationHierarchyLevel = 'cityDistrict' | 'provinceCity' | 'countryProvince';
@@ -167,38 +142,7 @@ function computeTagSummary(photos: PhotoDocument[]): TagSummaryItem[] {
     .map(([tag, count]) => ({ tag, count }));
 }
 
-/**
- * 照片状态 → 中文标签映射表
- *
- * 状态值由后端流水线维护，映射为前端显示的中文文本，
- * 用于在照片卡片上展示人类可读的状态标签（右上角徽章）。
- * 状态流转：unanalyzed → analyzing → analyzed（成功）/ failed（失败）
- * 网络错误时进入 pending_analysis 队列等待重试。
- */
-const STATUS_LABELS: Record<string, string> = {
-  analyzed: '已分析',
-  analyzing: '分析中',
-  failed: '失败',
-  pending_analysis: '待分析',
-  unanalyzed: '未分析',
-};
 
-/**
- * 照片状态 → Tailwind CSS 颜色类名映射
- *
- * 为不同状态分配语义化的背景色 + 文字颜色组合：
- * - analyzed:  绿色背景（成功/已完成，正向视觉反馈）
- * - analyzing: 黄色背景（进行中/处理中，提醒用户等待）
- * - failed:    红色背景（错误/失败，警示性视觉反馈）
- * - pending_analysis / unanalyzed: 灰色背景（等待/未处理，中性低调）
- */
-const STATUS_COLORS: Record<string, string> = {
-  analyzed: 'bg-green-100 text-green-700',
-  analyzing: 'bg-yellow-100 text-yellow-700',
-  failed: 'bg-red-100 text-red-700',
-  pending_analysis: 'bg-gray-100 text-gray-600',
-  unanalyzed: 'bg-gray-100 text-gray-600',
-};
 
 /**
  * 从照片文档中提取日期字符串
@@ -261,11 +205,11 @@ function photoSrc(path: string): string {
  */
 function SkeletonCard() {
   return (
-    <div className="animate-pulse rounded-xl overflow-hidden bg-white border border-gray-200">
-      <div className="aspect-square bg-gray-200" />
+    <div className="animate-pulse rounded-xl overflow-hidden bg-surface-card border border-border-default">
+      <div className="aspect-square bg-skeleton" />
       <div className="p-3 space-y-2">
-        <div className="h-3 w-3/4 rounded bg-gray-200" />
-        <div className="h-3 w-1/2 rounded bg-gray-200" />
+        <div className="h-3 w-3/4 rounded bg-skeleton" />
+        <div className="h-3 w-1/2 rounded bg-skeleton" />
       </div>
     </div>
   );
@@ -290,10 +234,10 @@ const PhotoCard = memo(function PhotoCard({ photo }: { photo: PhotoDocument }) {
     <button
       type="button"
       onClick={() => navigate(`/photo/${photo.id}`)}
-      className="group cursor-pointer text-left block rounded-xl overflow-hidden bg-white border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
+      className="group cursor-pointer text-left block rounded-xl overflow-hidden bg-surface-card border border-border-default shadow-theme-sm hover:shadow-theme-md transition-shadow"
     >
       {/* 缩略图区域：方形裁剪，悬停时有缩放动画 */}
-      <div className="aspect-square overflow-hidden bg-gray-100 relative">
+      <div className="aspect-square overflow-hidden bg-surface-elevated relative">
         {/*
          * 照片缩略图，使用 ?thumb=1 参数请求后端缩略图服务
          * loading="lazy" 启用浏览器原生懒加载
@@ -314,7 +258,7 @@ const PhotoCard = memo(function PhotoCard({ photo }: { photo: PhotoDocument }) {
          * 图片加载失败时的占位文字
          * 初始状态 hidden，onError 触发后显示
          */}
-        <div className="hidden absolute inset-0 flex items-center justify-center bg-gray-100 text-gray-400 text-sm">
+        <div className="hidden absolute inset-0 flex items-center justify-center bg-surface-elevated text-text-muted text-sm">
           无法加载图片
         </div>
         {/* 分析中/失败状态：右上角显示对应颜色标签 */}
@@ -334,21 +278,21 @@ const PhotoCard = memo(function PhotoCard({ photo }: { photo: PhotoDocument }) {
           <>
             {/* 分析中/失败：骨架屏模拟两行文字描述 */}
             <div className="animate-pulse space-y-1.5">
-              <div className={`h-3 w-full rounded ${photo.status === 'failed' ? 'bg-red-200' : 'bg-gray-200'}`} />
-              <div className={`h-3 w-3/4 rounded ${photo.status === 'failed' ? 'bg-red-200' : 'bg-gray-200'}`} />
+              <div className={`h-3 w-full rounded ${photo.status === 'failed' ? 'bg-status-error-bg' : 'bg-skeleton'}`} />
+              <div className={`h-3 w-3/4 rounded ${photo.status === 'failed' ? 'bg-status-error-bg' : 'bg-skeleton'}`} />
             </div>
             {/* 分析中/失败：骨架屏模拟三个标签 */}
             <div className="animate-pulse flex flex-wrap gap-1">
-              <div className={`h-5 w-10 rounded ${photo.status === 'failed' ? 'bg-red-200' : 'bg-gray-200'}`} />
-              <div className={`h-5 w-12 rounded ${photo.status === 'failed' ? 'bg-red-200' : 'bg-gray-200'}`} />
-              <div className={`h-5 w-8 rounded ${photo.status === 'failed' ? 'bg-red-200' : 'bg-gray-200'}`} />
+              <div className={`h-5 w-10 rounded ${photo.status === 'failed' ? 'bg-status-error-bg' : 'bg-skeleton'}`} />
+              <div className={`h-5 w-12 rounded ${photo.status === 'failed' ? 'bg-status-error-bg' : 'bg-skeleton'}`} />
+              <div className={`h-5 w-8 rounded ${photo.status === 'failed' ? 'bg-status-error-bg' : 'bg-skeleton'}`} />
             </div>
           </>
         ) : (
           <>
             {/* AI 生成的照片描述，line-clamp-2 限制最多显示 2 行 */}
             {photo.description && (
-              <p className="line-clamp-2 text-sm leading-snug text-gray-700">
+              <p className="line-clamp-2 text-sm leading-snug text-text-secondary">
                 {photo.description}
               </p>
             )}
@@ -364,7 +308,7 @@ const PhotoCard = memo(function PhotoCard({ photo }: { photo: PhotoDocument }) {
                   </span>
                 ))}
                 {photo.tags.length > 3 && (
-                  <span className="text-xs text-gray-400">
+                  <span className="text-xs text-text-muted">
                     +{photo.tags.length - 3}
                   </span>
                 )}
@@ -502,9 +446,9 @@ export default function Timeline() {
   // 请求失败时显示警告图标和具体错误信息
   if (isError) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 text-gray-500">
+      <div className="flex flex-col items-center justify-center py-20 text-text-tertiary">
         <svg
-          className="mb-4 h-16 w-16 text-gray-300"
+          className="mb-4 h-16 w-16 text-text-muted"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -540,9 +484,9 @@ export default function Timeline() {
   // 数据加载完成但没有照片时，显示空状态引导提示
   if (groupedPhotos.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+      <div className="flex flex-col items-center justify-center py-20 text-text-muted">
         <svg
-          className="mb-6 h-24 w-24 text-gray-200"
+          className="mb-6 h-24 w-24 text-text-muted"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -554,8 +498,8 @@ export default function Timeline() {
             d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
           />
         </svg>
-        <p className="text-xl font-medium text-gray-500">还没有照片</p>
-        <p className="mt-2 text-sm text-gray-400">
+        <p className="text-xl font-medium text-text-tertiary">还没有照片</p>
+        <p className="mt-2 text-sm text-text-muted">
           导入照片后将在此处按时间线展示
         </p>
       </div>
@@ -578,7 +522,7 @@ export default function Timeline() {
            * backdrop-blur-sm：半透明毛玻璃效果
            * z-10：确保标题在照片卡片之上
            */}
-          <h2 className="sticky top-0 z-10 mb-4 bg-gray-50/90 px-2 py-2 backdrop-blur-sm">
+          <h2 className="sticky top-0 z-10 mb-4 bg-surface-page/90 px-2 py-2 backdrop-blur-sm">
             {/*
              * 响应式布局：
              * - 移动端（< md）：flex-col，日期+标签第一行，地点第二行
@@ -588,7 +532,7 @@ export default function Timeline() {
             <div className="flex flex-col gap-1 md:flex-row md:flex-wrap md:items-center md:gap-x-2 md:gap-y-1">
               {/* 第一行：日期 + 标签 */}
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <span className="text-lg font-semibold text-gray-800">{formatDateLabel(dateStr)}</span>
+                <span className="text-lg font-semibold text-text-primary">{formatDateLabel(dateStr)}</span>
                 {tagSummary.map(({ tag }) => (
                   <Link
                     key={tag}
@@ -612,7 +556,7 @@ export default function Timeline() {
                       <Link
                         key={loc.label}
                         to={`/search?${locParams.toString()}`}
-                        className="inline-flex items-center gap-0.5 rounded bg-indigo-50 px-1.5 py-0.5 text-xs font-normal text-indigo-600 hover:bg-indigo-100 cursor-pointer transition-colors"
+                        className="inline-flex items-center gap-0.5 rounded bg-accent-subtle px-1.5 py-0.5 text-xs font-normal text-accent hover:bg-accent-subtle cursor-pointer transition-colors"
                       >
                         <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -668,7 +612,7 @@ export default function Timeline() {
        * "已加载全部照片" 的结束提示文字。
        */}
       {!hasNextPage && groupedPhotos.length > 0 && (
-        <p className="py-8 text-center text-sm text-gray-400">已加载全部照片</p>
+        <p className="py-8 text-center text-sm text-text-muted">已加载全部照片</p>
       )}
     </div>
   );

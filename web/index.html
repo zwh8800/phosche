@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="default">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" href="/favicon.ico" sizes="any">
@@ -10,6 +10,13 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Phosche" />
     <link rel="apple-touch-icon" href="/apple-touch-icon-180x180.png" />
+    <script>
+      (function() {
+        var t = localStorage.getItem('phosche-theme') || 'default';
+        document.documentElement.setAttribute('data-theme', t);
+        document.documentElement.style.colorScheme = t === 'voltagent' ? 'dark' : 'light';
+      })();
+    </script>
     <title>Phosche - AI 照片管理</title>
   </head>
   <body>
