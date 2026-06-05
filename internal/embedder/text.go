@@ -10,12 +10,12 @@ import (
 )
 
 // DefaultSourceTemplate 是默认的 embedding 输入文本模板。
-const DefaultSourceTemplate = `{{.Description}}
-标签: {{join .Tags "、"}}
-物体: {{join .Objects "、"}}
-地点: {{.FormattedAddress}}
-地址: {{.Address}}
-文字: {{.Text}}`
+const DefaultSourceTemplate = `这是一张{{if .SceneType}}{{.SceneType}}场景的{{end}}照片。
+内容描述：{{.Description}}
+关键标签：{{join .Tags "、"}}
+画面内容：{{join .Objects "、"}}
+{{if .FormattedAddress}}拍摄地点：{{.FormattedAddress}}{{end}}
+{{if .Text}}图中文字：{{.Text}}{{end}}`
 
 // templateData 是模板渲染用的数据结构。
 type templateData struct {
@@ -25,6 +25,7 @@ type templateData struct {
 	FormattedAddress string
 	Address          string
 	Text             string
+	SceneType        string
 }
 
 // BuildEmbeddingText 根据 PhotoDocument 构建 embedding 输入文本。
@@ -50,6 +51,7 @@ func BuildEmbeddingText(doc types.PhotoDocument, tmplStr string) (string, error)
 		FormattedAddress: doc.FormattedAddress,
 		Address:          doc.Address,
 		Text:             doc.Text,
+		SceneType:        doc.SceneType,
 	}
 
 	var buf bytes.Buffer
@@ -65,37 +67,40 @@ func BuildEmbeddingText(doc types.PhotoDocument, tmplStr string) (string, error)
 func BuildEmbeddingTextDefault(doc types.PhotoDocument) string {
 	var b strings.Builder
 
+	if doc.SceneType != "" {
+		b.WriteString("这是一张")
+		b.WriteString(doc.SceneType)
+		b.WriteString("场景的照片。\n")
+	} else {
+		b.WriteString("这是一张照片。\n")
+	}
+
 	if doc.Description != "" {
+		b.WriteString("内容描述：")
 		b.WriteString(doc.Description)
 		b.WriteByte('\n')
 	}
 
 	if len(doc.Tags) > 0 {
-		b.WriteString("标签: ")
+		b.WriteString("关键标签：")
 		b.WriteString(strings.Join(doc.Tags, "、"))
 		b.WriteByte('\n')
 	}
 
 	if len(doc.Objects) > 0 {
-		b.WriteString("物体: ")
+		b.WriteString("画面内容：")
 		b.WriteString(strings.Join(doc.Objects, "、"))
 		b.WriteByte('\n')
 	}
 
 	if doc.FormattedAddress != "" {
-		b.WriteString("地点: ")
+		b.WriteString("拍摄地点：")
 		b.WriteString(doc.FormattedAddress)
 		b.WriteByte('\n')
 	}
 
-	if doc.Address != "" {
-		b.WriteString("地址: ")
-		b.WriteString(doc.Address)
-		b.WriteByte('\n')
-	}
-
 	if doc.Text != "" {
-		b.WriteString("文字: ")
+		b.WriteString("图中文字：")
 		b.WriteString(doc.Text)
 	}
 
