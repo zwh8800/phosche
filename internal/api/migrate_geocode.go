@@ -34,8 +34,8 @@ func (s *Server) runGeocodeMigration() {
 			skipped++
 			return nil
 		}
-		// Skip if already has geocoding data
-		if doc.FormattedAddress != "" {
+		// Skip if already has complete geocoding data (City 为可靠的完整性标志)
+		if doc.City != "" {
 			skipped++
 			return nil
 		}
