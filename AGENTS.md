@@ -115,7 +115,7 @@ unanalyzed → analyzing → failed（不可恢复错误）
 
 中间件栈（注册顺序）：Logger → Recoverer → Timeout(30s) → CORS → JWTAuth
 
-JWTAuth 从 `access_token` cookie 提取 email 注入 context，不验证签名（适合前置网关已验证场景）。
+JWTAuth 从 `X-Token-User-Email` header 提取 email 注入 context，上游网关已校验 JWT 并注入此 header。JWTAuth（从 cookie 解析 JWT）已弃用，保留备用。
 
 ## 配置
 

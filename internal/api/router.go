@@ -4,6 +4,8 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
+	"maps"
 	"net/http"
 	"time"
 
@@ -51,6 +53,24 @@ func NewServer(svc PhotoSearcher, idx Indexer, indexName string, geocoder geocod
 	}
 }
 
+// debugHeaders 是一个 HTTP 中间件，在 debug 日志级别打印每个请求的完整 header 信息。
+// 仅当日志级别设为 debug 时才会输出，不影响生产环境性能。
+func debugHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		headers := make(map[string][]string, len(r.Header))
+		maps.Copy(headers, r.Header)
+		slog.Debug("request headers",
+			"method", r.Method,
+			"path", r.URL.Path,
+			"query", r.URL.RawQuery,
+			"remote_addr", r.RemoteAddr,
+			"host", r.Host,
+			"headers", headers,
+		)
+		next.ServeHTTP(w, r)
+	})
+}
+
 // NewRouter 创建并配置 chi 路由器，注册所有中间件和路由。
 //
 // 中间件栈（按注册顺序执行）：
@@ -58,6 +78,7 @@ func NewServer(svc PhotoSearcher, idx Indexer, indexName string, geocoder geocod
 //   - middleware.Recoverer — 捕获 panic，返回 500 状态码，防止服务崩溃
 //   - middleware.Timeout(30s) — 每个请求最多执行 30 秒，超时自动中断
 //   - cors.Handler — 配置跨域访问（允许所有来源，支持 GET/POST/PUT/DELETE/OPTIONS）
+//   - HeaderAuth — 从 X-Token-User-Email header 提取用户邮箱注入 context
 //
 // 路由表：
 //   GET  /health        — 健康检查，返回服务状态和版本号
@@ -72,17 +93,18 @@ func NewRouter(srv *Server) chi.Router {
 
 	// Middleware stack
 	r.Use(middleware.Logger)
+	r.Use(debugHeaders)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(30 * time.Second))
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Token-User-Email"},
 		ExposedHeaders:   []string{"Link"},
 		AllowCredentials: false,
 		MaxAge:           300,
 	}))
-	r.Use(JWTAuth)
+	r.Use(HeaderAuth)
 
 	// Health check
 	r.Get("/health", healthHandler)

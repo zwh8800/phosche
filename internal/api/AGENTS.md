@@ -10,7 +10,8 @@ REST API 层，基于 chi 路由器实现所有 HTTP 接口。
 - `photo_detail.go` — 单张照片详情（GET /api/photos/*）
 - `filters.go` — 筛选选项聚合（GET /api/filters）
 - `stats.go` — 统计信息（GET /api/stats）
-- `jwt.go` — JWT 认证中间件（从 cookie 提取 email）
+- `jwt.go` — JWT 认证中间件（从 cookie 提取 email，已弃用，保留备用）
+- `auth.go` — 认证中间件（从 X-Token-User-Email header 提取 email）+ context key 定义
 - `*_test.go` — 对应测试文件
 
 ## 接口
@@ -20,13 +21,14 @@ REST API 层，基于 chi 路由器实现所有 HTTP 接口。
 
 ## 中间件栈
 
-注册顺序：Logger → Recoverer → Timeout(30s) → CORS → JWTAuth
+注册顺序：Logger → Recoverer → Timeout(30s) → CORS → HeaderAuth
 
-JWTAuth 从 `access_token` cookie 提取 email 注入 context，不验证签名。
+HeaderAuth 从 `X-Token-User-Email` header 提取 email 注入 context（上游网关已校验 JWT 并注入此 header）。
+JWTAuth（从 `access_token` cookie 提取 email）已弃用，保留备用。
 
 ## 认证
 
-所有请求都会经过 JWTAuth，通过 `UserEmailFromContext(r.Context())` 获取用户 email。
+所有请求都会经过 HeaderAuth，通过 `UserEmailFromContext(r.Context())` 获取用户 email。
 未认证时 email 为空字符串，只返回公开照片。
 
 ## 路由
