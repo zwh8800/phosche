@@ -131,15 +131,15 @@ func buildIndexMapping(embeddingDims int) map[string]any {
 					"analyzer":        "ik_max_word",
 					"search_analyzer": "ik_smart",
 				},
-				"status":    map[string]any{"type": "keyword"},
-				"path":      map[string]any{"type": "keyword"},
-				"mtime":     map[string]any{"type": "long"},
-				"size":      map[string]any{"type": "long"},
-				"created_at": map[string]any{"type": "date"},
-				"email":     map[string]any{"type": "keyword"},
-			"gps_lat":   map[string]any{"type": "double"},
-			"gps_lon":   map[string]any{"type": "double"},
-			"location":  map[string]any{"type": "geo_point"},
+				"status":        map[string]any{"type": "keyword"},
+				"path":          map[string]any{"type": "keyword"},
+				"mtime":         map[string]any{"type": "long"},
+				"size":          map[string]any{"type": "long"},
+				"created_at":    map[string]any{"type": "date"},
+				"email":         map[string]any{"type": "keyword"},
+				"gps_lat":       map[string]any{"type": "double"},
+				"gps_lon":       map[string]any{"type": "double"},
+				"location":      map[string]any{"type": "geo_point"},
 				"country":       map[string]any{"type": "keyword"},
 				"province":      map[string]any{"type": "keyword"},
 				"city":          map[string]any{"type": "keyword"},
@@ -319,12 +319,12 @@ func (c *OSClient) createIndex(ctx context.Context, indexName string, embeddingD
 }
 
 func (c *OSClient) deleteIndex(ctx context.Context, indexName string) error {
-	_, err := c.client.Indices.Delete(ctx, opensearchapi.IndicesDeleteReq{
-		Indices: []string{indexName},
-	})
-	if err != nil {
-		// OpenSearch returns an error on 404, but we want to ignore it
-		return nil
-	}
+	// _, err := c.client.Indices.Delete(ctx, opensearchapi.IndicesDeleteReq{
+	// 	Indices: []string{indexName},
+	// })
+	// if err != nil {
+	// 	// OpenSearch returns an error on 404, but we want to ignore it
+	// 	return nil
+	// }
 	return nil
 }
