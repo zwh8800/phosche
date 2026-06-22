@@ -7,12 +7,19 @@ import (
 	"fmt"
 
 	"github.com/opensearch-project/opensearch-go/v4/opensearchapi"
+	"github.com/zwh8800/phosche/internal/config"
 )
 
-// mappingVersion 追踪当前索引映射的版本号，用于迁移检测。
+// mappingVersion 追踪当前索引映射的版本号，用于增量迁移检测。
 // 当映射结构发生变化时，应递增此版本号。启动时若检测到 OS 中
-// 已有索引的 _meta.version 与此不一致，会自动删除旧索引并重建。
-const mappingVersion = "9"
+// 已有索引的 _meta.version 与此不一致，会逐版本执行增量迁移，
+// 而非删除旧索引重建（避免数据丢失）。
+const mappingVersion = 9
+
+// MappingVersion 返回当前映射版本号（用于迁移逻辑和测试）。
+func MappingVersion() int {
+	return mappingVersion
+}
 
 // buildIndexMapping 构建 OS 索引映射，embeddingDims 控制 knn_vector 维度。
 // embeddingDims 为 0 时不启用 knn_vector 字段（embedding 未配置时）。
@@ -69,7 +76,7 @@ const mappingVersion = "9"
 //	| embedding_version   | keyword            | 向量版本标识（如 "bge-m3@1024"）       |
 //	| embedded_at         | long               | 向量生成时间戳                          |
 //
-// _meta.version 用于运行时检测映射版本是否匹配，发现不匹配时自动删除旧索引并重建。
+// _meta.version 用于运行时检测映射版本是否匹配，发现不匹配时逐版本执行增量迁移。
 func buildIndexMapping(embeddingDims int) map[string]any {
 	mapping := map[string]any{
 		"settings": map[string]any{
@@ -202,15 +209,16 @@ var textWithKeyword = map[string]any{
 //
 // 流程：
 //  1. 调用 indexExists 检查索引是否存在
-//  2. 若存在 → 调用 checkMappingVersion 校验 _meta.version，不匹配时自动删除并重建
-//  3. 若不存在 → 调用 createIndex 使用当前 indexMapping 创建索引
-func (c *OSClient) EnsureIndex(ctx context.Context, indexName string, embeddingDims int) error {
+//  2. 若不存在 → 调用 createIndex 使用当前 mapping 创建索引
+//  3. 若存在 → 调用 checkMappingVersion 校验 _meta.version，
+//     版本落后时逐版本执行增量迁移，版本超前时记录错误（降级启动）
+func (c *OSClient) EnsureIndex(ctx context.Context, indexName string, embeddingDims int, cfg *config.Config) error {
 	exists, err := c.indexExists(ctx, indexName)
 	if err != nil {
 		return err
 	}
 	if exists {
-		return c.checkMappingVersion(ctx, indexName, embeddingDims)
+		return c.checkMappingVersion(ctx, indexName, embeddingDims, cfg)
 	}
 	return c.createIndex(ctx, indexName, embeddingDims)
 }
@@ -247,15 +255,13 @@ func (c *OSClient) indexExists(ctx context.Context, indexName string) (bool, err
 }
 
 // checkMappingVersion 获取 OS 中已有索引的映射，提取 _meta.version 并与当前 mappingVersion 比较。
-// 如果版本缺失或不一致，会自动删除旧索引并使用新映射重建。
-func (c *OSClient) checkMappingVersion(ctx context.Context, indexName string, embeddingDims int) error {
+// 版本落后时逐版本执行增量迁移；版本超前时记录错误（不支持降级，降级启动）；
+// _meta.version 缺失时视为版本 0，从版本 1 开始迁移。
+func (c *OSClient) checkMappingVersion(ctx context.Context, indexName string, embeddingDims int, cfg *config.Config) error {
 	resp, err := c.client.Indices.Get(ctx, opensearchapi.IndicesGetReq{
 		Indices: []string{indexName},
 	})
 	if err != nil {
-		// opensearch-go typed client 把 404 也当作 error 返回。
-		// 通常不会在 indexExists→Get 之间发生（索引刚被确认存在），
-		// 但并发环境/极端情况可能出现 race，这里按"不存在"处理并重建。
 		if resp != nil && resp.Inspect().Response != nil && resp.Inspect().Response.StatusCode == 404 {
 			c.logger.Info("index vanished between Exists and Get, recreating", "index", indexName)
 			_ = c.deleteIndex(ctx, indexName)
@@ -268,7 +274,7 @@ func (c *OSClient) checkMappingVersion(ctx context.Context, indexName string, em
 	if !ok {
 		c.logger.Info("index not found in response, recreating", "index", indexName)
 		if err := c.deleteIndex(ctx, indexName); err != nil {
-			return fmt.Errorf("delete index for migration: %w", err)
+			return fmt.Errorf("delete index for recreation: %w", err)
 		}
 		return c.createIndex(ctx, indexName, embeddingDims)
 	}
@@ -278,28 +284,44 @@ func (c *OSClient) checkMappingVersion(ctx context.Context, indexName string, em
 		return fmt.Errorf("decode mapping: %w", err)
 	}
 
+	currentVersion := 0
 	meta, ok := mappings["_meta"].(map[string]any)
-	if !ok {
-		c.logger.Info("mapping _meta missing, recreating", "index", indexName)
-		if err := c.deleteIndex(ctx, indexName); err != nil {
-			return fmt.Errorf("delete index for migration: %w", err)
+	if ok {
+		switch v := meta["version"].(type) {
+		case string:
+			// 兼容旧版本：_meta.version 曾为字符串（如 "9"）
+			var parsed int
+			if _, err := fmt.Sscanf(v, "%d", &parsed); err == nil {
+				currentVersion = parsed
+			}
+		case float64:
+			// JSON 数字反序列化为 float64
+			currentVersion = int(v)
+		case int:
+			currentVersion = v
 		}
-		return c.createIndex(ctx, indexName, embeddingDims)
 	}
 
-	version, _ := meta["version"].(string)
-	if version != mappingVersion {
-		c.logger.Info("mapping version mismatch, recreating index",
-			"expected_version", mappingVersion,
-			"actual_version", version,
+	if currentVersion == mappingVersion {
+		return nil
+	}
+
+	if currentVersion > mappingVersion {
+		c.logger.Error("index mapping version is newer than code, downgrade not supported",
+			"code_version", mappingVersion,
+			"index_version", currentVersion,
 			"index", indexName,
 		)
-		if err := c.deleteIndex(ctx, indexName); err != nil {
-			return fmt.Errorf("delete index for migration: %w", err)
-		}
-		return c.createIndex(ctx, indexName, embeddingDims)
+		return nil
 	}
-	return nil
+
+	c.logger.Info("mapping version mismatch, starting incremental migration",
+		"code_version", mappingVersion,
+		"index_version", currentVersion,
+		"index", indexName,
+	)
+
+	return c.runMigrations(ctx, indexName, currentVersion, cfg)
 }
 
 func (c *OSClient) createIndex(ctx context.Context, indexName string, embeddingDims int) error {

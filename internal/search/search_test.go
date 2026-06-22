@@ -117,7 +117,7 @@ func setupSearchTest(t *testing.T) (*SearchService, func()) {
 	osClient, err := indexer.NewOSClient(cfg)
 	require.NoError(t, err)
 
-	err = osClient.EnsureIndex(ctx, testIndex, 0)
+	err = osClient.EnsureIndex(ctx, testIndex, 0, &config.Config{})
 	require.NoError(t, err)
 
 	for _, doc := range testDocs {

@@ -99,7 +99,7 @@ func TestEnsureIndex_Create(t *testing.T) {
 	ctx := context.Background()
 	indexName := "test_photos_create"
 
-	err := client.EnsureIndex(ctx, indexName, 0)
+	err := client.EnsureIndex(ctx, indexName, 0, &config.Config{})
 	require.NoError(t, err, "EnsureIndex should create the index")
 
 	exists, err := client.indexExists(ctx, indexName)
@@ -120,9 +120,9 @@ func TestEnsureIndex_Create(t *testing.T) {
 	meta, ok := mappings["_meta"].(map[string]any)
 	require.True(t, ok, "_meta should exist")
 
-	version, ok := meta["version"].(string)
-	require.True(t, ok, "version should be a string")
-	assert.Equal(t, mappingVersion, version, "_meta.version should match")
+	version, ok := meta["version"].(float64)
+	require.True(t, ok, "version should be a number")
+	assert.Equal(t, float64(mappingVersion), version, "_meta.version should match")
 
 	_, _ = client.client.Indices.Delete(ctx, opensearchapi.IndicesDeleteReq{
 		Indices: []string{indexName},
@@ -136,10 +136,10 @@ func TestEnsureIndex_Idempotent(t *testing.T) {
 	ctx := context.Background()
 	indexName := "test_photos_idempotent"
 
-	err := client.EnsureIndex(ctx, indexName, 0)
+	err := client.EnsureIndex(ctx, indexName, 0, &config.Config{})
 	require.NoError(t, err)
 
-	err = client.EnsureIndex(ctx, indexName, 0)
+	err = client.EnsureIndex(ctx, indexName, 0, &config.Config{})
 	require.NoError(t, err)
 
 	_, _ = client.client.Indices.Delete(ctx, opensearchapi.IndicesDeleteReq{
@@ -189,17 +189,18 @@ func TestEnsureIndex_VersionMismatch(t *testing.T) {
 	ctx := context.Background()
 	indexName := "test_photos_version_mismatch"
 
-	oldMapping := map[string]any{
+	// Create an index with a version lower than current code's mappingVersion
+	// Using the full current mapping but with _meta.version = 8 (one version behind)
+	currentMapping := buildIndexMapping(0)
+	mappingCopy := map[string]any{
 		"mappings": map[string]any{
 			"_meta": map[string]any{
-				"version": "0",
+				"version": 8, // One version behind current mappingVersion (9)
 			},
-			"properties": map[string]any{
-				"test_field": map[string]any{"type": "keyword"},
-			},
+			"properties": currentMapping["mappings"].(map[string]any)["properties"],
 		},
 	}
-	bodyBytes, err := json.Marshal(oldMapping)
+	bodyBytes, err := json.Marshal(mappingCopy)
 	require.NoError(t, err)
 
 	rawOS, err := opensearchapi.NewClient(opensearchapi.Config{
@@ -213,7 +214,7 @@ func TestEnsureIndex_VersionMismatch(t *testing.T) {
 		Index: indexName,
 		Body:  bytes.NewReader(bodyBytes),
 	})
-	require.NoError(t, err, "should create old index successfully")
+	require.NoError(t, err, "should create old version index successfully")
 
 	var buf bytes.Buffer
 	logger := captureLogger(&buf)
@@ -222,17 +223,32 @@ func TestEnsureIndex_VersionMismatch(t *testing.T) {
 	testClient, err := NewOSClientWithLogger(osCfg, logger)
 	require.NoError(t, err)
 
-	err = testClient.EnsureIndex(ctx, indexName, 0)
-	require.NoError(t, err, "EnsureIndex should succeed (warning only)")
+	err = testClient.EnsureIndex(ctx, indexName, 0, &config.Config{})
+	require.NoError(t, err, "EnsureIndex should succeed with incremental migration")
+
+	// Verify _meta.version was updated to current mappingVersion
+	getResp, err := testClient.client.Indices.Get(ctx, opensearchapi.IndicesGetReq{
+		Indices: []string{indexName},
+	})
+	require.NoError(t, err)
+
+	idxData, ok := getResp.Indices[indexName]
+	require.True(t, ok, "index should exist")
+
+	var mappings map[string]any
+	require.NoError(t, json.Unmarshal(idxData.Mappings, &mappings))
+
+	meta, ok := mappings["_meta"].(map[string]any)
+	require.True(t, ok, "_meta should exist")
+
+	version, ok := meta["version"].(float64)
+	require.True(t, ok, "version should be a number")
+	assert.Equal(t, float64(MappingVersion()), version, "_meta.version should be updated to current version")
 
 	logOutput := buf.String()
 	t.Logf("log output: %s", logOutput)
-	assert.Contains(t, logOutput, "index mapping version mismatch",
-		"log should contain version mismatch warning")
-	assert.Contains(t, logOutput, `expected_version=1`,
-		"log should contain expected version")
-	assert.Contains(t, logOutput, `actual_version=0`,
-		"log should contain actual version")
+	assert.Contains(t, logOutput, "incremental migration",
+		"log should contain migration message")
 
 	_, _ = rawOS.Indices.Delete(ctx, opensearchapi.IndicesDeleteReq{
 		Indices: []string{indexName},

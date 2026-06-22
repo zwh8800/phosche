@@ -65,7 +65,7 @@ func Run(distFS fs.FS, configPath string) {
 
 	ctx, osCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer osCancel()
-	if err := osClient.EnsureIndex(ctx, cfg.OpenSearch.IndexName, embeddingDims); err != nil {
+	if err := osClient.EnsureIndex(ctx, cfg.OpenSearch.IndexName, embeddingDims, cfg); err != nil {
 		slog.Error("failed to ensure OpenSearch index", "error", err)
 		os.Exit(1)
 	}

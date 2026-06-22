@@ -982,6 +982,57 @@ git push origin v1.0.0
 - **逆地理编码降级** — 高德 API 不可用时仅记录警告日志，照片仍正常处理，GeoInfo 字段留空
 - **优雅关闭** — 收到 SIGINT/SIGTERM 后，停止接收新的文件事件，等待所有进行中的分析和索引任务完成（最多 5 分钟），最后关闭 HTTP 服务器
 
+### Mapping 版本迁移
+
+OpenSearch 索引的 mapping 版本采用**逐版本增量迁移**策略，不再删除重建索引（避免数据丢失）。
+
+#### 迁移流程
+
+启动时 `EnsureIndex()` 检测线上索引的 `_meta.version`：
+
+- **版本匹配** → 无操作
+- **版本落后** → 从 `currentVersion+1` 到 `MappingVersion()` 逐版本执行迁移
+- **版本超前** → 记录错误日志，降级启动（不支持降级）
+- **`_meta.version` 缺失** → 视为版本 0，从版本 1 开始迁移
+
+每个迁移步骤：`applyMapping()`（PUT mapping API 添加新字段）→ `Migrate()`（可选数据回填）→ `updateMetaVersion()`（更新 `_meta.version` 标记完成）
+
+迁移失败时记录错误但不中断启动（降级模式），`_meta.version` 未更新的步骤下次启动会重试。
+
+#### 新增 mapping 版本
+
+两步：
+
+1. 在 `internal/indexer/mapping.go` 中将 `mappingVersion` 递增（如 `9` → `10`），并在 `buildIndexMapping()` 中添加新字段
+2. 在 `internal/indexer/migration.go` 中注册迁移脚本：
+
+```go
+func init() {
+    RegisterMigration(Migration{
+        Version: 10,
+        Mapping: map[string]any{
+            "multimodal_embedding": map[string]any{
+                "type":       "knn_vector",
+                "dimension":  1024,
+                "space_type": "cosinesimil",
+            },
+        },
+        Migrate: func(ctx context.Context, client *OSClient, indexName string, cfg *config.Config) error {
+            // 迁移脚本自行根据 cfg 创建所需的外部依赖
+            embClient, _ := embedder.NewEmbeddingClient(embedder.EmbeddingClientConfig{...})
+            // 遍历所有照片，调用模型获取向量并更新
+            return client.ScrollAll(ctx, indexName, func(doc *types.PhotoDocument) error {
+                vec, _ := embClient.Embed(ctx, ...)
+                // Update document with new field via Update API
+                ...
+            })
+        },
+    })
+}
+```
+
+`Mapping` 为 `nil` 表示仅数据回填无新字段；`Migrate` 为 `nil` 表示仅 mapping 变更无需回填。
+
 ---
 
 ## 许可证

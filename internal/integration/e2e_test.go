@@ -147,7 +147,7 @@ func TestEndToEnd(t *testing.T) {
 	require.NoError(t, err)
 
 	indexName := "test_photos_e2e"
-	err = osClient.EnsureIndex(ctx, indexName, 0)
+	err = osClient.EnsureIndex(ctx, indexName, 0, &config.Config{})
 	require.NoError(t, err)
 
 	idxService := indexer.NewIndexerService(osClient, 10)
