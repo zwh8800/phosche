@@ -79,18 +79,22 @@ func buildResponseFormat(responseFormatType string) (*openai.ChatCompletionRespo
 // AnalyzeImage 使用多模态 LLM 分析图片内容。
 // 返回结构化的分析结果，包含描述、标签、场景类型等。
 // 如果 API 调用失败或响应格式无效，返回错误。
-func (c *OpenAIClient) AnalyzeImage(ctx context.Context, imageData []byte, prompt string) (*types.AnalysisResult, error) {
+func (c *OpenAIClient) AnalyzeImage(ctx context.Context, imageData []byte, systemPrompt string, userPrompt string) (*types.AnalysisResult, error) {
 	encodedImage := "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(imageData)
 
 	req := openai.ChatCompletionRequest{
 		Model: c.model,
 		Messages: []openai.ChatCompletionMessage{
 			{
+				Role:    openai.ChatMessageRoleSystem,
+				Content: systemPrompt,
+			},
+			{
 				Role: openai.ChatMessageRoleUser,
 				MultiContent: []openai.ChatMessagePart{
 					{
 						Type: openai.ChatMessagePartTypeText,
-						Text: prompt,
+						Text: userPrompt,
 					},
 					{
 						Type: openai.ChatMessagePartTypeImageURL,
@@ -140,8 +144,8 @@ func logRequest(req openai.ChatCompletionRequest) {
 		return
 	}
 
-	imageURL := reqForLog.Messages[0].MultiContent[1].ImageURL.URL
-	reqForLog.Messages[0].MultiContent[1].ImageURL = &openai.ChatMessageImageURL{
+	imageURL := reqForLog.Messages[1].MultiContent[1].ImageURL.URL
+	reqForLog.Messages[1].MultiContent[1].ImageURL = &openai.ChatMessageImageURL{
 		URL: imageURL[:min(len(imageURL), 100)] + "...(truncated)",
 	}
 

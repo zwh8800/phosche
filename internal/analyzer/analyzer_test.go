@@ -45,7 +45,7 @@ type mockLLMClient struct {
 	callIdx int
 }
 
-func (m *mockLLMClient) AnalyzeImage(_ context.Context, _ []byte, _ string) (*types.AnalysisResult, error) {
+func (m *mockLLMClient) AnalyzeImage(_ context.Context, _ []byte, _ string, _ string) (*types.AnalysisResult, error) {
 	if m.callIdx >= len(m.calls) {
 		return nil, fmt.Errorf("mock: unexpected call (callIdx=%d, total=%d)", m.callIdx, len(m.calls))
 	}
@@ -59,14 +59,14 @@ type capturingMockClient struct {
 	result       *types.AnalysisResult
 }
 
-func (m *capturingMockClient) AnalyzeImage(_ context.Context, imageData []byte, _ string) (*types.AnalysisResult, error) {
+func (m *capturingMockClient) AnalyzeImage(_ context.Context, imageData []byte, _ string, _ string) (*types.AnalysisResult, error) {
 	m.receivedData = append([]byte(nil), imageData...)
 	return m.result, nil
 }
 
 type blockingMockClient struct{}
 
-func (m *blockingMockClient) AnalyzeImage(ctx context.Context, _ []byte, _ string) (*types.AnalysisResult, error) {
+func (m *blockingMockClient) AnalyzeImage(ctx context.Context, _ []byte, _ string, _ string) (*types.AnalysisResult, error) {
 	<-ctx.Done()
 	return nil, ctx.Err()
 }
@@ -186,11 +186,12 @@ func TestAnalyzer_ImageResize(t *testing.T) {
 	}
 
 	analyzer := &ImageAnalyzer{
-		client:      capturing,
-		prompt:      DefaultPrompt,
-		maxRetries:  2,
-		timeout:     30 * time.Second,
-		maxImageDim: 200,
+		client:       capturing,
+		systemPrompt: DefaultSystemPrompt,
+		userPrompt:   DefaultUserPrompt,
+		maxRetries:   2,
+		timeout:      30 * time.Second,
+		maxImageDim:  200,
 	}
 
 	_, err := analyzer.Analyze(context.Background(), originalData, "")

@@ -12,7 +12,7 @@ import (
 // LLMClient 定义了大语言模型客户端的统一接口，基于 OpenAI 兼容协议抽象为单一的 AnalyzeImage 方法。
 // 调用方无需关心底层是本地 Ollama 还是云端 OpenAI，只需传入图片数据和提示词即可获得结构化的分析结果。
 type LLMClient interface {
-	AnalyzeImage(ctx context.Context, imageData []byte, prompt string) (*types.AnalysisResult, error)
+	AnalyzeImage(ctx context.Context, imageData []byte, systemPrompt string, userPrompt string) (*types.AnalysisResult, error)
 }
 
 // LLMClientConfig 使用 OpenAI 兼容协议统一配置本地和云端 LLM。

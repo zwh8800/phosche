@@ -53,19 +53,25 @@ func TestOllamaProvider_OpenAIProtocol(t *testing.T) {
 			t.Errorf("expected model 'llama3.2-vision', got %v", body["model"])
 		}
 
-		// Validate messages structure with multimodal content array
+		// Validate messages structure: system message + user message with multimodal content
 		messages, ok := body["messages"].([]interface{})
-		if !ok || len(messages) == 0 {
-			t.Fatal("expected messages array with at least one message")
+		if !ok || len(messages) < 2 {
+			t.Fatal("expected messages array with at least two messages (system + user)")
 		}
-		msg := messages[0].(map[string]interface{})
-		if msg["role"] != "user" {
-			t.Errorf("expected role 'user', got %v", msg["role"])
+		// Validate system message
+		sysMsg := messages[0].(map[string]interface{})
+		if sysMsg["role"] != "system" {
+			t.Errorf("expected first message role 'system', got %v", sysMsg["role"])
+		}
+		// Validate user message with multimodal content array
+		userMsg := messages[1].(map[string]interface{})
+		if userMsg["role"] != "user" {
+			t.Errorf("expected second message role 'user', got %v", userMsg["role"])
 		}
 
-		content, ok := msg["content"].([]interface{})
+		content, ok := userMsg["content"].([]interface{})
 		if !ok {
-			t.Fatal("expected content to be an array (multimodal)")
+			t.Fatal("expected user message content to be an array (multimodal)")
 		}
 
 		hasImageURL := false
@@ -114,7 +120,7 @@ func TestOllamaProvider_OpenAIProtocol(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewOpenAIClient: %v", err)
 	}
-	result, err := client.AnalyzeImage(context.Background(), []byte("fake-image-data"), "describe this image")
+	result, err := client.AnalyzeImage(context.Background(), []byte("fake-image-data"), "system-prompt", "describe this image")
 	if err != nil {
 		t.Fatalf("AnalyzeImage failed: %v", err)
 	}
@@ -154,19 +160,25 @@ func TestOpenAIClient_RequestFormat(t *testing.T) {
 			t.Errorf("expected model 'gpt-4o', got %v", body["model"])
 		}
 
-		// Validate messages structure with image_url
+		// Validate messages structure: system message + user message
 		messages, ok := body["messages"].([]interface{})
-		if !ok || len(messages) == 0 {
-			t.Fatal("expected messages array")
+		if !ok || len(messages) < 2 {
+			t.Fatal("expected messages array with at least two messages")
 		}
-		msg := messages[0].(map[string]interface{})
-		if msg["role"] != "user" {
-			t.Errorf("expected role 'user', got %v", msg["role"])
+		// Validate system message
+		sysMsg := messages[0].(map[string]interface{})
+		if sysMsg["role"] != "system" {
+			t.Errorf("expected first message role 'system', got %v", sysMsg["role"])
+		}
+		// Validate user message with multimodal content
+		userMsg := messages[1].(map[string]interface{})
+		if userMsg["role"] != "user" {
+			t.Errorf("expected second message role 'user', got %v", userMsg["role"])
 		}
 
-		content, ok := msg["content"].([]interface{})
+		content, ok := userMsg["content"].([]interface{})
 		if !ok {
-			t.Fatal("expected content to be an array (multimodal)")
+			t.Fatal("expected user message content to be an array (multimodal)")
 		}
 
 		hasImageURL := false
@@ -214,7 +226,7 @@ func TestOpenAIClient_RequestFormat(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewOpenAIClient: %v", err)
 	}
-	result, err := client.AnalyzeImage(context.Background(), []byte("fake-image-data"), "describe this image")
+	result, err := client.AnalyzeImage(context.Background(), []byte("fake-image-data"), "system-prompt", "describe this image")
 	if err != nil {
 		t.Fatalf("AnalyzeImage failed: %v", err)
 	}
@@ -251,7 +263,7 @@ func TestOpenAIClient_ResponseParsing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewOpenAIClient: %v", err)
 	}
-	result, err := client.AnalyzeImage(context.Background(), []byte("fake-image-data"), "describe this image")
+	result, err := client.AnalyzeImage(context.Background(), []byte("fake-image-data"), "system-prompt", "describe this image")
 	if err != nil {
 		t.Fatalf("AnalyzeImage failed: %v", err)
 	}
@@ -293,7 +305,7 @@ func TestLLMClient_InvalidJSON_OllamaProvider(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewOpenAIClient: %v", err)
 	}
-	_, err = client.AnalyzeImage(context.Background(), []byte("fake-image-data"), "describe this image")
+	_, err = client.AnalyzeImage(context.Background(), []byte("fake-image-data"), "system-prompt", "describe this image")
 	if err == nil {
 		t.Error("expected error for invalid JSON, got nil")
 	}
@@ -310,7 +322,7 @@ func TestLLMClient_InvalidJSON_OpenAI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewOpenAIClient: %v", err)
 	}
-	_, err = client.AnalyzeImage(context.Background(), []byte("fake-image-data"), "describe this image")
+	_, err = client.AnalyzeImage(context.Background(), []byte("fake-image-data"), "system-prompt", "describe this image")
 	if err == nil {
 		t.Error("expected error for invalid JSON, got nil")
 	}
@@ -327,7 +339,7 @@ func TestLLMClient_HTTPError_OllamaProvider(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewOpenAIClient: %v", err)
 	}
-	_, err = client.AnalyzeImage(context.Background(), []byte("fake-image-data"), "describe this image")
+	_, err = client.AnalyzeImage(context.Background(), []byte("fake-image-data"), "system-prompt", "describe this image")
 	if err == nil {
 		t.Error("expected error for HTTP 500, got nil")
 	}
@@ -344,7 +356,7 @@ func TestLLMClient_HTTPError_OpenAI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewOpenAIClient: %v", err)
 	}
-	_, err = client.AnalyzeImage(context.Background(), []byte("fake-image-data"), "describe this image")
+	_, err = client.AnalyzeImage(context.Background(), []byte("fake-image-data"), "system-prompt", "describe this image")
 	if err == nil {
 		t.Error("expected error for HTTP 500, got nil")
 	}
@@ -404,7 +416,7 @@ func TestNewLLMClient_AutoAppendsV1(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewLLMClient: %v", err)
 	}
-	result, err := client.AnalyzeImage(context.Background(), []byte("fake"), "describe")
+	result, err := client.AnalyzeImage(context.Background(), []byte("fake"), "system-prompt", "describe")
 	if err != nil {
 		t.Fatalf("AnalyzeImage failed: %v", err)
 	}
@@ -457,7 +469,7 @@ func TestLLMClient_ContextCancellation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewOpenAIClient: %v", err)
 	}
-	_, err = client.AnalyzeImage(ctx, []byte("fake-image-data"), "describe this image")
+	_, err = client.AnalyzeImage(ctx, []byte("fake-image-data"), "system-prompt", "describe this image")
 	if err == nil {
 		t.Error("expected error for cancelled context, got nil")
 	}
@@ -559,7 +571,7 @@ func TestOpenAIClient_MaxTokensSetInRequestBody(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewOpenAIClient: %v", err)
 	}
-	_, err = client.AnalyzeImage(context.Background(), []byte("fake"), "describe")
+	_, err = client.AnalyzeImage(context.Background(), []byte("fake"), "system-prompt", "describe")
 	if err != nil {
 		t.Fatalf("AnalyzeImage: %v", err)
 	}
@@ -595,7 +607,7 @@ func TestOpenAIClient_MaxTokensZeroOmitted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewOpenAIClient: %v", err)
 	}
-	_, err = client.AnalyzeImage(context.Background(), []byte("fake"), "describe")
+	_, err = client.AnalyzeImage(context.Background(), []byte("fake"), "system-prompt", "describe")
 	if err != nil {
 		t.Fatalf("AnalyzeImage: %v", err)
 	}
@@ -638,7 +650,7 @@ func TestOpenAIClient_MaxCompletionTokensSetInRequestBody(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewOpenAIClient: %v", err)
 	}
-	_, err = client.AnalyzeImage(context.Background(), []byte("fake"), "describe")
+	_, err = client.AnalyzeImage(context.Background(), []byte("fake"), "system-prompt", "describe")
 	if err != nil {
 		t.Fatalf("AnalyzeImage: %v", err)
 	}
@@ -685,7 +697,7 @@ func TestOpenAIClient_BothTokenLimitsSet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewOpenAIClient: %v", err)
 	}
-	_, err = client.AnalyzeImage(context.Background(), []byte("fake"), "describe")
+	_, err = client.AnalyzeImage(context.Background(), []byte("fake"), "system-prompt", "describe")
 	if err != nil {
 		t.Fatalf("AnalyzeImage: %v", err)
 	}
@@ -764,7 +776,7 @@ func TestOpenAIClient_ResponseFormatInRequestBody(t *testing.T) {
 			if err != nil {
 				t.Fatalf("NewOpenAIClient: %v", err)
 			}
-			result, err := client.AnalyzeImage(context.Background(), []byte("fake"), "describe")
+			result, err := client.AnalyzeImage(context.Background(), []byte("fake"), "system-prompt", "describe")
 			if err != nil {
 				t.Fatalf("AnalyzeImage: %v", err)
 			}
