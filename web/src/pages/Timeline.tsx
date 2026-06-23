@@ -419,7 +419,7 @@ export default function Timeline() {
   const totalCount = data?.pages?.[0]?.total ?? 0;
 
   const [showCountBadge, setShowCountBadge] = useState(false);
-  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
   const handleScroll = useCallback(() => {
     clearTimeout(scrollTimeoutRef.current);
