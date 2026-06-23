@@ -502,7 +502,7 @@ export default function Timeline() {
 
   // ========== 主渲染：按日期分组的照片内容 ==========
   return (
-    <div className="space-y-8">
+    <>
       {totalCount > 0 && (
         <div
           className={`fixed top-[44px] left-0 right-0 z-20 flex justify-center pointer-events-none transition-all duration-300 ${
@@ -514,6 +514,7 @@ export default function Timeline() {
           </span>
         </div>
       )}
+      <div className="space-y-8">
       {/*
        * 按日期分组迭代渲染：
        * 每组包含一个 sticky 定位的日期标题（带毛玻璃效果）
@@ -620,5 +621,6 @@ export default function Timeline() {
         <p className="py-8 text-center text-sm text-gray-500">已加载全部照片</p>
       )}
     </div>
+    </>
   );
 }
