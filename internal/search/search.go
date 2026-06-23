@@ -353,7 +353,18 @@ func (s *SearchService) searchHybrid(ctx context.Context, indexName string, req 
 		"shards_successful", resp.Shards.Successful,
 	)
 
-	return s.buildSearchResponse(resp, req)
+	var exactTotal int64
+	if osQuery, ok := query["query"]; ok {
+		if q, ok := osQuery.(map[string]any); ok {
+			if cnt, err := s.count(ctx, indexName, q); err == nil {
+				exactTotal = cnt
+			} else {
+				slog.Warn("hybrid search count failed, using hits.total", "error", err)
+			}
+		}
+	}
+
+	return s.buildSearchResponse(resp, req, exactTotal)
 }
 
 // searchBM25 执行纯 BM25 全文搜索或过滤查询。
@@ -394,7 +405,18 @@ func (s *SearchService) searchBM25(ctx context.Context, indexName string, req *t
 		"hits_count", len(resp.Hits.Hits),
 	)
 
-	return s.buildSearchResponse(resp, req)
+	var exactTotal int64
+	if osQuery, ok := query["query"]; ok {
+		if q, ok := osQuery.(map[string]any); ok {
+			if cnt, err := s.count(ctx, indexName, q); err == nil {
+				exactTotal = cnt
+			} else {
+				slog.Warn("BM25 search count failed, using hits.total", "error", err)
+			}
+		}
+	}
+
+	return s.buildSearchResponse(resp, req, exactTotal)
 }
 
 // buildQuery 是核心查询构造器，将 SearchRequest 转换为 OpenSearch 查询 DSL。
@@ -551,9 +573,31 @@ func (s *SearchService) buildFilters(req *types.SearchRequest, userEmail string)
 	return filter
 }
 
+// count 使用 _count API 获取精确匹配文档数，避免 track_total_hits 的性能开销。
+func (s *SearchService) count(ctx context.Context, indexName string, query map[string]any) (int64, error) {
+	bodyBytes, err := json.Marshal(map[string]any{"query": query})
+	if err != nil {
+		return 0, fmt.Errorf("marshal count query: %w", err)
+	}
+
+	resp, err := s.client.Client().Indices.Count(ctx, &opensearchapi.IndicesCountReq{
+		Indices: []string{indexName},
+		Body:    bytes.NewReader(bodyBytes),
+	})
+	if err != nil {
+		return 0, fmt.Errorf("count request: %w", err)
+	}
+
+	return int64(resp.Count), nil
+}
+
 // buildSearchResponse 将 OpenSearch 类型化响应转换为标准搜索响应格式。
-func (s *SearchService) buildSearchResponse(resp *opensearchapi.SearchResp, req *types.SearchRequest) (*types.SearchResponse, error) {
-	total := int64(resp.Hits.Total.Value)
+// exactTotal 非零时使用其值替代 resp.Hits.Total.Value（_count API 更精确）。
+func (s *SearchService) buildSearchResponse(resp *opensearchapi.SearchResp, req *types.SearchRequest, exactTotal int64) (*types.SearchResponse, error) {
+	total := exactTotal
+	if total == 0 {
+		total = int64(resp.Hits.Total.Value)
+	}
 
 	page := req.Page
 	if page <= 0 {
@@ -719,13 +763,12 @@ func (s *SearchService) parseFiltersResponse(aggsRaw json.RawMessage) (*types.Fi
 // 聚合内容：
 //   - by_status: terms aggregation on status 字段，按处理状态分组计数
 //   - recent: filter aggregation，统计最近 1 小时内创建的文档数
-//   - track_total_hits: true，精确统计文档总数（非近似值）
 func (s *SearchService) GetStats(ctx context.Context, indexName string, userEmail string) (*types.StatsResponse, error) {
 	slog.Debug("get stats", "index", indexName)
+	emailFilter := buildEmailFilter(userEmail)
 	query := map[string]any{
-		"size":             0,
-		"track_total_hits": true,
-		"query":            buildEmailFilter(userEmail),
+		"size":  0,
+		"query": emailFilter,
 		"aggs": map[string]any{
 			"by_status": map[string]any{
 				"terms": map[string]any{"field": "status", "size": 10},
@@ -753,7 +796,12 @@ func (s *SearchService) GetStats(ctx context.Context, indexName string, userEmai
 		return nil, fmt.Errorf("stats request: %w", err)
 	}
 
-	return s.parseStatsResponse(resp)
+	exactTotal, err := s.count(ctx, indexName, emailFilter)
+	if err != nil {
+		slog.Warn("stats count failed, using hits.total", "error", err)
+	}
+
+	return s.parseStatsResponse(resp, exactTotal)
 }
 
 // parseStatsResponse 解析 OpenSearch 统计响应，构建按状态分组的计数映射。
@@ -762,8 +810,11 @@ func (s *SearchService) GetStats(ctx context.Context, indexName string, userEmai
 //   - 初始化所有 5 种状态为 0（确保未出现的状态也返回 0 而非缺失）
 //   - 遍历 by_status buckets 填充实际计数
 //   - 提取 recent filter 的 doc_count 作为最近新增数
-func (s *SearchService) parseStatsResponse(resp *opensearchapi.SearchResp) (*types.StatsResponse, error) {
-	total := int64(resp.Hits.Total.Value)
+func (s *SearchService) parseStatsResponse(resp *opensearchapi.SearchResp, exactTotal int64) (*types.StatsResponse, error) {
+	total := exactTotal
+	if total == 0 {
+		total = int64(resp.Hits.Total.Value)
+	}
 
 	var aggs struct {
 		ByStatus struct {

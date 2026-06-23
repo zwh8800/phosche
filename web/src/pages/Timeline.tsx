@@ -481,8 +481,13 @@ export default function Timeline() {
   }
 
   // ========== 主渲染：按日期分组的照片内容 ==========
+  const totalCount = data?.pages?.[0]?.total ?? 0;
+
   return (
     <div className="space-y-8">
+      {totalCount > 0 && (
+        <p className="text-sm text-gray-500 text-center">共 {totalCount.toLocaleString()} 张照片</p>
+      )}
       {/*
        * 按日期分组迭代渲染：
        * 每组包含一个 sticky 定位的日期标题（带毛玻璃效果）
