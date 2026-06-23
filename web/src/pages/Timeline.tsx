@@ -29,7 +29,7 @@
  */
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useNavigate, Link } from 'react-router-dom';
-import { useRef, useEffect, useMemo, memo } from 'react';
+import { useRef, useEffect, useMemo, memo, useState, useCallback } from 'react';
 import { fetchPhotos } from '../api/photos';
 import type { PhotoDocument } from '../types';
 import { computeLocationSummary } from './locationSummary';
@@ -416,6 +416,26 @@ export default function Timeline() {
       }));
   }, [data]);
 
+  const totalCount = data?.pages?.[0]?.total ?? 0;
+
+  const [showCountBadge, setShowCountBadge] = useState(false);
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+
+  const handleScroll = useCallback(() => {
+    clearTimeout(scrollTimeoutRef.current);
+    scrollTimeoutRef.current = setTimeout(() => {
+      setShowCountBadge(window.scrollY > 300);
+    }, 50);
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      clearTimeout(scrollTimeoutRef.current);
+    };
+  }, [handleScroll]);
+
   // ========== 条件渲染：错误状态 ==========
   // 请求失败时显示警告图标和具体错误信息
   if (isError) {
@@ -481,12 +501,18 @@ export default function Timeline() {
   }
 
   // ========== 主渲染：按日期分组的照片内容 ==========
-  const totalCount = data?.pages?.[0]?.total ?? 0;
-
   return (
     <div className="space-y-8">
       {totalCount > 0 && (
-        <p className="text-sm text-gray-500 text-center">共 {totalCount.toLocaleString()} 张照片</p>
+        <div
+          className={`fixed top-[44px] left-0 right-0 z-20 flex justify-center pointer-events-none transition-all duration-300 ${
+            showCountBadge ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'
+          }`}
+        >
+          <span className="mt-2 rounded-full bg-black/60 px-3 py-1 text-xs text-white backdrop-blur-sm">
+            {totalCount.toLocaleString()} 张照片
+          </span>
+        </div>
       )}
       {/*
        * 按日期分组迭代渲染：
