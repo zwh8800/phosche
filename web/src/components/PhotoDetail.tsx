@@ -16,10 +16,12 @@
  * - 点击遮罩层关闭弹窗，点击弹窗内部阻止事件冒泡
  * - 弹窗入场动画通过动态注入 @keyframes 实现
  */
-import { useEffect, useCallback, useState } from 'react';
+import { useEffect, useCallback, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import { TransformWrapper, TransformComponent, useControls } from 'react-zoom-pan-pinch';
+import type { ReactZoomPanPinchRef } from 'react-zoom-pan-pinch';
 import type { PhotoDocument } from '../types';
 import { fetchSimilarPhotos, fetchNearbyPhotos } from '../api/photos';
 
@@ -259,6 +261,80 @@ function SceneTypeBadge({ type }: { type: string }) {
   );
 }
 
+interface ViewerToolbarProps {
+  rotation: number;
+  onRotate: () => void;
+  visible: boolean;
+  onMouseEnter: () => void;
+  onMouseLeave: () => void;
+}
+
+function ViewerToolbar({ rotation, onRotate, visible, onMouseEnter, onMouseLeave }: ViewerToolbarProps) {
+  const { zoomIn, zoomOut, resetTransform } = useControls();
+
+  return (
+    <div
+      className={`absolute bottom-4 left-1/2 -translate-x-1/2 z-30
+        bg-black/30 backdrop-blur-md rounded-full px-3 py-2
+        flex items-center gap-1
+        transition-opacity duration-300
+        ${visible ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <button
+        onClick={() => zoomIn(0.2, 200)}
+        className="w-9 h-9 rounded-full hover:bg-white/20 text-white transition-colors cursor-pointer flex items-center justify-center"
+        title="放大"
+        aria-label="放大"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="11" cy="11" r="8" />
+          <path d="M21 21l-4.35-4.35" />
+          <path d="M11 8v6M8 11h6" />
+        </svg>
+      </button>
+
+      <button
+        onClick={() => zoomOut(0.2, 200)}
+        className="w-9 h-9 rounded-full hover:bg-white/20 text-white transition-colors cursor-pointer flex items-center justify-center"
+        title="缩小"
+        aria-label="缩小"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="11" cy="11" r="8" />
+          <path d="M21 21l-4.35-4.35" />
+          <path d="M8 11h6" />
+        </svg>
+      </button>
+
+      <button
+        onClick={() => resetTransform(200, 'easeOut')}
+        className="w-9 h-9 rounded-full hover:bg-white/20 text-white transition-colors cursor-pointer flex items-center justify-center"
+        title="适应窗口"
+        aria-label="适应窗口"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+        </svg>
+      </button>
+
+      <button
+        onClick={onRotate}
+        className="w-9 h-9 rounded-full hover:bg-white/20 text-white transition-colors cursor-pointer flex items-center justify-center"
+        title={`旋转 90°（当前 ${rotation}°）`}
+        aria-label="旋转 90°"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 12a9 9 0 11-6.219-8.56" />
+          <path d="M21 3v6h-6" />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
 /**
  * 照片详情模态框主组件
  *
@@ -290,6 +366,88 @@ function PhotoDetailModal({
   onLocationClick,
   onObjectClick,
 }: PhotoDetailModalProps) {
+  // Viewer mode state
+  const [isViewerMode, setIsViewerMode] = useState(false);
+  const [rotation, setRotation] = useState(0);
+  const currentScaleRef = useRef(1);
+  const [viewerKey, setViewerKey] = useState(0);
+
+  // Drag detection: distinguish drag from click
+  const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
+  const isDraggingRef = useRef(false);
+
+  // Toolbar auto-hide state
+  const [isToolbarVisible, setIsToolbarVisible] = useState(() => typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0));
+  const toolbarTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+
+  const handleMouseMove = useCallback(() => {
+    if (!isViewerMode || isTouchDevice) return;
+    setIsToolbarVisible(true);
+    if (toolbarTimerRef.current) clearTimeout(toolbarTimerRef.current);
+    toolbarTimerRef.current = setTimeout(() => setIsToolbarVisible(false), 3000);
+  }, [isViewerMode, isTouchDevice]);
+
+  const handleToolbarMouseEnter = useCallback(() => {
+    if (toolbarTimerRef.current) clearTimeout(toolbarTimerRef.current);
+  }, []);
+
+  const handleToolbarMouseLeave = useCallback(() => {
+    if (isTouchDevice) return;
+    toolbarTimerRef.current = setTimeout(() => setIsToolbarVisible(false), 3000);
+  }, [isTouchDevice]);
+
+  const handleRotate = useCallback(() => {
+    setRotation(prev => (prev + 90) % 360);
+  }, []);
+
+  // Mouse down handler: record start position for drag detection
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
+    isDraggingRef.current = false;
+  }, []);
+
+  // Mouse up handler: distinguish click from drag
+  const handleMouseUp = useCallback((e: React.MouseEvent) => {
+    if (!mouseDownPosRef.current) return;
+    
+    const dx = Math.abs(e.clientX - mouseDownPosRef.current.x);
+    const dy = Math.abs(e.clientY - mouseDownPosRef.current.y);
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    // If moved more than 5px, it's a drag, not a click
+    if (distance > 5) {
+      isDraggingRef.current = true;
+    }
+    
+    mouseDownPosRef.current = null;
+  }, []);
+
+  const handleImageAreaClick = useCallback(() => {
+    // Ignore click if it was actually a drag
+    if (isDraggingRef.current) {
+      isDraggingRef.current = false;
+      return;
+    }
+
+    if (!isViewerMode) {
+      setIsViewerMode(true);
+      if (!isTouchDevice) {
+        setIsToolbarVisible(true);
+        if (toolbarTimerRef.current) clearTimeout(toolbarTimerRef.current);
+        toolbarTimerRef.current = setTimeout(() => setIsToolbarVisible(false), 3000);
+      } else {
+        setIsToolbarVisible(true);
+      }
+    } else {
+      // Allow exit regardless of zoom level
+      setIsViewerMode(false);
+      setRotation(0);
+      currentScaleRef.current = 1;
+      setViewerKey(prev => prev + 1);
+    }
+  }, [isViewerMode, isTouchDevice]);
+
   // 键盘导航处理：Escape 键关闭弹窗，←/→ 键切换照片
   /**
    * 键盘事件处理器（使用 useCallback 优化性能）
@@ -304,11 +462,24 @@ function PhotoDetailModal({
    */
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        if (isViewerMode) {
+          setIsViewerMode(false);
+          setRotation(0);
+          currentScaleRef.current = 1;
+          setViewerKey(prev => prev + 1);
+          e.preventDefault();
+          return;
+        }
+        onClose();
+      }
+      if (isViewerMode && currentScaleRef.current > 1 && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+        return;
+      }
       if (e.key === 'ArrowLeft' && hasPrev && onPrev) onPrev();
       if (e.key === 'ArrowRight' && hasNext && onNext) onNext();
     },
-    [onClose, onPrev, onNext, hasPrev, hasNext],
+    [onClose, onPrev, onNext, hasPrev, hasNext, isViewerMode],
   );
 
   // 注册键盘事件监听和 body 滚动锁定，组件卸载时自动清理
@@ -332,6 +503,23 @@ function PhotoDetailModal({
       document.body.style.overflow = prev;
     };
   }, [handleKeyDown]);
+
+  useEffect(() => {
+    setIsViewerMode(false);
+    setRotation(0);
+    currentScaleRef.current = 1;
+    setViewerKey(prev => prev + 1);
+    setIsToolbarVisible(isTouchDevice);
+  }, [photo.id, isTouchDevice]);
+
+  // Toolbar auto-hide timer cleanup
+  useEffect(() => {
+    return () => {
+      if (toolbarTimerRef.current) {
+        clearTimeout(toolbarTimerRef.current);
+      }
+    };
+  }, []);
 
   // 构造照片原始文件 URL（去除路径前导斜杠）
   const imageUrl = `/photos/${photo.path.replace(/^\/+/, '')}`;
@@ -419,7 +607,7 @@ function PhotoDetailModal({
         onClick={onClose}
       >
         <div
-           className="relative flex flex-col lg:flex-row w-full max-w-[1400px] max-h-[92vh] bg-white rounded-[18px] shadow-2xl overflow-hidden animate-[fadeIn_0.2s_ease-out]"
+           className={`relative flex flex-col lg:flex-row w-full overflow-hidden animate-[fadeIn_0.2s_ease-out] transition-all duration-300 ease-out ${isViewerMode ? 'max-w-full max-h-full h-full bg-black rounded-[18px]' : 'max-w-[1400px] max-h-[92vh] bg-white rounded-[18px] shadow-2xl'}`}
           onClick={(e) => e.stopPropagation()}
         >
           <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
@@ -506,30 +694,84 @@ function PhotoDetailModal({
           )}
 
           {/* ── Image area ── 照片显示区域 ── */}
-          <div className="relative flex items-center justify-center bg-black lg:w-[55%] min-h-[280px] lg:min-h-0 max-h-[50vh] lg:max-h-full overflow-hidden shrink-0">
-            {/*
-             * 图片加载失败时隐藏 <img> 元素，显示相邻的 "无法加载图片" 占位文字。
-             * onError 触发后：1) 设置 img display:none；2) 显示相邻的 fallback div
-             */}
-            <img
-              src={displayUrl}
-              alt={photo.description || '照片'}
-              className="w-full h-full object-contain"
-              loading="eager"
-              onError={(e) => {
-                const el = e.currentTarget;
-                el.style.display = 'none';
-                el.nextElementSibling?.classList.remove('hidden');
-              }}
-            />
-            {/* 图片加载失败时的占位提示（默认 hidden，通过 onError 显示） */}
-            <div className="hidden absolute inset-0 flex items-center justify-center bg-gray-900 text-gray-400 text-sm">
-              无法加载图片
-            </div>
+          <div
+            className={`relative flex items-center justify-center bg-black overflow-hidden transition-all duration-300 ease-out ${isViewerMode ? 'max-w-full max-h-full w-full h-full' : 'lg:w-[55%] min-h-[280px] lg:min-h-0 max-h-[50vh] lg:max-h-full shrink-0'} ${!isViewerMode ? 'cursor-pointer' : ''}`}
+            onClick={handleImageAreaClick}
+            onMouseDown={handleMouseDown}
+            onMouseUp={handleMouseUp}
+            onMouseMove={handleMouseMove}
+          >
+            {isViewerMode ? (
+              <TransformWrapper
+                key={viewerKey}
+                initialScale={1}
+                minScale={0.5}
+                maxScale={8}
+                centerOnInit={true}
+                limitToBounds={true}
+                smooth={false}
+                doubleClick={{ disabled: false, step: 0.7 }}
+                wheel={{ step: 0.15 }}
+                pinch={{ step: 5 }}
+                panning={{ disabled: false }}
+                onTransform={(_ref: ReactZoomPanPinchRef, state: { scale: number; positionX: number; positionY: number }) => {
+                  currentScaleRef.current = state.scale;
+                  if (isTouchDevice) {
+                    setIsToolbarVisible(state.scale === 1);
+                  }
+                }}
+              >
+                <TransformComponent
+                  wrapperClass="!w-full !h-full"
+                  contentClass="!w-full !h-full !flex !items-center !justify-center"
+                >
+                  <img
+                    src={displayUrl}
+                    alt={photo.description || '照片'}
+                    className="max-w-full max-h-full object-contain"
+                    style={{ transform: `rotate(${rotation}deg)` }}
+                    draggable={false}
+                    loading="eager"
+                    onError={(e) => {
+                      const el = e.currentTarget;
+                      el.style.display = 'none';
+                      el.nextElementSibling?.classList.remove('hidden');
+                    }}
+                  />
+                  <div className="hidden absolute inset-0 flex items-center justify-center bg-gray-900 text-gray-400 text-sm">
+                    无法加载图片
+                  </div>
+                </TransformComponent>
+                <ViewerToolbar
+                  rotation={rotation}
+                  onRotate={handleRotate}
+                  visible={isToolbarVisible}
+                  onMouseEnter={handleToolbarMouseEnter}
+                  onMouseLeave={handleToolbarMouseLeave}
+                />
+              </TransformWrapper>
+            ) : (
+              <>
+                <img
+                  src={displayUrl}
+                  alt={photo.description || '照片'}
+                  className="w-full h-full object-contain"
+                  loading="eager"
+                  onError={(e) => {
+                    const el = e.currentTarget;
+                    el.style.display = 'none';
+                    el.nextElementSibling?.classList.remove('hidden');
+                  }}
+                />
+                <div className="hidden absolute inset-0 flex items-center justify-center bg-gray-900 text-gray-400 text-sm">
+                  无法加载图片
+                </div>
+              </>
+            )}
           </div>
 
           {/* ── Sidebar ── 右侧信息面板 ── */}
-          <div className="flex flex-col lg:w-[45%] overflow-y-auto">
+          <div className={`flex flex-col lg:w-[45%] overflow-y-auto ${isViewerMode ? 'hidden' : ''}`}>
             <div className="p-6 lg:p-8 space-y-8">
               {/* ── Section 1: AI 分析 ── AI 分析结果 ── */}
               {/*
