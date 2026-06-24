@@ -716,9 +716,6 @@ function PhotoDetailModal({
                 panning={{ disabled: false }}
                 onTransform={(_ref: ReactZoomPanPinchRef, state: { scale: number; positionX: number; positionY: number }) => {
                   currentScaleRef.current = state.scale;
-                  if (isTouchDevice) {
-                    setIsToolbarVisible(state.scale === 1);
-                  }
                 }}
               >
                 <TransformComponent
