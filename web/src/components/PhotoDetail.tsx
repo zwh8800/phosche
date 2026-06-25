@@ -371,14 +371,10 @@ function PhotoDetailModal({
   const [rotation, setRotation] = useState(0);
   const currentScaleRef = useRef(1);
   const [viewerKey, setViewerKey] = useState(0);
-  const viewerControlsRef = useRef<ReactZoomPanPinchRef | null>(null);
 
   // Drag detection: distinguish drag from click
   const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
   const isDraggingRef = useRef(false);
-
-  // Mobile double-tap detection
-  const mobileLastTapRef = useRef(0);
 
   // Toolbar auto-hide state
   const [isToolbarVisible, setIsToolbarVisible] = useState(() => typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0));
@@ -443,35 +439,12 @@ function PhotoDetailModal({
       } else {
         setIsToolbarVisible(true);
       }
-    } else if (!isTouchDevice) {
+    } else {
+      // Allow exit regardless of zoom level
       setIsViewerMode(false);
       setRotation(0);
       currentScaleRef.current = 1;
       setViewerKey(prev => prev + 1);
-    }
-    // Mobile: click in viewer mode does NOT exit — use close button instead
-  }, [isViewerMode, isTouchDevice]);
-
-  // Mobile double-tap zoom cycling: 1x → 2x → 4x → 1x
-  const handleTouchEnd = useCallback(() => {
-    if (!isViewerMode || !isTouchDevice) return;
-    if (!viewerControlsRef.current) return;
-
-    const now = Date.now();
-    const elapsed = now - mobileLastTapRef.current;
-    mobileLastTapRef.current = now;
-
-    if (elapsed > 0 && elapsed < 300) {
-      const currentScale = currentScaleRef.current;
-      let targetScale: number;
-      if (currentScale < 1.5) {
-        targetScale = 2;
-      } else if (currentScale < 3.5) {
-        targetScale = 4;
-      } else {
-        targetScale = 1;
-      }
-      viewerControlsRef.current.setTransform(0, 0, targetScale, 200, 'easeOut');
     }
   }, [isViewerMode, isTouchDevice]);
 
@@ -721,17 +694,15 @@ function PhotoDetailModal({
           )}
 
           {/* ── Image area ── 照片显示区域 ── */}
-           <div
+          <div
             className={`relative flex items-center justify-center bg-black overflow-hidden transition-all duration-300 ease-out ${isViewerMode ? 'max-w-full max-h-full w-full h-full' : 'lg:w-[55%] min-h-[280px] lg:min-h-0 max-h-[50vh] lg:max-h-full shrink-0'} ${!isViewerMode ? 'cursor-pointer' : ''}`}
             onClick={handleImageAreaClick}
             onMouseDown={handleMouseDown}
             onMouseUp={handleMouseUp}
             onMouseMove={handleMouseMove}
-            onTouchEnd={handleTouchEnd}
           >
             {isViewerMode ? (
               <TransformWrapper
-                ref={viewerControlsRef}
                 key={viewerKey}
                 initialScale={1}
                 minScale={0.5}
@@ -739,7 +710,7 @@ function PhotoDetailModal({
                 centerOnInit={true}
                 limitToBounds={true}
                 smooth={false}
-                doubleClick={{ disabled: true }}
+                doubleClick={{ disabled: false, step: 0.7 }}
                 wheel={{ step: 0.15 }}
                 pinch={{ step: 5 }}
                 panning={{ disabled: false }}

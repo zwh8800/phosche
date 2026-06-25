@@ -137,7 +137,7 @@ describe('PhotoDetailModal — 图片查看器模式', () => {
     expect(infoPanel?.className).toContain('hidden');
   });
 
-  it('查看模式下通过 Escape 键退出', () => {
+  it('查看模式下点击图片区域退出', () => {
     render(<PhotoDetailModal {...defaultProps} />);
 
     const imageArea = findImageArea()!;
@@ -148,8 +148,12 @@ describe('PhotoDetailModal — 图片查看器模式', () => {
     // 确认进入了查看模式
     expect(screen.getByTestId('transform-wrapper')).toBeInTheDocument();
 
-    // 退出查看模式 — 按 Escape 键
-    fireEvent.keyDown(document, { key: 'Escape' });
+    // 找到查看模式下的图片区域
+    const viewerImageArea = findImageArea();
+    expect(viewerImageArea).toBeTruthy();
+
+    // 退出查看模式 — 点击该区域
+    fireEvent.click(viewerImageArea!);
 
     // 验证 TransformWrapper 不再渲染（退出了查看模式）
     expect(screen.queryByTestId('transform-wrapper')).not.toBeInTheDocument();
@@ -202,8 +206,9 @@ describe('PhotoDetailModal — 图片查看器模式', () => {
     fireEvent.click(screen.getByTitle('旋转 90°（当前 90°）'));
     expect(screen.getByTitle('旋转 90°（当前 180°）')).toBeInTheDocument();
 
-    // 退出查看模式 — 按 Escape 键
-    fireEvent.keyDown(document, { key: 'Escape' });
+    // 退出查看模式
+    const viewerImageArea = findImageArea()!;
+    fireEvent.click(viewerImageArea);
 
     // 重新进入查看模式
     const restoredImageArea = findImageArea()!;
