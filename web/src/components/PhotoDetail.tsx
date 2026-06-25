@@ -443,36 +443,34 @@ function PhotoDetailModal({
       } else {
         setIsToolbarVisible(true);
       }
-    } else if (!isTouchDevice) {
-      setIsViewerMode(false);
-      setRotation(0);
-      currentScaleRef.current = 1;
-      setViewerKey(prev => prev + 1);
+      return;
     }
-    // Mobile: click in viewer mode does NOT exit — use close button instead
-  }, [isViewerMode, isTouchDevice]);
 
-  // Mobile double-tap zoom cycling: 1x → 2x → 4x → 1x
-  const handleTouchEnd = useCallback(() => {
-    if (!isViewerMode || !isTouchDevice) return;
-    if (!viewerControlsRef.current) return;
+    if (isTouchDevice) {
+      const now = Date.now();
+      const elapsed = now - mobileLastTapRef.current;
+      mobileLastTapRef.current = now;
 
-    const now = Date.now();
-    const elapsed = now - mobileLastTapRef.current;
-    mobileLastTapRef.current = now;
-
-    if (elapsed > 0 && elapsed < 300) {
-      const currentScale = currentScaleRef.current;
-      let targetScale: number;
-      if (currentScale < 1.5) {
-        targetScale = 2;
-      } else if (currentScale < 3.5) {
-        targetScale = 4;
-      } else {
-        targetScale = 1;
+      if (elapsed > 0 && elapsed < 300) {
+        const currentScale = currentScaleRef.current;
+        let targetScale: number;
+        if (currentScale < 1.5) {
+          targetScale = 2;
+        } else if (currentScale < 3.5) {
+          targetScale = 4;
+        } else {
+          targetScale = 1;
+        }
+        viewerControlsRef.current?.setTransform(0, 0, targetScale, 200, 'easeOut');
       }
-      viewerControlsRef.current.setTransform(0, 0, targetScale, 200, 'easeOut');
+      return;
     }
+
+    // Desktop: click exits viewer mode
+    setIsViewerMode(false);
+    setRotation(0);
+    currentScaleRef.current = 1;
+    setViewerKey(prev => prev + 1);
   }, [isViewerMode, isTouchDevice]);
 
   // 键盘导航处理：Escape 键关闭弹窗，←/→ 键切换照片
@@ -727,7 +725,6 @@ function PhotoDetailModal({
             onMouseDown={handleMouseDown}
             onMouseUp={handleMouseUp}
             onMouseMove={handleMouseMove}
-            onTouchEnd={handleTouchEnd}
           >
             {isViewerMode ? (
               <TransformWrapper
@@ -741,7 +738,7 @@ function PhotoDetailModal({
                 smooth={false}
                 doubleClick={{ disabled: true }}
                 wheel={{ step: 0.15 }}
-                pinch={{ step: 5 }}
+                pinch={{ step: 0.3 }}
                 panning={{ disabled: false }}
                 onTransform={(_ref: ReactZoomPanPinchRef, state: { scale: number; positionX: number; positionY: number }) => {
                   currentScaleRef.current = state.scale;
