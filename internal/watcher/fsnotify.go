@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -20,7 +21,8 @@ const defaultDebounceMs = 500
 
 // WatcherConfig 是文件监控器的配置。
 type WatcherConfig struct {
-	DebounceMs int
+	DebounceMs  int
+	ExcludeDirs []string // 排除的目录名列表，支持前缀匹配和目录名匹配（如 "@eaDir"）
 }
 
 // pendingItem 记录待触发的去抖事件和目标定时器。
@@ -84,9 +86,15 @@ func (w *FSNotifyWatcher) Watch(ctx context.Context, dirs []string, recursive bo
 					slog.Warn("walk error", "path", path, "err", err)
 					return nil
 				}
-				if info.IsDir() && path != dir {
-					if addErr := fw.Add(path); addErr != nil {
-						slog.Warn("add subdirectory", "path", path, "err", addErr)
+				if info.IsDir() {
+					// 排除的目录：不注册监控，也不递归进入
+					if w.isExcludedDir(path) {
+						return filepath.SkipDir
+					}
+					if path != dir {
+						if addErr := fw.Add(path); addErr != nil {
+							slog.Warn("add subdirectory", "path", path, "err", addErr)
+						}
 					}
 				}
 				return nil
@@ -151,12 +159,34 @@ func (w *FSNotifyWatcher) loop(ctx context.Context) {
 	}
 }
 
+// isExcludedDir 判断路径是否命中排除目录规则。
+// 与 pipeline 的 isExcluded 语义一致：支持前缀匹配（d 为路径前缀）和目录名匹配（任意路径分量等于 d）。
+func (w *FSNotifyWatcher) isExcludedDir(path string) bool {
+	for _, d := range w.cfg.ExcludeDirs {
+		// 前缀匹配：/photos/#recycle 匹配 /photos/#recycle 及其子路径
+		if path == d || strings.HasPrefix(path, d+string(filepath.Separator)) {
+			return true
+		}
+		// 目录名匹配：@eaDir 匹配任意路径中名为 @eaDir 的目录
+		for _, part := range strings.Split(filepath.Clean(path), string(filepath.Separator)) {
+			if part == d {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // handleFsnotifyEvent 处理 fsnotify 事件。Create 目录 → 自动注册监控；Create/Write 图片文件 → 经过去抖后发送。
 func (w *FSNotifyWatcher) handleFsnotifyEvent(e fsnotify.Event) {
 	// 目录创建事件：自动注册对该目录的 fsnotify 监控，支持递归
 	if e.Has(fsnotify.Create) {
 		info, err := os.Stat(e.Name)
 		if err == nil && info.IsDir() {
+			// 排除的目录不注册监控
+			if w.isExcludedDir(e.Name) {
+				return
+			}
 			if w.fw != nil {
 				if addErr := w.fw.Add(e.Name); addErr != nil {
 					slog.Warn("add created directory", "path", e.Name, "err", addErr)

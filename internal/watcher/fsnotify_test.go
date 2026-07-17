@@ -237,3 +237,80 @@ func TestFSNotify_Close(t *testing.T) {
 		t.Error("timed out waiting for channel to close")
 	}
 }
+
+func TestFSNotify_ExcludeDirs(t *testing.T) {
+	dir := t.TempDir()
+
+	// 预置排除目录（模拟群晖 @eaDir 缩略图目录）和正常目录
+	eaDir := filepath.Join(dir, "2025", "@eaDir")
+	if err := os.MkdirAll(eaDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	normal := filepath.Join(dir, "2025", "normal")
+	if err := os.MkdirAll(normal, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	w := watcher.NewFSNotifyWatcher(watcher.WatcherConfig{
+		DebounceMs:  100,
+		ExcludeDirs: []string{"@eaDir"},
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	events, err := w.Watch(ctx, []string{dir}, true)
+	if err != nil {
+		t.Fatal("Watch:", err)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	// 排除目录中的图片不应产生事件（walk 时未注册监控）
+	excludedPath := filepath.Join(eaDir, "thumb.jpg")
+	if err := os.WriteFile(excludedPath, []byte("thumbnail"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// 运行时新建的排除目录也不应注册监控
+	runtimeEaDir := filepath.Join(normal, "@eaDir")
+	if err := os.Mkdir(runtimeEaDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(200 * time.Millisecond)
+	runtimeExcludedPath := filepath.Join(runtimeEaDir, "thumb2.jpg")
+	if err := os.WriteFile(runtimeExcludedPath, []byte("thumbnail"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// 正常目录中的图片应产生事件
+	normalPath := filepath.Join(normal, "photo.jpg")
+	if err := os.WriteFile(normalPath, []byte("real photo"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.After(3 * time.Second)
+	gotNormal := false
+	for !gotNormal {
+		select {
+		case evt, ok := <-events:
+			if !ok {
+				t.Fatal("events channel closed unexpectedly")
+			}
+			if evt.Path == excludedPath || evt.Path == runtimeExcludedPath {
+				t.Errorf("unexpected event from excluded dir: %q", evt.Path)
+			}
+			if evt.Path == normalPath {
+				gotNormal = true
+			}
+		case <-deadline:
+			t.Fatal("timed out waiting for event in normal dir")
+		}
+	}
+
+	// 再确认没有来自排除目录的残留事件
+	select {
+	case evt := <-events:
+		t.Errorf("unexpected trailing event: %q", evt.Path)
+	case <-time.After(500 * time.Millisecond):
+	}
+}

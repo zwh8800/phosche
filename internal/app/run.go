@@ -161,7 +161,8 @@ func Run(distFS fs.FS, configPath string) {
 
 	// 创建文件监控器（基于 fsnotify，带去抖功能）和目录扫描器
 	fsWatcher := watcher.NewFSNotifyWatcher(watcher.WatcherConfig{
-		DebounceMs: cfg.Watch.DebounceMs,
+		DebounceMs:  cfg.Watch.DebounceMs,
+		ExcludeDirs: cfg.Watch.ExcludeDirs,
 	})
 	dirScanner := &watcher.DirectoryScanner{}
 
