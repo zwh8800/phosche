@@ -37,6 +37,7 @@ config.prd.yaml
 opencode.json
 .kimi-code/
 .omo/
+.qoder/
 
 # IDE
 .idea/
