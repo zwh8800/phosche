@@ -35,6 +35,7 @@ config.prd.yaml
 
 # Development tools
 opencode.json
+.kimi-code/
 .omo/
 
 # IDE
