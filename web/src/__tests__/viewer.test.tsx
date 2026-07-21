@@ -16,14 +16,40 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import PhotoDetailModal from '../components/PhotoDetail';
 import type { PhotoDocument } from '../types';
 
+// Mock 状态共享：TransformWrapper 捕获 onTransform，centerView/resetTransform 触发它，
+// 模拟真实 react-zoom-pan-pinch 的变换回调行为
+const mocks = vi.hoisted(() => {
+  const state = {
+    onTransform: null as
+      | null
+      | ((ref: unknown, s: { scale: number; positionX: number; positionY: number }) => void),
+  };
+  return {
+    state,
+    centerView: vi.fn((scale: number) => {
+      state.onTransform?.(null, { scale, positionX: 0, positionY: 0 });
+    }),
+    resetTransform: vi.fn(() => {
+      state.onTransform?.(null, { scale: 1, positionX: 0, positionY: 0 });
+    }),
+  };
+});
+
 // Mock react-zoom-pan-pinch — 提供 TransformWrapper/TransformComponent/useControls 的最小实现
 vi.mock('react-zoom-pan-pinch', () => ({
-  TransformWrapper: ({ children }: { children: React.ReactNode }) => {
+  TransformWrapper: ({
+    children,
+    onTransform,
+  }: {
+    children: React.ReactNode;
+    onTransform?: (ref: unknown, s: { scale: number; positionX: number; positionY: number }) => void;
+  }) => {
+    mocks.state.onTransform = onTransform ?? null;
     return <div data-testid="transform-wrapper">{children}</div>;
   },
   TransformComponent: ({ children }: { children: React.ReactNode }) => {
@@ -32,8 +58,8 @@ vi.mock('react-zoom-pan-pinch', () => ({
   useControls: () => ({
     zoomIn: vi.fn(),
     zoomOut: vi.fn(),
-    resetTransform: vi.fn(),
-    centerView: vi.fn(),
+    resetTransform: mocks.resetTransform,
+    centerView: mocks.centerView,
   }),
 }));
 
@@ -168,8 +194,69 @@ describe('PhotoDetailModal — 图片查看器模式', () => {
     // 4 个工具栏按钮应该存在
     expect(screen.getByTitle('放大')).toBeInTheDocument();
     expect(screen.getByTitle('缩小')).toBeInTheDocument();
-    expect(screen.getByTitle('适应窗口')).toBeInTheDocument();
+    expect(screen.getByTitle('实际大小（1:1）')).toBeInTheDocument();
     expect(screen.getByTitle('旋转 90°（当前 0°）')).toBeInTheDocument();
+  });
+
+  it('第三个按钮在适应窗口与 1:1 实际大小之间切换', () => {
+    render(<PhotoDetailModal {...defaultProps} />);
+
+    const imageArea = findImageArea()!;
+    fireEvent.click(imageArea);
+
+    // 默认适应窗口，按钮提示为「实际大小（1:1）」
+    const toggleBtn = screen.getByTitle('实际大小（1:1）');
+    expect(toggleBtn).toBeInTheDocument();
+
+    // mock 图片尺寸：显示宽度 400px，自然宽度 1600px → 1:1 缩放比为 4
+    const img = screen.getByAltText('测试照片描述');
+    Object.defineProperty(img, 'offsetWidth', { value: 400, configurable: true });
+    Object.defineProperty(img, 'naturalWidth', { value: 1600, configurable: true });
+
+    // 点击切换到 1:1，centerView 应以 4 倍缩放被调用（画面保持居中）
+    fireEvent.click(toggleBtn);
+    expect(mocks.centerView).toHaveBeenCalledWith(4, 200, 'easeOut');
+
+    // onTransform 同步后按钮变为「适应窗口」
+    expect(screen.getByTitle('适应窗口')).toBeInTheDocument();
+
+    // 再次点击恢复适应窗口
+    fireEvent.click(screen.getByTitle('适应窗口'));
+    expect(mocks.resetTransform).toHaveBeenCalled();
+    expect(screen.getByTitle('实际大小（1:1）')).toBeInTheDocument();
+  });
+
+  it('鼠标悬停在工具栏上时 3 秒后工具栏不消失，移出后 3 秒消失', () => {
+    vi.useFakeTimers();
+    // jsdom 环境 window 上自带 ontouchstart，会被组件判定为触屏设备（触屏下工具栏不自动隐藏），
+    // 此处删除该属性以模拟桌面非触屏环境
+    delete (window as { ontouchstart?: unknown }).ontouchstart;
+    try {
+      render(<PhotoDetailModal {...defaultProps} />);
+
+      const imageArea = findImageArea()!;
+      fireEvent.click(imageArea);
+
+      // 工具栏容器是包含工具按钮的外层 div
+      const toolbar = screen.getByTitle('实际大小（1:1）').parentElement!;
+      expect(toolbar.className).toContain('opacity-100');
+
+      // 鼠标进入工具栏（React 的 onMouseEnter 由 mouseover 事件合成）
+      fireEvent.mouseOver(toolbar);
+
+      // 超过 3 秒，工具栏仍应可见
+      act(() => vi.advanceTimersByTime(5000));
+      expect(toolbar.className).toContain('opacity-100');
+
+      // 鼠标移出工具栏，3 秒后应自动隐藏
+      fireEvent.mouseOut(toolbar);
+      act(() => vi.advanceTimersByTime(3000));
+      expect(toolbar.className).toContain('opacity-0');
+    } finally {
+      // 恢复 ontouchstart，避免影响同文件其他用例
+      (window as { ontouchstart?: unknown }).ontouchstart = null;
+      vi.useRealTimers();
+    }
   });
 
   it('旋转按钮点击后角度递增 90° 并循环回 0°', () => {

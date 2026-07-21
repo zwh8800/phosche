@@ -267,10 +267,31 @@ interface ViewerToolbarProps {
   visible: boolean;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
+  isActualSize: boolean;
+  imgRef: React.RefObject<HTMLImageElement | null>;
 }
 
-function ViewerToolbar({ rotation, onRotate, visible, onMouseEnter, onMouseLeave }: ViewerToolbarProps) {
-  const { zoomIn, zoomOut, resetTransform } = useControls();
+function ViewerToolbar({ rotation, onRotate, visible, onMouseEnter, onMouseLeave, isActualSize, imgRef }: ViewerToolbarProps) {
+  const { zoomIn, zoomOut, resetTransform, centerView } = useControls();
+
+  /**
+   * 切换「适应窗口 / 实际大小（1:1）」显示模式。
+   *
+   * 默认图片以 object-contain 方式适配窗口。切换到 1:1 时，
+   * 根据图片自然尺寸与当前布局尺寸的比值计算缩放倍数，
+   * 使图片 1 个像素对应屏幕 1 个像素；再次切换则复位到适应窗口。
+   * 使用 centerView 而非 setTransform，保证放大后画面以中心点呈现而非左上角。
+   */
+  const handleToggleActualSize = useCallback(() => {
+    const img = imgRef.current;
+    if (isActualSize || !img || img.offsetWidth === 0 || img.naturalWidth === 0) {
+      resetTransform(200, 'easeOut');
+      return;
+    }
+    // offsetWidth 是布局尺寸（不受 transform 影响），即适应窗口下的显示宽度
+    const scale = img.naturalWidth / img.offsetWidth;
+    centerView(scale, 200, 'easeOut');
+  }, [isActualSize, imgRef, resetTransform, centerView]);
 
   return (
     <div
@@ -310,14 +331,18 @@ function ViewerToolbar({ rotation, onRotate, visible, onMouseEnter, onMouseLeave
       </button>
 
       <button
-        onClick={() => resetTransform(200, 'easeOut')}
+        onClick={handleToggleActualSize}
         className="w-9 h-9 rounded-full hover:bg-white/20 text-white transition-colors cursor-pointer flex items-center justify-center"
-        title="适应窗口"
-        aria-label="适应窗口"
+        title={isActualSize ? '适应窗口' : '实际大小（1:1）'}
+        aria-label={isActualSize ? '适应窗口' : '实际大小（1:1）'}
       >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
-        </svg>
+        {isActualSize ? (
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+          </svg>
+        ) : (
+          <span className="text-[11px] font-semibold leading-none">1:1</span>
+        )}
       </button>
 
       <button
@@ -371,6 +396,9 @@ function PhotoDetailModal({
   const [rotation, setRotation] = useState(0);
   const currentScaleRef = useRef(1);
   const [viewerKey, setViewerKey] = useState(0);
+  // 1:1 实际大小模式状态：图片 ref 用于读取自然尺寸计算缩放比
+  const [isActualSize, setIsActualSize] = useState(false);
+  const imgRef = useRef<HTMLImageElement | null>(null);
 
   // Drag detection: distinguish drag from click
   const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
@@ -379,23 +407,40 @@ function PhotoDetailModal({
   // Toolbar auto-hide state
   const [isToolbarVisible, setIsToolbarVisible] = useState(() => typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0));
   const toolbarTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 鼠标是否悬停在工具栏上：悬停期间不自动隐藏工具栏
+  const isToolbarHoveredRef = useRef(false);
   const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+
+  /**
+   * 调度工具栏 3 秒后自动隐藏。
+   * 定时器触发时若鼠标仍悬停在工具栏上，则跳过本次隐藏，
+   * 保证用户在工具栏上操作时工具栏不会消失。
+   */
+  const scheduleToolbarHide = useCallback(() => {
+    if (toolbarTimerRef.current) clearTimeout(toolbarTimerRef.current);
+    toolbarTimerRef.current = setTimeout(() => {
+      if (!isToolbarHoveredRef.current) {
+        setIsToolbarVisible(false);
+      }
+    }, 3000);
+  }, []);
 
   const handleMouseMove = useCallback(() => {
     if (!isViewerMode || isTouchDevice) return;
     setIsToolbarVisible(true);
-    if (toolbarTimerRef.current) clearTimeout(toolbarTimerRef.current);
-    toolbarTimerRef.current = setTimeout(() => setIsToolbarVisible(false), 3000);
-  }, [isViewerMode, isTouchDevice]);
+    scheduleToolbarHide();
+  }, [isViewerMode, isTouchDevice, scheduleToolbarHide]);
 
   const handleToolbarMouseEnter = useCallback(() => {
+    isToolbarHoveredRef.current = true;
     if (toolbarTimerRef.current) clearTimeout(toolbarTimerRef.current);
   }, []);
 
   const handleToolbarMouseLeave = useCallback(() => {
+    isToolbarHoveredRef.current = false;
     if (isTouchDevice) return;
-    toolbarTimerRef.current = setTimeout(() => setIsToolbarVisible(false), 3000);
-  }, [isTouchDevice]);
+    scheduleToolbarHide();
+  }, [isTouchDevice, scheduleToolbarHide]);
 
   const handleRotate = useCallback(() => {
     setRotation(prev => (prev + 90) % 360);
@@ -432,21 +477,19 @@ function PhotoDetailModal({
 
     if (!isViewerMode) {
       setIsViewerMode(true);
+      setIsToolbarVisible(true);
       if (!isTouchDevice) {
-        setIsToolbarVisible(true);
-        if (toolbarTimerRef.current) clearTimeout(toolbarTimerRef.current);
-        toolbarTimerRef.current = setTimeout(() => setIsToolbarVisible(false), 3000);
-      } else {
-        setIsToolbarVisible(true);
+        scheduleToolbarHide();
       }
     } else {
       // Allow exit regardless of zoom level
       setIsViewerMode(false);
       setRotation(0);
       currentScaleRef.current = 1;
+      setIsActualSize(false);
       setViewerKey(prev => prev + 1);
     }
-  }, [isViewerMode, isTouchDevice]);
+  }, [isViewerMode, isTouchDevice, scheduleToolbarHide]);
 
   // 键盘导航处理：Escape 键关闭弹窗，←/→ 键切换照片
   /**
@@ -467,6 +510,7 @@ function PhotoDetailModal({
           setIsViewerMode(false);
           setRotation(0);
           currentScaleRef.current = 1;
+          setIsActualSize(false);
           setViewerKey(prev => prev + 1);
           e.preventDefault();
           return;
@@ -508,6 +552,7 @@ function PhotoDetailModal({
     setIsViewerMode(false);
     setRotation(0);
     currentScaleRef.current = 1;
+    setIsActualSize(false);
     setViewerKey(prev => prev + 1);
     setIsToolbarVisible(isTouchDevice);
   }, [photo.id, isTouchDevice]);
@@ -716,6 +761,15 @@ function PhotoDetailModal({
                 panning={{ disabled: false }}
                 onTransform={(_ref: ReactZoomPanPinchRef, state: { scale: number; positionX: number; positionY: number }) => {
                   currentScaleRef.current = state.scale;
+                  // 根据当前缩放比与 1:1 目标缩放比的偏差同步 isActualSize 状态，
+                  // 保证用户通过滚轮/双击缩放后工具栏图标依然准确
+                  const img = imgRef.current;
+                  if (img && img.offsetWidth > 0 && img.naturalWidth > 0) {
+                    const oneToOneScale = img.naturalWidth / img.offsetWidth;
+                    setIsActualSize(Math.abs(state.scale - oneToOneScale) < 0.01);
+                  } else {
+                    setIsActualSize(false);
+                  }
                 }}
               >
                 <TransformComponent
@@ -723,6 +777,7 @@ function PhotoDetailModal({
                   contentClass="!w-full !h-full !flex !items-center !justify-center"
                 >
                   <img
+                    ref={imgRef}
                     src={displayUrl}
                     alt={photo.description || '照片'}
                     className="max-w-full max-h-full object-contain"
@@ -745,6 +800,8 @@ function PhotoDetailModal({
                   visible={isToolbarVisible}
                   onMouseEnter={handleToolbarMouseEnter}
                   onMouseLeave={handleToolbarMouseLeave}
+                  isActualSize={isActualSize}
+                  imgRef={imgRef}
                 />
               </TransformWrapper>
             ) : (
